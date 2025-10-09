@@ -1,0 +1,41 @@
+# Maven build directories
+target/
+*/target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Mac
+.DS_Store
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Test output
+test-output/
+surefire-reports/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Initial prompt (development only)
+initial_prompt.txt

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Debug logging for our components (change to INFO for less output) -->
+    <logger name="com.spark2sql.execution.DuckDBExecutor" level="DEBUG"/>
+    <logger name="com.spark2sql.translator" level="DEBUG"/>
+
+    <!-- Reduce Spark noise -->
+    <logger name="org.apache.spark" level="WARN"/>
+    <logger name="org.spark_project" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
