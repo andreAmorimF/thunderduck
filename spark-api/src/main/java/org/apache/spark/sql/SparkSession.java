@@ -163,7 +163,7 @@ public class SparkSession implements AutoCloseable {
 
         public void createOrReplaceTempView(String viewName, Dataset<?> dataset) {
             LOG.debug("Creating temp view: {}", viewName);
-            engine.createOrReplaceTempView(viewName, dataset);
+            engine.createTempView(viewName, dataset.logicalPlan);
             tempViews.put(viewName, (Dataset<Row>) dataset);
         }
 
@@ -184,7 +184,7 @@ public class SparkSession implements AutoCloseable {
             if (tempViews.containsKey(tableName)) {
                 return tempViews.get(tableName);
             }
-            return engine.table(tableName, session);
+            return engine.getTable(tableName, session);
         }
     }
 }

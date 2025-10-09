@@ -1,9 +1,15 @@
 package com.spark2sql.translator;
 
+import com.spark2sql.plan.Expression;
 import com.spark2sql.plan.LogicalPlan;
+import com.spark2sql.plan.PlanVisitor;
 import com.spark2sql.plan.nodes.*;
+import com.spark2sql.plan.expressions.*;
+import org.apache.spark.sql.Row;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 /**
  * Simplified translator that converts LogicalPlan to SQL.
@@ -39,10 +45,24 @@ public class PlanToSQLTranslator {
         public Void visitProject(Project project) {
             sql.append("SELECT ");
 
-            List<Column> columns = project.getProjectList();
+            List<?> columns = project.getProjectList();
             for (int i = 0; i < columns.size(); i++) {
                 if (i > 0) sql.append(", ");
-                sql.append(expressionToSQL(columns.get(i).expr()));
+                // Project list contains Column objects, we need to extract their expressions
+                Object col = columns.get(i);
+                if (col.getClass().getName().equals("org.apache.spark.sql.Column")) {
+                    // Use reflection to get the expression from Column
+                    try {
+                        java.lang.reflect.Method exprMethod = col.getClass().getDeclaredMethod("expr");
+                        exprMethod.setAccessible(true);
+                        Expression expr = (Expression) exprMethod.invoke(col);
+                        sql.append(expressionToSQL(expr));
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to extract expression from Column", e);
+                    }
+                } else {
+                    sql.append(expressionToSQL((Expression) col));
+                }
             }
 
             sql.append(" FROM (");
@@ -130,10 +150,25 @@ public class PlanToSQLTranslator {
             subqueryDepth--;
             sql.append(") ORDER BY ");
 
-            List<Column> sortExprs = sort.getSortExpressions();
+            List<?> sortExprs = sort.getSortExpressions();
             for (int i = 0; i < sortExprs.size(); i++) {
                 if (i > 0) sql.append(", ");
-                Expression expr = sortExprs.get(i).expr();
+                Object sortExpr = sortExprs.get(i);
+                Expression expr;
+
+                if (sortExpr.getClass().getName().equals("org.apache.spark.sql.Column")) {
+                    // Extract expression from Column using reflection
+                    try {
+                        java.lang.reflect.Method exprMethod = sortExpr.getClass().getDeclaredMethod("expr");
+                        exprMethod.setAccessible(true);
+                        expr = (Expression) exprMethod.invoke(sortExpr);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to extract expression from Column", e);
+                    }
+                } else {
+                    expr = (Expression) sortExpr;
+                }
+
                 if (expr instanceof SortOrder) {
                     SortOrder so = (SortOrder) expr;
                     sql.append(expressionToSQL(so.getChild()));
@@ -144,6 +179,28 @@ public class PlanToSQLTranslator {
                 }
             }
 
+            return null;
+        }
+
+        @Override
+        public Void visitAggregate(Aggregate aggregate) {
+            // TODO: Implement aggregate translation in Phase 3
+            sql.append("SELECT * FROM (");
+            if (!aggregate.children().isEmpty()) {
+                aggregate.children().get(0).accept(this);
+            }
+            sql.append(")");
+            return null;
+        }
+
+        @Override
+        public Void visitJoin(Join join) {
+            // TODO: Implement join translation in Phase 3
+            sql.append("SELECT * FROM (");
+            join.children().get(0).accept(this);
+            sql.append(") JOIN (");
+            join.children().get(1).accept(this);
+            sql.append(")");
             return null;
         }
 

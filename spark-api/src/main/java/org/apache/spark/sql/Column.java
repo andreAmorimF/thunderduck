@@ -4,6 +4,10 @@ import com.spark2sql.plan.Expression;
 import com.spark2sql.plan.expressions.*;
 import org.apache.spark.sql.types.DataType;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Column expression for DataFrame operations.
  * Provides fluent API for building expressions.
@@ -29,48 +33,24 @@ public class Column {
         return new Column(new EqualTo(expression, lit(other).expression));
     }
 
-    public Column ===(Object other) {
-        return equalTo(other);
-    }
-
     public Column notEqual(Object other) {
         return new Column(new NotEqualTo(expression, lit(other).expression));
-    }
-
-    public Column =!=(Object other) {
-        return notEqual(other);
     }
 
     public Column gt(Object other) {
         return new Column(new GreaterThan(expression, lit(other).expression));
     }
 
-    public Column >(Object other) {
-        return gt(other);
-    }
-
     public Column lt(Object other) {
         return new Column(new LessThan(expression, lit(other).expression));
-    }
-
-    public Column <(Object other) {
-        return lt(other);
     }
 
     public Column geq(Object other) {
         return new Column(new GreaterThanOrEqual(expression, lit(other).expression));
     }
 
-    public Column >=(Object other) {
-        return geq(other);
-    }
-
     public Column leq(Object other) {
         return new Column(new LessThanOrEqual(expression, lit(other).expression));
-    }
-
-    public Column <=(Object other) {
-        return leq(other);
     }
 
     // Arithmetic operations
@@ -78,40 +58,20 @@ public class Column {
         return new Column(new Add(expression, lit(other).expression));
     }
 
-    public Column +(Object other) {
-        return plus(other);
-    }
-
     public Column minus(Object other) {
         return new Column(new Subtract(expression, lit(other).expression));
-    }
-
-    public Column -(Object other) {
-        return minus(other);
     }
 
     public Column multiply(Object other) {
         return new Column(new Multiply(expression, lit(other).expression));
     }
 
-    public Column *(Object other) {
-        return multiply(other);
-    }
-
     public Column divide(Object other) {
         return new Column(new Divide(expression, lit(other).expression));
     }
 
-    public Column /(Object other) {
-        return divide(other);
-    }
-
     public Column mod(Object other) {
         return new Column(new Remainder(expression, lit(other).expression));
-    }
-
-    public Column %(Object other) {
-        return mod(other);
     }
 
     // String operations
@@ -136,9 +96,9 @@ public class Column {
     }
 
     public Column isin(Object... values) {
-        Expression[] exprs = new Expression[values.length];
-        for (int i = 0; i < values.length; i++) {
-            exprs[i] = lit(values[i]).expression;
+        List<Expression> exprs = new ArrayList<>();
+        for (Object value : values) {
+            exprs.add(lit(value).expression);
         }
         return new Column(new In(expression, exprs));
     }
@@ -161,24 +121,12 @@ public class Column {
         return new Column(new And(expression, other.expression));
     }
 
-    public Column &&(Column other) {
-        return and(other);
-    }
-
     public Column or(Column other) {
         return new Column(new Or(expression, other.expression));
     }
 
-    public Column ||(Column other) {
-        return or(other);
-    }
-
     public Column not() {
         return new Column(new Not(expression));
-    }
-
-    public Column !() {
-        return not();
     }
 
     // Aliasing
@@ -239,8 +187,8 @@ public class Column {
     // When/Otherwise
     public Column when(Column condition, Object value) {
         return new Column(new CaseWhen(
-            new Expression[]{condition.expression},
-            new Expression[]{lit(value).expression},
+            Arrays.asList(condition.expression),
+            Arrays.asList(lit(value).expression),
             null
         ));
     }
@@ -305,24 +253,12 @@ public class Column {
         return new Column(new BitwiseAnd(expression, lit(other).expression));
     }
 
-    public Column &(Object other) {
-        return bitwiseAND(other);
-    }
-
     public Column bitwiseOR(Object other) {
         return new Column(new BitwiseOr(expression, lit(other).expression));
     }
 
-    public Column |(Object other) {
-        return bitwiseOR(other);
-    }
-
     public Column bitwiseXOR(Object other) {
         return new Column(new BitwiseXor(expression, lit(other).expression));
-    }
-
-    public Column ^(Object other) {
-        return bitwiseXOR(other);
     }
 
     // Helper to create literal expressions
@@ -330,7 +266,7 @@ public class Column {
         if (value instanceof Column) {
             return (Column) value;
         }
-        return new Column(new Literal(value));
+        return new Column(Literal.create(value));
     }
 
     @Override

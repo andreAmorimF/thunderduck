@@ -2,7 +2,6 @@ package org.apache.spark.sql;
 
 import com.spark2sql.plan.LogicalPlan;
 import com.spark2sql.plan.nodes.*;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -123,7 +122,7 @@ public class Dataset<T> {
     }
 
     public Dataset<Row> join(Dataset<?> right, String usingColumn) {
-        return join(right, col(usingColumn).equalTo(right.col(usingColumn)));
+        return join(right, functions.col(usingColumn).equalTo(functions.col(usingColumn)));
     }
 
     public RelationalGroupedDataset groupBy(Column... columns) {
@@ -275,7 +274,7 @@ public class Dataset<T> {
     // Type conversions
     @SuppressWarnings("unchecked")
     public Dataset<Row> toDF() {
-        if (encoder instanceof RowEncoder) {
+        if (encoder.getClass().getName().equals("org.apache.spark.sql.RowEncoder")) {
             return (Dataset<Row>) this;
         }
         return new Dataset<>(sparkSession, logicalPlan,
