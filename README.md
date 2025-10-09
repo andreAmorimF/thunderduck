@@ -1,1 +1,0 @@
-# spark-connect2sql
