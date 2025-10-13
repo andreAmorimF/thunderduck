@@ -1,0 +1,27 @@
+# IGNORE THIS FILE
+
+Explore the problem of building a translation layer from Scala code written against the Spark 3.5v+ DataFrame API to a dialect of SQL.
+
+Consider several approaches, their advantages and disadvantages such as 
+- alternative implementation of the Spark API or the compatible Spark Connect Client API (that matches the DataFrame API) embedded in process
+- an alternative implementation of the Spark Connect server that translates the chain of DataFrame operations to SQL operations to be run on DuckDB or other similar engines
+- any other feasible approach
+
+The implementation does not need to target SQL string representation, in fact it would be better if it target Substrait or Apache Calcite that allows it to be fed to multiple SQL engines such as DuckDB directly or to optimize the generated SQL expression and generate a string representation in particular SQL dialect.
+
+100% coverage is not a goal, as most Spark transformations do not use the full range of the Spark DataFrame API operations.
+
+No need to support Spart Streaming semantics.
+
+Only support query operations and returning a result set.
+
+Ensuring consistent treatment of numerics is key, pay attention to possible gotchas when mapping Spark data types to SQL data types. 
+
+Any Spark built-in function that does not have SQL equivalent to ensure numerical correctness should be mapped to an extension function.
+
+Describe valid approaches and create a high level implementation plan in idiomatic Java 8 if using the embedded approach or Java 21 or newer if needed, when using the alternative implementation of the Spark Connect Server approach and save it in Analysis_and_Design.md as markdown.
+
+-- 
+
+
+npx claude-flow@alpha hive-mind spawn "read all docs/*.md, and build BDD (given-when-then) style tests and a step-by-step plan for implementation" --claude
