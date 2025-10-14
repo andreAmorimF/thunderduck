@@ -1,0 +1,7 @@
+/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/test/TestCategories.java
+/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/test/TestDataBuilder.java
+/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/test/DifferentialAssertion.java
+/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/types/TypeMapperTest.java
+/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/test/TestBase.java
+/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/functions/FunctionRegistryTest.java
+/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/expression/ExpressionTest.java
