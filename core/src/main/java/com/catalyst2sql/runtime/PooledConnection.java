@@ -61,7 +61,7 @@ public class PooledConnection implements AutoCloseable {
      */
     public DuckDBConnection get() {
         if (released) {
-            throw new IllegalStateException("Connection already released to pool");
+            throw new IllegalStateException("Connection has already been released to pool");
         }
         return connection;
     }

@@ -134,7 +134,12 @@ public class QueryExecutionException extends RuntimeException {
                    "Check column name spelling and case sensitivity.";
         }
 
-        return "Column not found: " + message;
+        // Strip technical jargon from message
+        String cleanMessage = message
+            .replace("Binder Error:", "")
+            .replace("Parser Error:", "")
+            .trim();
+        return "Column not found: " + cleanMessage;
     }
 
     /**

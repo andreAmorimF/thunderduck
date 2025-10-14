@@ -81,9 +81,18 @@ public class SQLGenerator {
             sql.setLength(savedLength);
             contextStack.clear();
 
-            // Wrap in SQLGenerationException with context
-            throw new SQLGenerationException(
-                "Unsupported logical plan operator", e, plan);
+            // Re-throw UnsupportedOperationException without wrapping
+            // so callers can catch it directly if needed
+            throw e;
+
+        } catch (IllegalArgumentException e) {
+            // Rollback state
+            sql.setLength(savedLength);
+            contextStack.clear();
+
+            // Re-throw IllegalArgumentException without wrapping
+            // This includes validation errors from quoting/escaping
+            throw e;
 
         } catch (Exception e) {
             // Rollback state
@@ -151,7 +160,8 @@ public class SQLGenerator {
             String alias = aliases.get(i);
             if (alias != null && !alias.isEmpty()) {
                 sql.append(" AS ");
-                sql.append(quoteIdentifier(alias));
+                // Always quote aliases for security and consistency
+                sql.append(SQLQuoting.quoteIdentifier(alias));
             }
         }
 

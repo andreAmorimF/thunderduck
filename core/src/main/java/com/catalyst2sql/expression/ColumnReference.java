@@ -1,6 +1,7 @@
 package com.catalyst2sql.expression;
 
 import com.catalyst2sql.types.DataType;
+import com.catalyst2sql.generator.SQLQuoting;
 import java.util.Objects;
 
 /**
@@ -117,10 +118,18 @@ public class ColumnReference extends Expression {
     /**
      * Converts this column reference to its SQL string representation.
      *
+     * <p>Column names are properly quoted to prevent SQL injection and
+     * handle reserved words, special characters, etc. Quoting is only
+     * applied when necessary to keep SQL readable.
+     *
      * @return the SQL string
      */
     public String toSQL() {
-        return qualifiedName();
+        if (qualifier != null) {
+            return SQLQuoting.quoteIdentifierIfNeeded(qualifier) + "." +
+                   SQLQuoting.quoteIdentifierIfNeeded(columnName);
+        }
+        return SQLQuoting.quoteIdentifierIfNeeded(columnName);
     }
 
     @Override

@@ -41,16 +41,17 @@ public class Union extends LogicalPlan {
         this.right = Objects.requireNonNull(right, "right must not be null");
         this.all = all;
 
-        // Verify schemas are compatible
+        // Verify schemas are compatible (if available)
         StructType leftSchema = left.schema();
         StructType rightSchema = right.schema();
-        if (leftSchema.size() != rightSchema.size()) {
-            throw new IllegalArgumentException(
-                String.format("Union requires same number of columns: left has %d, right has %d",
-                            leftSchema.size(), rightSchema.size()));
+        if (leftSchema != null && rightSchema != null) {
+            if (leftSchema.size() != rightSchema.size()) {
+                throw new IllegalArgumentException(
+                    String.format("Union requires same number of columns: left has %d, right has %d",
+                                leftSchema.size(), rightSchema.size()));
+            }
+            // TODO: Add stricter type compatibility checking
         }
-
-        // TODO: Add stricter type compatibility checking
     }
 
     /**

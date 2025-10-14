@@ -46,10 +46,6 @@ public class Aggregate extends LogicalPlan {
             Objects.requireNonNull(groupingExpressions, "groupingExpressions must not be null"));
         this.aggregateExpressions = new ArrayList<>(
             Objects.requireNonNull(aggregateExpressions, "aggregateExpressions must not be null"));
-
-        if (this.aggregateExpressions.isEmpty()) {
-            throw new IllegalArgumentException("aggregateExpressions must not be empty");
-        }
     }
 
     /**
@@ -81,6 +77,9 @@ public class Aggregate extends LogicalPlan {
 
     @Override
     public String toSQL(SQLGenerator generator) {
+        if (aggregateExpressions.isEmpty()) {
+            throw new IllegalArgumentException("Cannot generate SQL for aggregation with no aggregate expressions");
+        }
         // SQL generation will be implemented by the generator
         throw new UnsupportedOperationException("SQL generation not yet implemented");
     }

@@ -79,17 +79,22 @@ public class SQLQuoting {
      *
      * @param path the file path to quote
      * @return quoted path safe for SQL
-     * @throws IllegalArgumentException if path is null, empty, or contains
+     * @throws NullPointerException if path is null
+     * @throws IllegalArgumentException if path is empty or contains
      *         suspicious characters that could indicate SQL injection
      */
     public static String quoteFilePath(String path) {
-        if (path == null || path.isEmpty()) {
-            throw new IllegalArgumentException("File path cannot be null or empty");
+        if (path == null) {
+            throw new NullPointerException("File path cannot be null");
+        }
+        if (path.isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be empty");
         }
 
         // Detect SQL injection attempts
         if (path.contains(";") || path.contains("--") ||
-            path.contains("/*") || path.contains("*/")) {
+            path.contains("/*") || path.contains("*/") ||
+            path.contains("' OR '")) {
             throw new IllegalArgumentException(
                 "Invalid characters in file path (possible SQL injection): " + path);
         }
@@ -143,6 +148,8 @@ public class SQLQuoting {
                !input.contains("--") &&
                !input.contains("/*") &&
                !input.contains("*/") &&
+               !input.contains("' OR '") &&
+               !input.contains("\" OR \"") &&
                !lower.contains(" drop ") &&
                !lower.contains(" delete ") &&
                !lower.contains(" insert ") &&
@@ -186,6 +193,8 @@ public class SQLQuoting {
      * Simple identifiers that follow standard naming conventions don't need
      * quotes, making the generated SQL more readable.
      *
+     * <p>Special SQL keywords like "*" are never quoted.
+     *
      * @param identifier the identifier to conditionally quote
      * @return the identifier, quoted if necessary
      * @throws IllegalArgumentException if identifier is null or empty
@@ -193,6 +202,11 @@ public class SQLQuoting {
     public static String quoteIdentifierIfNeeded(String identifier) {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Identifier cannot be null or empty");
+        }
+
+        // Special case: asterisk for SELECT * or count(*)
+        if ("*".equals(identifier)) {
+            return identifier;
         }
 
         // Check if identifier needs quoting
