@@ -16,6 +16,9 @@ import java.sql.Types;
  */
 public class TypeComparator {
 
+    // DuckDB-specific type codes (not in standard java.sql.Types)
+    private static final int DUCKDB_HUGEINT = 2000;  // 128-bit integer for large aggregates
+
     /**
      * Check if Spark DataType is compatible with JDBC type code.
      *
@@ -31,7 +34,8 @@ public class TypeComparator {
 
         // Long types
         if (sparkType instanceof LongType) {
-            return jdbcTypeCode == Types.BIGINT || jdbcTypeCode == Types.INTEGER;
+            return jdbcTypeCode == Types.BIGINT || jdbcTypeCode == Types.INTEGER ||
+                   jdbcTypeCode == DUCKDB_HUGEINT;  // DuckDB uses HUGEINT for SUM(BIGINT)
         }
 
         // Short types
@@ -155,6 +159,8 @@ public class TypeComparator {
                 return "ARRAY";
             case Types.STRUCT:
                 return "STRUCT";
+            case DUCKDB_HUGEINT:
+                return "HUGEINT";
             default:
                 return "UNKNOWN(" + jdbcTypeCode + ")";
         }

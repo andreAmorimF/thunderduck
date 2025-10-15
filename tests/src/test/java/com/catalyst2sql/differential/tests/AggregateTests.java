@@ -126,9 +126,12 @@ public class AggregateTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
+        // Fix: Group by computed expression using groupBy with expr
         Dataset<Row> sparkResult = spark.read().parquet(parquetPath)
-                .selectExpr("category", "amount % 2 as parity", "COUNT(*) as count")
-                .groupBy("category", "parity")
+                .groupBy(
+                        org.apache.spark.sql.functions.col("category"),
+                        org.apache.spark.sql.functions.expr("amount % 2").as("parity")
+                )
                 .count()
                 .orderBy("category", "parity");
 
@@ -138,7 +141,7 @@ public class AggregateTests extends DifferentialTestHarness {
                     tableName, parquetPath));
 
             try (ResultSet duckdbResult = stmt.executeQuery(
-                    "SELECT category, amount % 2 as parity, COUNT(*) as count FROM " + tableName + 
+                    "SELECT category, amount % 2 as parity, COUNT(*) as count FROM " + tableName +
                     " GROUP BY category, parity ORDER BY category, parity")) {
                 ComparisonResult result = executeAndCompare("GROUP_BY_MULTIPLE", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();

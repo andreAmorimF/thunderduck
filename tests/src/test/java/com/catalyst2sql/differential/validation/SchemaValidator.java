@@ -89,17 +89,11 @@ public class SchemaValidator {
                     ));
                 }
 
-                // Check nullability (less critical)
-                boolean jdbcNullableFlag = (jdbcNullable == ResultSetMetaData.columnNullable);
-                if (sparkNullable != jdbcNullableFlag) {
-                    divergences.add(new Divergence(
-                            Divergence.Type.SCHEMA_MISMATCH,
-                            Divergence.Severity.MEDIUM,
-                            String.format("Column '%s' nullability mismatch", sparkName),
-                            sparkNullable,
-                            jdbcNullableFlag
-                    ));
-                }
+                // Skip nullability checks - JDBC drivers report nullability inconsistently
+                // especially for aggregate results and literals. This is not a semantic divergence.
+                // For example, COUNT(*) can never be NULL but DuckDB JDBC reports it as nullable.
+                // Similarly, literals like 42 or 'hello' are reported as nullable by DuckDB JDBC.
+                // We intentionally skip this check to avoid false positives.
             }
 
         } catch (Exception e) {

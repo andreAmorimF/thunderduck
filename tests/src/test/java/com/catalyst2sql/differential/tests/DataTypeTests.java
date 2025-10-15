@@ -226,7 +226,8 @@ public class DataTypeTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        Dataset<Row> sparkResult = spark.read().parquet(parquetPath);
+        // Add ORDER BY for deterministic row ordering
+        Dataset<Row> sparkResult = spark.read().parquet(parquetPath).orderBy("int_val");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
@@ -234,7 +235,7 @@ public class DataTypeTests extends DifferentialTestHarness {
                     tableName, parquetPath));
 
             try (ResultSet duckdbResult = stmt.executeQuery(
-                    "SELECT * FROM " + tableName)) {
+                    "SELECT * FROM " + tableName + " ORDER BY int_val")) {
                 ComparisonResult result = executeAndCompare("MIN_MAX_VALUES", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
             }

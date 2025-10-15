@@ -42,15 +42,15 @@ public class BasicSelectTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        // When: Execute on both engines
-        Dataset<Row> sparkResult = spark.read().parquet(parquetPath);
+        // When: Execute on both engines with ORDER BY for deterministic results
+        Dataset<Row> sparkResult = spark.read().parquet(parquetPath).orderBy("id");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
                     "CREATE OR REPLACE VIEW %s AS SELECT * FROM parquet_scan('%s/**/*.parquet')",
                     tableName, parquetPath));
 
-            try (ResultSet duckdbResult = stmt.executeQuery("SELECT * FROM " + tableName)) {
+            try (ResultSet duckdbResult = stmt.executeQuery("SELECT * FROM " + tableName + " ORDER BY id")) {
                 // Then: Compare results
                 ComparisonResult result = executeAndCompare("SELECT_STAR", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
@@ -67,15 +67,15 @@ public class BasicSelectTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        // When: Select specific columns
-        Dataset<Row> sparkResult = spark.read().parquet(parquetPath).select("id", "name");
+        // When: Select specific columns with ORDER BY for deterministic results
+        Dataset<Row> sparkResult = spark.read().parquet(parquetPath).select("id", "name").orderBy("id");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
                     "CREATE OR REPLACE VIEW %s AS SELECT * FROM parquet_scan('%s/**/*.parquet')",
                     tableName, parquetPath));
 
-            try (ResultSet duckdbResult = stmt.executeQuery("SELECT id, name FROM " + tableName)) {
+            try (ResultSet duckdbResult = stmt.executeQuery("SELECT id, name FROM " + tableName + " ORDER BY id")) {
                 // Then: Compare results
                 ComparisonResult result = executeAndCompare("SELECT_PROJECTION", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
@@ -92,9 +92,10 @@ public class BasicSelectTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        // When: Select with aliases
+        // When: Select with aliases and ORDER BY for deterministic results
         Dataset<Row> sparkResult = spark.read().parquet(parquetPath)
-                .selectExpr("id AS identifier", "name AS full_name", "value AS amount");
+                .selectExpr("id AS identifier", "name AS full_name", "value AS amount")
+                .orderBy("identifier");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
@@ -102,7 +103,7 @@ public class BasicSelectTests extends DifferentialTestHarness {
                     tableName, parquetPath));
 
             try (ResultSet duckdbResult = stmt.executeQuery(
-                    "SELECT id AS identifier, name AS full_name, value AS amount FROM " + tableName)) {
+                    "SELECT id AS identifier, name AS full_name, value AS amount FROM " + tableName + " ORDER BY identifier")) {
                 // Then: Compare results
                 ComparisonResult result = executeAndCompare("SELECT_ALIASES", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
@@ -146,9 +147,10 @@ public class BasicSelectTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        // When: Select with literals
+        // When: Select with literals and ORDER BY for deterministic results
         Dataset<Row> sparkResult = spark.read().parquet(parquetPath)
-                .selectExpr("id", "42 AS constant", "'hello' AS greeting");
+                .selectExpr("id", "42 AS constant", "'hello' AS greeting")
+                .orderBy("id");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
@@ -156,7 +158,7 @@ public class BasicSelectTests extends DifferentialTestHarness {
                     tableName, parquetPath));
 
             try (ResultSet duckdbResult = stmt.executeQuery(
-                    "SELECT id, 42 AS constant, 'hello' AS greeting FROM " + tableName)) {
+                    "SELECT id, 42 AS constant, 'hello' AS greeting FROM " + tableName + " ORDER BY id")) {
                 // Then: Compare results
                 ComparisonResult result = executeAndCompare("SELECT_LITERALS", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
@@ -173,9 +175,10 @@ public class BasicSelectTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        // When: Select with arithmetic
+        // When: Select with arithmetic and ORDER BY for deterministic results
         Dataset<Row> sparkResult = spark.read().parquet(parquetPath)
-                .selectExpr("id", "value * 2 AS doubled", "value + 10 AS added");
+                .selectExpr("id", "value * 2 AS doubled", "value + 10 AS added")
+                .orderBy("id");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
@@ -183,7 +186,7 @@ public class BasicSelectTests extends DifferentialTestHarness {
                     tableName, parquetPath));
 
             try (ResultSet duckdbResult = stmt.executeQuery(
-                    "SELECT id, value * 2 AS doubled, value + 10 AS added FROM " + tableName)) {
+                    "SELECT id, value * 2 AS doubled, value + 10 AS added FROM " + tableName + " ORDER BY id")) {
                 // Then: Compare results
                 ComparisonResult result = executeAndCompare("SELECT_ARITHMETIC", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
@@ -254,9 +257,10 @@ public class BasicSelectTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        // When: Select with CAST
+        // When: Select with CAST and ORDER BY for deterministic results
         Dataset<Row> sparkResult = spark.read().parquet(parquetPath)
-                .selectExpr("id", "CAST(value AS INT) AS value_int", "CAST(id AS STRING) AS id_str");
+                .selectExpr("id", "CAST(value AS INT) AS value_int", "CAST(id AS STRING) AS id_str")
+                .orderBy("id");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
@@ -264,7 +268,7 @@ public class BasicSelectTests extends DifferentialTestHarness {
                     tableName, parquetPath));
 
             try (ResultSet duckdbResult = stmt.executeQuery(
-                    "SELECT id, CAST(value AS INTEGER) AS value_int, CAST(id AS VARCHAR) AS id_str FROM " + tableName)) {
+                    "SELECT id, CAST(value AS INTEGER) AS value_int, CAST(id AS VARCHAR) AS id_str FROM " + tableName + " ORDER BY id")) {
                 // Then: Compare results
                 ComparisonResult result = executeAndCompare("SELECT_CAST", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
@@ -281,9 +285,10 @@ public class BasicSelectTests extends DifferentialTestHarness {
         String parquetPath = tempDir.resolve(tableName + ".parquet").toString();
         testData.write().mode("overwrite").parquet(parquetPath);
 
-        // When: Select with CASE WHEN
+        // When: Select with CASE WHEN and ORDER BY for deterministic results
         Dataset<Row> sparkResult = spark.read().parquet(parquetPath)
-                .selectExpr("id", "CASE WHEN value > 50 THEN 'high' ELSE 'low' END AS category");
+                .selectExpr("id", "CASE WHEN value > 50 THEN 'high' ELSE 'low' END AS category")
+                .orderBy("id");
 
         try (Statement stmt = duckdb.createStatement()) {
             stmt.execute(String.format(
@@ -291,7 +296,7 @@ public class BasicSelectTests extends DifferentialTestHarness {
                     tableName, parquetPath));
 
             try (ResultSet duckdbResult = stmt.executeQuery(
-                    "SELECT id, CASE WHEN value > 50 THEN 'high' ELSE 'low' END AS category FROM " + tableName)) {
+                    "SELECT id, CASE WHEN value > 50 THEN 'high' ELSE 'low' END AS category FROM " + tableName + " ORDER BY id")) {
                 // Then: Compare results
                 ComparisonResult result = executeAndCompare("SELECT_CASE_WHEN", sparkResult, duckdbResult);
                 assertThat(result.hasDivergences()).isFalse();
