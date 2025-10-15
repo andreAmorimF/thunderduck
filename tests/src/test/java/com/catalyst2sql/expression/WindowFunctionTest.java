@@ -98,9 +98,9 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("DENSE_RANK with multiple partitions")
         void testDenseRankWithMultiplePartitions() {
             // Given: DENSE_RANK with multiple partition columns
-            Expression departmentCol = new ColumnReference("department");
-            Expression teamCol = new ColumnReference("team");
-            Expression salaryCol = new ColumnReference("salary");
+            Expression departmentCol = new ColumnReference("department", StringType.get());
+            Expression teamCol = new ColumnReference("team", StringType.get());
+            Expression salaryCol = new ColumnReference("salary", IntegerType.get());
 
             List<Expression> partitions = Arrays.asList(departmentCol, teamCol);
 
@@ -130,7 +130,7 @@ public class WindowFunctionTest extends TestBase {
         void testNTileBuckets() {
             // Given: NTILE(4) for quartiles
             Expression bucketCount = new Literal(4, IntegerType.get());
-            Expression scoreCol = new ColumnReference("score");
+            Expression scoreCol = new ColumnReference("score", IntegerType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(
                 scoreCol,
@@ -162,11 +162,11 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("LAG with offset and default value")
         void testLagWithOffsetAndDefault() {
             // Given: LAG(amount, 1, 0)
-            Expression amountCol = new ColumnReference("amount");
+            Expression amountCol = new ColumnReference("amount", IntegerType.get());
             Expression offset = new Literal(1, IntegerType.get());
             Expression defaultValue = new Literal(0, IntegerType.get());
 
-            Expression dateCol = new ColumnReference("date");
+            Expression dateCol = new ColumnReference("date", StringType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(
                 dateCol,
@@ -193,11 +193,11 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("LEAD with offset and missing values")
         void testLeadWithOffset() {
             // Given: LEAD(value, 2)
-            Expression valueCol = new ColumnReference("value");
+            Expression valueCol = new ColumnReference("value", IntegerType.get());
             Expression offset = new Literal(2, IntegerType.get());
 
-            Expression timestampCol = new ColumnReference("timestamp");
-            Expression categoryCol = new ColumnReference("category");
+            Expression timestampCol = new ColumnReference("timestamp", StringType.get());
+            Expression categoryCol = new ColumnReference("category", StringType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(
                 timestampCol,
@@ -224,9 +224,9 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("FIRST_VALUE with frame specification")
         void testFirstValueWithFrame() {
             // Given: FIRST_VALUE(price) - frame is typically implicit
-            Expression priceCol = new ColumnReference("price");
-            Expression categoryCol = new ColumnReference("category");
-            Expression dateCol = new ColumnReference("date");
+            Expression priceCol = new ColumnReference("price", IntegerType.get());
+            Expression categoryCol = new ColumnReference("category", StringType.get());
+            Expression dateCol = new ColumnReference("date", StringType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(
                 dateCol,
@@ -253,9 +253,9 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("LAST_VALUE with frame specification")
         void testLastValueWithFrame() {
             // Given: LAST_VALUE(status)
-            Expression statusCol = new ColumnReference("status");
-            Expression userIdCol = new ColumnReference("user_id");
-            Expression timestampCol = new ColumnReference("timestamp");
+            Expression statusCol = new ColumnReference("status", StringType.get());
+            Expression userIdCol = new ColumnReference("user_id", IntegerType.get());
+            Expression timestampCol = new ColumnReference("timestamp", StringType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(
                 timestampCol,
@@ -307,7 +307,7 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("Window with only PARTITION BY, no ORDER BY")
         void testPartitionByOnly() {
             // Given: COUNT(*) OVER (PARTITION BY category)
-            Expression categoryCol = new ColumnReference("category");
+            Expression categoryCol = new ColumnReference("category", StringType.get());
 
             WindowFunction count = new WindowFunction(
                 "COUNT",
@@ -329,7 +329,7 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("Window with only ORDER BY, no PARTITION BY")
         void testOrderByOnly() {
             // Given: RANK() OVER (ORDER BY score DESC)
-            Expression scoreCol = new ColumnReference("score");
+            Expression scoreCol = new ColumnReference("score", IntegerType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(
                 scoreCol,
@@ -357,8 +357,8 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("Multiple ORDER BY columns with mixed directions")
         void testMultipleOrderByColumns() {
             // Given: RANK() OVER (ORDER BY department ASC, salary DESC)
-            Expression deptCol = new ColumnReference("department");
-            Expression salaryCol = new ColumnReference("salary");
+            Expression deptCol = new ColumnReference("department", StringType.get());
+            Expression salaryCol = new ColumnReference("salary", IntegerType.get());
 
             Sort.SortOrder order1 = new Sort.SortOrder(
                 deptCol,
@@ -397,12 +397,12 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("Window function with complex expression argument")
         void testComplexExpressionArgument() {
             // Given: LAG(price * quantity, 1)
-            Expression priceCol = new ColumnReference("price");
-            Expression quantityCol = new ColumnReference("quantity");
-            Expression productExpr = new BinaryExpression("*", priceCol, quantityCol);
+            Expression priceCol = new ColumnReference("price", IntegerType.get());
+            Expression quantityCol = new ColumnReference("quantity", IntegerType.get());
+            Expression productExpr = BinaryExpression.multiply(priceCol, quantityCol);
 
             Expression offset = new Literal(1, IntegerType.get());
-            Expression dateCol = new ColumnReference("date");
+            Expression dateCol = new ColumnReference("date", StringType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(
                 dateCol,
@@ -429,8 +429,8 @@ public class WindowFunctionTest extends TestBase {
         @DisplayName("Window function getters return correct values")
         void testWindowFunctionGetters() {
             // Given: A window function with all components
-            Expression categoryCol = new ColumnReference("category");
-            Expression priceCol = new ColumnReference("price");
+            Expression categoryCol = new ColumnReference("category", StringType.get());
+            Expression priceCol = new ColumnReference("price", IntegerType.get());
             Expression arg1 = new Literal(1, IntegerType.get());
 
             Sort.SortOrder sortOrder = new Sort.SortOrder(

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for Catalyst2SQL structured logging.
+
+  Features:
+  - Console appender for development and debugging
+  - Rolling file appender with 30-day retention
+  - Correlation ID tracking via MDC
+  - Configurable log levels per package
+
+  For more information on Logback configuration:
+  https://logback.qos.ch/manual/configuration.html
+-->
+<configuration>
+
+    <!--
+      Console Appender
+      Outputs logs to stdout with colored output and correlation IDs.
+      Pattern includes: timestamp, thread, level, logger, correlation ID, message.
+    -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{queryId}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      Rolling File Appender
+      Writes logs to files with daily rotation and 30-day retention.
+      Files are stored in logs/ directory with date-based naming.
+    -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- Current log file location -->
+        <file>logs/catalyst2sql.log</file>
+
+        <!-- Rolling policy: new file each day, keep 30 days of history -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/catalyst2sql.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+
+        <!-- Log format matches console for consistency -->
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{queryId}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      Package-specific logger configuration.
+      Set DEBUG level for catalyst2sql package to capture detailed query processing.
+    -->
+    <logger name="com.catalyst2sql" level="DEBUG"/>
+
+    <!--
+      Spark logging can be verbose, set to WARN to reduce noise.
+      Uncomment the following lines if running in Spark environment.
+    -->
+    <!-- <logger name="org.apache.spark" level="WARN"/> -->
+    <!-- <logger name="org.apache.hadoop" level="WARN"/> -->
+    <!-- <logger name="org.apache.parquet" level="WARN"/> -->
+
+    <!--
+      Root logger configuration.
+      All loggers not explicitly configured inherit these settings.
+    -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>
