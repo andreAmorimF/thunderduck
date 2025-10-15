@@ -450,7 +450,7 @@ public class DatabaseConnectionCleanupTest extends TestBase {
 
         @Test
         @DisplayName("Cleanup failure during manager shutdown")
-        void testCleanupFailureDuringShutdown() throws SQLException {
+        void testCleanupFailureDuringShutdown() throws Exception {
             logStep("Given: Connection with active statement");
             PooledConnection pooled = manager.borrowConnection();
             Statement stmt = pooled.get().createStatement();

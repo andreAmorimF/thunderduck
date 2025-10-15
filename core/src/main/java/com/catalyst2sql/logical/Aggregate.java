@@ -12,11 +12,13 @@ import java.util.Objects;
  * Logical plan node representing an aggregation (GROUP BY clause with aggregates).
  *
  * <p>This node groups rows from its child and computes aggregate functions.
+ * Optionally supports HAVING clause to filter aggregated results.
  *
  * <p>Examples:
  * <pre>
  *   df.groupBy("category").agg(sum("amount"), avg("price"))
  *   df.groupBy("year", "month").count()
+ *   df.groupBy("customer_id").agg(count("*")).having(col("count") > 5)
  * </pre>
  *
  * <p>SQL generation:
@@ -24,15 +26,37 @@ import java.util.Objects;
  * SELECT groupingExpr1, groupingExpr2, aggFunc1, aggFunc2
  * FROM (child)
  * GROUP BY groupingExpr1, groupingExpr2
+ * HAVING condition
  * </pre>
  */
 public class Aggregate extends LogicalPlan {
 
     private final List<Expression> groupingExpressions;
     private final List<AggregateExpression> aggregateExpressions;
+    private final Expression havingCondition;
 
     /**
-     * Creates an aggregate node.
+     * Creates an aggregate node with optional HAVING clause.
+     *
+     * @param child the child node
+     * @param groupingExpressions the grouping expressions (empty for global aggregation)
+     * @param aggregateExpressions the aggregate expressions (sum, avg, count, etc.)
+     * @param havingCondition the HAVING condition (can be null)
+     */
+    public Aggregate(LogicalPlan child,
+                    List<Expression> groupingExpressions,
+                    List<AggregateExpression> aggregateExpressions,
+                    Expression havingCondition) {
+        super(child);
+        this.groupingExpressions = new ArrayList<>(
+            Objects.requireNonNull(groupingExpressions, "groupingExpressions must not be null"));
+        this.aggregateExpressions = new ArrayList<>(
+            Objects.requireNonNull(aggregateExpressions, "aggregateExpressions must not be null"));
+        this.havingCondition = havingCondition;  // Can be null
+    }
+
+    /**
+     * Creates an aggregate node without HAVING clause (backward compatibility).
      *
      * @param child the child node
      * @param groupingExpressions the grouping expressions (empty for global aggregation)
@@ -41,11 +65,7 @@ public class Aggregate extends LogicalPlan {
     public Aggregate(LogicalPlan child,
                     List<Expression> groupingExpressions,
                     List<AggregateExpression> aggregateExpressions) {
-        super(child);
-        this.groupingExpressions = new ArrayList<>(
-            Objects.requireNonNull(groupingExpressions, "groupingExpressions must not be null"));
-        this.aggregateExpressions = new ArrayList<>(
-            Objects.requireNonNull(aggregateExpressions, "aggregateExpressions must not be null"));
+        this(child, groupingExpressions, aggregateExpressions, null);
     }
 
     /**
@@ -64,6 +84,15 @@ public class Aggregate extends LogicalPlan {
      */
     public List<AggregateExpression> aggregateExpressions() {
         return Collections.unmodifiableList(aggregateExpressions);
+    }
+
+    /**
+     * Returns the HAVING condition.
+     *
+     * @return the HAVING condition expression, or null if no HAVING clause
+     */
+    public Expression havingCondition() {
+        return havingCondition;
     }
 
     /**
@@ -120,6 +149,12 @@ public class Aggregate extends LogicalPlan {
             sql.append(String.join(", ", groupExprs));
         }
 
+        // HAVING clause
+        if (havingCondition != null) {
+            sql.append(" HAVING ");
+            sql.append(havingCondition.toSQL());
+        }
+
         return sql.toString();
     }
 
@@ -145,34 +180,90 @@ public class Aggregate extends LogicalPlan {
 
     @Override
     public String toString() {
+        if (havingCondition != null) {
+            return String.format("Aggregate(groupBy=%s, agg=%s, having=%s)",
+                               groupingExpressions, aggregateExpressions, havingCondition);
+        }
         return String.format("Aggregate(groupBy=%s, agg=%s)",
                            groupingExpressions, aggregateExpressions);
     }
 
     /**
      * Represents an aggregate expression (e.g., SUM(amount), AVG(price)).
+     *
+     * <p>Supports DISTINCT keyword for unique value aggregation:
+     * <pre>
+     *   COUNT(DISTINCT customer_id)
+     *   SUM(DISTINCT price)
+     *   AVG(DISTINCT amount)
+     * </pre>
      */
     public static class AggregateExpression extends Expression {
         private final String function;
         private final Expression argument;
         private final String alias;
+        private final boolean distinct;
 
-        public AggregateExpression(String function, Expression argument, String alias) {
-            this.function = Objects.requireNonNull(function);
+        /**
+         * Creates an aggregate expression with optional DISTINCT modifier.
+         *
+         * @param function the aggregate function name (COUNT, SUM, AVG, MIN, MAX, etc.)
+         * @param argument the expression to aggregate (can be null for COUNT(*))
+         * @param alias the result column alias (can be null)
+         * @param distinct whether to aggregate only distinct values
+         */
+        public AggregateExpression(String function, Expression argument, String alias, boolean distinct) {
+            this.function = Objects.requireNonNull(function, "function must not be null");
             this.argument = argument;
             this.alias = alias;
+            this.distinct = distinct;
         }
 
+        /**
+         * Creates an aggregate expression without DISTINCT (backward compatibility).
+         *
+         * @param function the aggregate function name
+         * @param argument the expression to aggregate (can be null for COUNT(*))
+         * @param alias the result column alias (can be null)
+         */
+        public AggregateExpression(String function, Expression argument, String alias) {
+            this(function, argument, alias, false);
+        }
+
+        /**
+         * Returns the aggregate function name.
+         *
+         * @return the function name (e.g., "COUNT", "SUM", "AVG")
+         */
         public String function() {
             return function;
         }
 
+        /**
+         * Returns the expression being aggregated.
+         *
+         * @return the argument expression, or null for COUNT(*)
+         */
         public Expression argument() {
             return argument;
         }
 
+        /**
+         * Returns the result column alias.
+         *
+         * @return the alias, or null if not specified
+         */
         public String alias() {
             return alias;
+        }
+
+        /**
+         * Returns whether this aggregate uses DISTINCT.
+         *
+         * @return true if aggregating distinct values only
+         */
+        public boolean isDistinct() {
+            return distinct;
         }
 
         @Override
@@ -190,11 +281,29 @@ public class Aggregate extends LogicalPlan {
 
         @Override
         public String toSQL() {
-            if (argument != null) {
-                return String.format("%s(%s)", function, argument.toSQL());
-            } else {
-                return String.format("%s()", function);
+            StringBuilder sql = new StringBuilder();
+            sql.append(function.toUpperCase());
+            sql.append("(");
+
+            // Add DISTINCT keyword if specified
+            if (distinct) {
+                sql.append("DISTINCT ");
             }
+
+            // Add argument or * for COUNT(*)
+            if (argument != null) {
+                sql.append(argument.toSQL());
+            } else {
+                // COUNT(*) case - DISTINCT not allowed with *
+                if (!distinct) {
+                    sql.append("*");
+                }
+                // If distinct is true and argument is null, we don't add *
+                // This should be validated elsewhere as an error case
+            }
+
+            sql.append(")");
+            return sql.toString();
         }
 
         @Override

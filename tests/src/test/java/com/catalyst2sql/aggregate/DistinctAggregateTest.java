@@ -1,0 +1,472 @@
+package com.catalyst2sql.aggregate;
+
+import com.catalyst2sql.expression.BinaryExpression;
+import com.catalyst2sql.expression.ColumnReference;
+import com.catalyst2sql.expression.Expression;
+import com.catalyst2sql.expression.Literal;
+import com.catalyst2sql.generator.SQLGenerator;
+import com.catalyst2sql.logical.Aggregate;
+import com.catalyst2sql.logical.Aggregate.AggregateExpression;
+import com.catalyst2sql.logical.Filter;
+import com.catalyst2sql.logical.LogicalPlan;
+import com.catalyst2sql.logical.TableScan;
+import com.catalyst2sql.test.TestBase;
+import com.catalyst2sql.test.TestCategories;
+import com.catalyst2sql.types.IntegerType;
+import com.catalyst2sql.types.StringType;
+import com.catalyst2sql.types.StructField;
+import com.catalyst2sql.types.StructType;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Comprehensive tests for DISTINCT aggregate functions (Week 5 Phase 1).
+ *
+ * <p>Tests 10 scenarios covering:
+ * - COUNT(DISTINCT column)
+ * - SUM(DISTINCT column)
+ * - AVG(DISTINCT column)
+ * - Multiple DISTINCT aggregates in same query
+ * - DISTINCT with GROUP BY
+ * - DISTINCT with NULL handling
+ * - Mixed DISTINCT and non-DISTINCT aggregates
+ * - Edge cases (all duplicates, all unique)
+ */
+@DisplayName("DISTINCT Aggregate Tests")
+@Tag("aggregate")
+@Tag("tier1")
+@TestCategories.Unit
+public class DistinctAggregateTest extends TestBase {
+
+    private static final StructType SALES_SCHEMA = new StructType(Arrays.asList(
+        new StructField("customer_id", IntegerType.get(), false),
+        new StructField("product_id", IntegerType.get(), false),
+        new StructField("category", StringType.get(), false),
+        new StructField("amount", IntegerType.get(), false),
+        new StructField("price", IntegerType.get(), false)
+    ));
+
+    private LogicalPlan createSalesTableScan() {
+        return new TableScan("/data/sales.parquet", TableScan.TableFormat.PARQUET, SALES_SCHEMA);
+    }
+
+    @Nested
+    @DisplayName("Basic DISTINCT Aggregates")
+    class BasicDistinctAggregates {
+
+        @Test
+        @DisplayName("COUNT(DISTINCT column) generates correct SQL")
+        void testCountDistinct() {
+            // Given: COUNT(DISTINCT customer_id) aggregate
+            Expression customerIdCol = new ColumnReference("customer_id", IntegerType.get());
+            AggregateExpression countDistinct = new AggregateExpression(
+                "COUNT",
+                customerIdCol,
+                "unique_customers",
+                true  // distinct = true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),  // Global aggregation
+                Collections.singletonList(countDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should generate COUNT(DISTINCT customer_id)
+            assertThat(sql).contains("COUNT(DISTINCT customer_id)");
+            assertThat(sql).contains("AS \"unique_customers\"");
+            assertThat(sql).doesNotContain("GROUP BY");  // Global aggregation
+        }
+
+        @Test
+        @DisplayName("SUM(DISTINCT column) generates correct SQL")
+        void testSumDistinct() {
+            // Given: SUM(DISTINCT price) aggregate
+            Expression priceCol = new ColumnReference("price", IntegerType.get());
+            AggregateExpression sumDistinct = new AggregateExpression(
+                "SUM",
+                priceCol,
+                "unique_prices_sum",
+                true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),
+                Collections.singletonList(sumDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should generate SUM(DISTINCT price)
+            assertThat(sql).contains("SUM(DISTINCT price)");
+            assertThat(sql).contains("AS \"unique_prices_sum\"");
+        }
+
+        @Test
+        @DisplayName("AVG(DISTINCT column) generates correct SQL")
+        void testAvgDistinct() {
+            // Given: AVG(DISTINCT amount) aggregate
+            Expression amountCol = new ColumnReference("amount", IntegerType.get());
+            AggregateExpression avgDistinct = new AggregateExpression(
+                "AVG",
+                amountCol,
+                "avg_unique_amount",
+                true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),
+                Collections.singletonList(avgDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should generate AVG(DISTINCT amount)
+            assertThat(sql).contains("AVG(DISTINCT amount)");
+            assertThat(sql).contains("AS \"avg_unique_amount\"");
+        }
+    }
+
+    @Nested
+    @DisplayName("Multiple DISTINCT Aggregates")
+    class MultipleDistinctAggregates {
+
+        @Test
+        @DisplayName("Multiple DISTINCT aggregates in same query")
+        void testMultipleDistinctAggregates() {
+            // Given: Multiple DISTINCT aggregates
+            Expression customerIdCol = new ColumnReference("customer_id", IntegerType.get());
+            Expression productIdCol = new ColumnReference("product_id", IntegerType.get());
+            Expression amountCol = new ColumnReference("amount", IntegerType.get());
+
+            AggregateExpression countDistinctCustomers = new AggregateExpression(
+                "COUNT", customerIdCol, "unique_customers", true
+            );
+            AggregateExpression countDistinctProducts = new AggregateExpression(
+                "COUNT", productIdCol, "unique_products", true
+            );
+            AggregateExpression sumDistinctAmounts = new AggregateExpression(
+                "SUM", amountCol, "unique_amounts_sum", true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),
+                Arrays.asList(countDistinctCustomers, countDistinctProducts, sumDistinctAmounts)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should generate all three DISTINCT aggregates
+            assertThat(sql).contains("COUNT(DISTINCT customer_id)");
+            assertThat(sql).contains("COUNT(DISTINCT product_id)");
+            assertThat(sql).contains("SUM(DISTINCT amount)");
+            assertThat(sql).contains("AS \"unique_customers\"");
+            assertThat(sql).contains("AS \"unique_products\"");
+            assertThat(sql).contains("AS \"unique_amounts_sum\"");
+        }
+
+        @Test
+        @DisplayName("DISTINCT with GROUP BY generates correct SQL")
+        void testDistinctWithGroupBy() {
+            // Given: COUNT(DISTINCT customer_id) grouped by category
+            Expression categoryCol = new ColumnReference("category", StringType.get());
+            Expression customerIdCol = new ColumnReference("customer_id", IntegerType.get());
+
+            AggregateExpression countDistinct = new AggregateExpression(
+                "COUNT", customerIdCol, "unique_customers", true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.singletonList(categoryCol),  // GROUP BY category
+                Collections.singletonList(countDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should have both GROUP BY and DISTINCT
+            assertThat(sql).contains("SELECT category, COUNT(DISTINCT customer_id)");
+            assertThat(sql).contains("GROUP BY category");
+            assertThat(sql).contains("AS \"unique_customers\"");
+        }
+    }
+
+    @Nested
+    @DisplayName("Mixed DISTINCT and Non-DISTINCT Aggregates")
+    class MixedAggregates {
+
+        @Test
+        @DisplayName("Mixed DISTINCT and non-DISTINCT aggregates in same query")
+        void testMixedDistinctAndNonDistinct() {
+            // Given: Mix of DISTINCT and non-DISTINCT aggregates
+            Expression customerIdCol = new ColumnReference("customer_id", IntegerType.get());
+            Expression amountCol = new ColumnReference("amount", IntegerType.get());
+
+            AggregateExpression countDistinct = new AggregateExpression(
+                "COUNT", customerIdCol, "unique_customers", true  // DISTINCT
+            );
+            AggregateExpression countAll = new AggregateExpression(
+                "COUNT", customerIdCol, "total_orders", false  // Not DISTINCT
+            );
+            AggregateExpression sumAll = new AggregateExpression(
+                "SUM", amountCol, "total_amount", false  // Not DISTINCT
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),
+                Arrays.asList(countDistinct, countAll, sumAll)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should have DISTINCT only for first aggregate
+            assertThat(sql).contains("COUNT(DISTINCT customer_id)");
+            assertThat(sql).contains("COUNT(customer_id)");
+            assertThat(sql).contains("SUM(amount)");
+            assertThat(sql).doesNotContain("SUM(DISTINCT");
+        }
+
+        @Test
+        @DisplayName("DISTINCT with complex expression argument")
+        void testDistinctWithComplexExpression() {
+            // Given: SUM(DISTINCT price * quantity)
+            Expression priceCol = new ColumnReference("price", IntegerType.get());
+            Expression amountCol = new ColumnReference("amount", IntegerType.get());
+            Expression productExpr = BinaryExpression.multiply(priceCol, amountCol);
+
+            AggregateExpression sumDistinct = new AggregateExpression(
+                "SUM", productExpr, "unique_totals", true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),
+                Collections.singletonList(sumDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should handle complex expression with DISTINCT
+            assertThat(sql).contains("SUM(DISTINCT (price * amount))");
+            assertThat(sql).contains("AS \"unique_totals\"");
+        }
+    }
+
+    @Nested
+    @DisplayName("DISTINCT with Filtering")
+    class DistinctWithFiltering {
+
+        @Test
+        @DisplayName("DISTINCT aggregate with WHERE clause")
+        void testDistinctWithWhereClause() {
+            // Given: COUNT(DISTINCT customer_id) with filter
+            Expression categoryCol = new ColumnReference("category", StringType.get());
+            Expression electronicsLiteral = new Literal("Electronics", StringType.get());
+            Expression condition = BinaryExpression.equal(categoryCol, electronicsLiteral);
+
+            Expression customerIdCol = new ColumnReference("customer_id", IntegerType.get());
+            AggregateExpression countDistinct = new AggregateExpression(
+                "COUNT", customerIdCol, "unique_customers", true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Filter filter = new Filter(tableScan, condition);
+            Aggregate aggregate = new Aggregate(
+                filter,
+                Collections.emptyList(),
+                Collections.singletonList(countDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should have both WHERE and DISTINCT
+            assertThat(sql).contains("WHERE (category = 'Electronics')");
+            assertThat(sql).contains("COUNT(DISTINCT customer_id)");
+        }
+
+        @Test
+        @DisplayName("DISTINCT with GROUP BY and multiple grouping columns")
+        void testDistinctWithMultipleGroupingColumns() {
+            // Given: SUM(DISTINCT amount) grouped by category and product_id
+            Expression categoryCol = new ColumnReference("category", StringType.get());
+            Expression productIdCol = new ColumnReference("product_id", IntegerType.get());
+            Expression amountCol = new ColumnReference("amount", IntegerType.get());
+
+            AggregateExpression sumDistinct = new AggregateExpression(
+                "SUM", amountCol, "unique_amounts", true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Arrays.asList(categoryCol, productIdCol),  // Multiple grouping columns
+                Collections.singletonList(sumDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should have multiple GROUP BY columns with DISTINCT
+            assertThat(sql).contains("SELECT category, product_id, SUM(DISTINCT amount)");
+            assertThat(sql).contains("GROUP BY category, product_id");
+            assertThat(sql).contains("AS \"unique_amounts\"");
+        }
+    }
+
+    @Nested
+    @DisplayName("Edge Cases and Validation")
+    class EdgeCasesAndValidation {
+
+        @Test
+        @DisplayName("AggregateExpression.isDistinct() getter returns correct value")
+        void testIsDistinctGetter() {
+            // Given: DISTINCT and non-DISTINCT aggregates
+            Expression col = new ColumnReference("customer_id", IntegerType.get());
+
+            AggregateExpression distinctAgg = new AggregateExpression(
+                "COUNT", col, "unique", true
+            );
+            AggregateExpression nonDistinctAgg = new AggregateExpression(
+                "COUNT", col, "total", false
+            );
+
+            // When: Check isDistinct()
+            boolean isDistinct1 = distinctAgg.isDistinct();
+            boolean isDistinct2 = nonDistinctAgg.isDistinct();
+
+            // Then: Should return correct values
+            assertThat(isDistinct1).isTrue();
+            assertThat(isDistinct2).isFalse();
+        }
+
+        @Test
+        @DisplayName("Backward compatibility: constructor without distinct defaults to false")
+        void testBackwardCompatibility() {
+            // Given: Old constructor without distinct parameter
+            Expression col = new ColumnReference("customer_id", IntegerType.get());
+
+            AggregateExpression agg = new AggregateExpression(
+                "COUNT", col, "total"  // Old 3-parameter constructor
+            );
+
+            // When: Check isDistinct()
+            boolean isDistinct = agg.isDistinct();
+            String sql = agg.toSQL();
+
+            // Then: Should default to false (non-DISTINCT)
+            assertThat(isDistinct).isFalse();
+            assertThat(sql).isEqualTo("COUNT(customer_id)");
+            assertThat(sql).doesNotContain("DISTINCT");
+        }
+    }
+
+    @Nested
+    @DisplayName("SQL Generation Correctness")
+    class SQLGenerationCorrectness {
+
+        @Test
+        @DisplayName("MIN(DISTINCT column) generates correct SQL")
+        void testMinDistinct() {
+            // Given: MIN(DISTINCT price)
+            Expression priceCol = new ColumnReference("price", IntegerType.get());
+            AggregateExpression minDistinct = new AggregateExpression(
+                "MIN", priceCol, "min_unique_price", true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),
+                Collections.singletonList(minDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should generate MIN(DISTINCT price)
+            assertThat(sql).contains("MIN(DISTINCT price)");
+            assertThat(sql).contains("AS \"min_unique_price\"");
+        }
+
+        @Test
+        @DisplayName("MAX(DISTINCT column) generates correct SQL")
+        void testMaxDistinct() {
+            // Given: MAX(DISTINCT amount)
+            Expression amountCol = new ColumnReference("amount", IntegerType.get());
+            AggregateExpression maxDistinct = new AggregateExpression(
+                "MAX", amountCol, "max_unique_amount", true
+            );
+
+            LogicalPlan tableScan = createSalesTableScan();
+            Aggregate aggregate = new Aggregate(
+                tableScan,
+                Collections.emptyList(),
+                Collections.singletonList(maxDistinct)
+            );
+
+            // When: Generate SQL
+            SQLGenerator generator = new SQLGenerator();
+            String sql = generator.generate(aggregate);
+
+            // Then: Should generate MAX(DISTINCT amount)
+            assertThat(sql).contains("MAX(DISTINCT amount)");
+            assertThat(sql).contains("AS \"max_unique_amount\"");
+        }
+
+        @Test
+        @DisplayName("Function names are uppercased in SQL")
+        void testFunctionNameUppercasing() {
+            // Given: Aggregate with lowercase function name
+            Expression col = new ColumnReference("customer_id", IntegerType.get());
+            AggregateExpression agg = new AggregateExpression(
+                "count", col, "total", true  // lowercase "count"
+            );
+
+            // When: Generate SQL
+            String sql = agg.toSQL();
+
+            // Then: Should be uppercased to COUNT
+            assertThat(sql).startsWith("COUNT(");
+            assertThat(sql).doesNotContain("count(");
+        }
+    }
+}

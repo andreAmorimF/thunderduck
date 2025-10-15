@@ -1,11 +1,13 @@
 package com.catalyst2sql.expression;
 
+import com.catalyst2sql.expression.window.WindowFrame;
 import com.catalyst2sql.logical.Sort;
 import com.catalyst2sql.types.DataType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Expression representing a window function.
@@ -19,6 +21,7 @@ import java.util.Objects;
  *   ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC)
  *   RANK() OVER (ORDER BY score DESC)
  *   LAG(amount, 1) OVER (PARTITION BY customer_id ORDER BY date)
+ *   AVG(amount) OVER (ORDER BY date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
  * </pre>
  *
  * <p>Supported window functions:
@@ -30,7 +33,13 @@ import java.util.Objects;
  *   <li>LEAD(expr, offset, default) - Value from next row</li>
  *   <li>FIRST_VALUE(expr) - First value in window frame</li>
  *   <li>LAST_VALUE(expr) - Last value in window frame</li>
+ *   <li>Aggregate functions with OVER clause (SUM, AVG, COUNT, etc.)</li>
  * </ul>
+ *
+ * <p>Window frames can be specified to control which rows are included in the
+ * window function's computation. See {@link WindowFrame} for details.
+ *
+ * @see WindowFrame
  */
 public class WindowFunction extends Expression {
 
@@ -38,9 +47,65 @@ public class WindowFunction extends Expression {
     private final List<Expression> arguments;
     private final List<Expression> partitionBy;
     private final List<Sort.SortOrder> orderBy;
+    private final WindowFrame frame;
+    private final String windowName;  // Optional reference to named window
 
     /**
-     * Creates a window function.
+     * Creates a window function with an optional frame specification.
+     *
+     * @param function the function name (ROW_NUMBER, RANK, LAG, etc.)
+     * @param arguments the function arguments (empty for ROW_NUMBER, RANK, etc.)
+     * @param partitionBy the partition by expressions (empty for no partitioning)
+     * @param orderBy the order by specifications (empty for no ordering)
+     * @param frame the window frame specification (null for default frame)
+     */
+    public WindowFunction(String function,
+                         List<Expression> arguments,
+                         List<Expression> partitionBy,
+                         List<Sort.SortOrder> orderBy,
+                         WindowFrame frame) {
+        this.function = Objects.requireNonNull(function, "function must not be null");
+        this.arguments = new ArrayList<>(
+            Objects.requireNonNull(arguments, "arguments must not be null"));
+        this.partitionBy = new ArrayList<>(
+            Objects.requireNonNull(partitionBy, "partitionBy must not be null"));
+        this.orderBy = new ArrayList<>(
+            Objects.requireNonNull(orderBy, "orderBy must not be null"));
+        this.frame = frame;  // Can be null
+        this.windowName = null;  // Not using named window
+    }
+
+    /**
+     * Creates a window function that references a named window.
+     *
+     * <p>When using a named window, the window specification is defined in the
+     * WINDOW clause and referenced by name here.
+     *
+     * <p>Example:
+     * <pre>
+     * SELECT RANK() OVER w FROM employees
+     * WINDOW w AS (PARTITION BY department_id ORDER BY salary DESC)
+     * </pre>
+     *
+     * @param function the function name (ROW_NUMBER, RANK, LAG, etc.)
+     * @param arguments the function arguments (empty for ROW_NUMBER, RANK, etc.)
+     * @param windowName the name of the window defined in WINDOW clause
+     */
+    public WindowFunction(String function,
+                         List<Expression> arguments,
+                         String windowName) {
+        this.function = Objects.requireNonNull(function, "function must not be null");
+        this.arguments = new ArrayList<>(
+            Objects.requireNonNull(arguments, "arguments must not be null"));
+        this.windowName = Objects.requireNonNull(windowName, "windowName must not be null");
+        this.partitionBy = Collections.emptyList();
+        this.orderBy = Collections.emptyList();
+        this.frame = null;
+    }
+
+    /**
+     * Creates a window function without a frame specification.
+     * This constructor is provided for backward compatibility.
      *
      * @param function the function name (ROW_NUMBER, RANK, LAG, etc.)
      * @param arguments the function arguments (empty for ROW_NUMBER, RANK, etc.)
@@ -51,13 +116,16 @@ public class WindowFunction extends Expression {
                          List<Expression> arguments,
                          List<Expression> partitionBy,
                          List<Sort.SortOrder> orderBy) {
-        this.function = Objects.requireNonNull(function, "function must not be null");
-        this.arguments = new ArrayList<>(
-            Objects.requireNonNull(arguments, "arguments must not be null"));
-        this.partitionBy = new ArrayList<>(
-            Objects.requireNonNull(partitionBy, "partitionBy must not be null"));
-        this.orderBy = new ArrayList<>(
-            Objects.requireNonNull(orderBy, "orderBy must not be null"));
+        this(function, arguments, partitionBy, orderBy, null);
+    }
+
+    /**
+     * Returns the named window reference, if this function uses one.
+     *
+     * @return an Optional containing the window name, or empty if inline specification is used
+     */
+    public Optional<String> windowName() {
+        return Optional.ofNullable(windowName);
     }
 
     /**
@@ -96,6 +164,15 @@ public class WindowFunction extends Expression {
         return Collections.unmodifiableList(orderBy);
     }
 
+    /**
+     * Returns the window frame specification.
+     *
+     * @return an Optional containing the window frame, or empty if no frame is specified
+     */
+    public Optional<WindowFrame> frame() {
+        return Optional.ofNullable(frame);
+    }
+
     @Override
     public DataType dataType() {
         // Type depends on function - will be refined during implementation
@@ -127,7 +204,16 @@ public class WindowFunction extends Expression {
         sql.append(")");
 
         // OVER clause
-        sql.append(" OVER (");
+        sql.append(" OVER ");
+
+        // If using named window, just reference the name
+        if (windowName != null) {
+            sql.append(windowName);
+            return sql.toString();
+        }
+
+        // Otherwise, inline window specification
+        sql.append("(");
 
         boolean hasPartition = !partitionBy.isEmpty();
         boolean hasOrder = !orderBy.isEmpty();
@@ -173,6 +259,14 @@ public class WindowFunction extends Expression {
             }
         }
 
+        // Window frame clause
+        if (frame != null) {
+            if (hasPartition || hasOrder) {
+                sql.append(" ");
+            }
+            sql.append(frame.toSQL());
+        }
+
         sql.append(")");
 
         return sql.toString();
@@ -180,7 +274,7 @@ public class WindowFunction extends Expression {
 
     @Override
     public String toString() {
-        return String.format("WindowFunction(%s, partitionBy=%s, orderBy=%s)",
-                           function, partitionBy, orderBy);
+        return String.format("WindowFunction(%s, partitionBy=%s, orderBy=%s, frame=%s)",
+                           function, partitionBy, orderBy, frame);
     }
 }
