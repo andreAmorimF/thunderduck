@@ -500,12 +500,13 @@ mvn clean deploy -Prelease
 - Write 60+ join test scenarios
 - Run TPC-H Q3, Q5, Q8 (join-heavy queries)
 
-#### Week 5: Aggregations & Window Functions ⏳ IN PROGRESS
+#### Week 5: Aggregations & Window Functions ✅ COMPLETE
 - Implement aggregate operations (groupBy, sum, avg, count, etc.)
 - Add window functions (row_number, rank, lag, lead, etc.)
-- Implement having clause support
-- Write 55+ aggregation tests
-- Write 45+ window function tests
+- Implement HAVING clause, DISTINCT aggregates, ROLLUP/CUBE/GROUPING SETS
+- Implement window frames, named windows, value window functions
+- Add window function optimizations and aggregate pushdown
+- Write 160+ comprehensive tests (aggregation, window, optimization, TPC-H)
 - Run TPC-H Q13, Q18 (aggregation queries)
 
 #### Week 6: Delta Lake & Iceberg Support 📋 PLANNED
@@ -971,15 +972,15 @@ This implementation plan provides a comprehensive roadmap for delivering a high-
 **Expected Outcomes**:
 - **Week 3**: Working embedded API with Parquet support ✅
 - **Week 4**: Complete expression system and joins ✅
-- **Week 5**: Aggregations and window functions ⏳
+- **Week 5**: Aggregations and window functions ✅
 - **Week 9**: Production-ready system with comprehensive testing
 - **Week 12**: Spark Connect server mode operational
 
 ---
 
-**Document Version**: 1.2
+**Document Version**: 1.3
 **Last Updated**: 2025-10-15
-**Status**: Week 4 Complete - Week 5 In Progress
+**Status**: Week 5 Complete - Week 6 Ready to Start
 **Approval**: Approved
 
 ---
