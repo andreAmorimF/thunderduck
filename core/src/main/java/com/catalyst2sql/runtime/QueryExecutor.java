@@ -1,10 +1,12 @@
 package com.catalyst2sql.runtime;
 
 import com.catalyst2sql.exception.QueryExecutionException;
+import com.catalyst2sql.logging.QueryLogger;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.duckdb.DuckDBConnection;
 import java.sql.*;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Executes SQL queries against DuckDB and returns results.
@@ -59,6 +61,13 @@ public class QueryExecutor {
      * to Apache Arrow format, and returns the result. The connection is
      * automatically acquired from the pool and released after execution.
      *
+     * <p>Supports SQL introspection via EXPLAIN statements:
+     * <ul>
+     *   <li>EXPLAIN &lt;query&gt; - Returns logical query plan</li>
+     *   <li>EXPLAIN ANALYZE &lt;query&gt; - Executes query and returns runtime statistics</li>
+     *   <li>EXPLAIN (FORMAT JSON) &lt;query&gt; - Returns plan in JSON format</li>
+     * </ul>
+     *
      * <p>The returned VectorSchemaRoot must be closed by the caller to
      * free memory.
      *
@@ -70,51 +79,112 @@ public class QueryExecutor {
     public VectorSchemaRoot executeQuery(String sql) throws QueryExecutionException {
         Objects.requireNonNull(sql, "sql must not be null");
 
-        // Use try-with-resources for automatic connection cleanup
-        try (PooledConnection pooled = connectionManager.borrowConnection()) {
-            DuckDBConnection conn = pooled.get();
-            Statement stmt = null;
-            ResultSet rs = null;
+        // Generate unique query ID for logging correlation
+        String queryId = "q_" + UUID.randomUUID().toString().substring(0, 8);
+        QueryLogger.startQuery(queryId);
 
-            try {
-                // Execute query
-                stmt = conn.createStatement();
-                rs = stmt.executeQuery(sql);
+        long queryStartTime = System.nanoTime();
 
-                // Convert to Arrow
-                VectorSchemaRoot result = ArrowInterchange.fromResultSet(rs);
+        try {
+            // Detect EXPLAIN statements for SQL introspection
+            boolean isExplain = isExplainStatement(sql);
 
-                return result;
+            // Use try-with-resources for automatic connection cleanup
+            try (PooledConnection pooled = connectionManager.borrowConnection()) {
+                DuckDBConnection conn = pooled.get();
+                Statement stmt = null;
+                ResultSet rs = null;
 
+                try {
+                    // Execute query
+                    long execStartTime = System.nanoTime();
+                    stmt = conn.createStatement();
+                    rs = stmt.executeQuery(sql);
+                    long execTimeMs = (System.nanoTime() - execStartTime) / 1_000_000;
+
+                    // Convert to Arrow
+                    long arrowStartTime = System.nanoTime();
+                    VectorSchemaRoot result = ArrowInterchange.fromResultSet(rs);
+                    long arrowTimeMs = (System.nanoTime() - arrowStartTime) / 1_000_000;
+
+                    // Get row count from result
+                    long rowCount = result.getRowCount();
+
+                    // Log execution metrics
+                    QueryLogger.logExecution(execTimeMs + arrowTimeMs, rowCount);
+
+                    // Log SQL for EXPLAIN statements (they're typically short)
+                    if (isExplain) {
+                        QueryLogger.logSQLGeneration(sql, 0); // No generation for direct SQL
+                    }
+
+                    // Complete query logging
+                    long totalTimeMs = (System.nanoTime() - queryStartTime) / 1_000_000;
+                    QueryLogger.completeQuery(totalTimeMs);
+
+                    return result;
+
+                } catch (SQLException e) {
+                    // Log error before throwing
+                    QueryLogger.logError(e);
+
+                    // Wrap in QueryExecutionException with context
+                    throw new QueryExecutionException(
+                        "Failed to execute query: " + e.getMessage(), e, sql);
+
+                } finally {
+                    // Clean up JDBC resources
+                    if (rs != null) {
+                        try {
+                            rs.close();
+                        } catch (SQLException e) {
+                            // Log but don't throw
+                            System.err.println("Error closing ResultSet: " + e.getMessage());
+                        }
+                    }
+                    if (stmt != null) {
+                        try {
+                            stmt.close();
+                        } catch (SQLException e) {
+                            // Log but don't throw
+                            System.err.println("Error closing Statement: " + e.getMessage());
+                        }
+                    }
+                }
             } catch (SQLException e) {
-                // Wrap in QueryExecutionException with context
-                throw new QueryExecutionException(
-                    "Failed to execute query: " + e.getMessage(), e, sql);
+                // Log error
+                QueryLogger.logError(e);
 
-            } finally {
-                // Clean up JDBC resources
-                if (rs != null) {
-                    try {
-                        rs.close();
-                    } catch (SQLException e) {
-                        // Log but don't throw
-                        System.err.println("Error closing ResultSet: " + e.getMessage());
-                    }
-                }
-                if (stmt != null) {
-                    try {
-                        stmt.close();
-                    } catch (SQLException e) {
-                        // Log but don't throw
-                        System.err.println("Error closing Statement: " + e.getMessage());
-                    }
-                }
+                // Wrap connection acquisition errors
+                throw new QueryExecutionException(
+                    "Failed to acquire database connection: " + e.getMessage(), e, sql);
             }
-        } catch (SQLException e) {
-            // Wrap connection acquisition errors
-            throw new QueryExecutionException(
-                "Failed to acquire database connection: " + e.getMessage(), e, sql);
-        } // Connection automatically released here
+        } finally {
+            // Always clear logging context to prevent memory leaks
+            QueryLogger.clearContext();
+        }
+    }
+
+    /**
+     * Checks if a SQL statement is an EXPLAIN statement for query introspection.
+     *
+     * <p>Supports the following EXPLAIN variants:
+     * <ul>
+     *   <li>EXPLAIN &lt;query&gt;</li>
+     *   <li>EXPLAIN ANALYZE &lt;query&gt;</li>
+     *   <li>EXPLAIN (FORMAT JSON) &lt;query&gt;</li>
+     * </ul>
+     *
+     * @param sql the SQL statement to check
+     * @return true if the statement starts with EXPLAIN (case-insensitive)
+     */
+    private boolean isExplainStatement(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return false;
+        }
+
+        String trimmed = sql.trim().toUpperCase();
+        return trimmed.startsWith("EXPLAIN");
     }
 
     /**

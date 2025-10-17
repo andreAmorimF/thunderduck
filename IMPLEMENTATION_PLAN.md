@@ -695,7 +695,7 @@ tpchgen-cli -s 0.01 --format=parquet --output=data/tpch_sf001
 
 ---
 
-#### Week 10: Research & Design 📋 PLANNED
+#### Week 10: Research & Design  ✅ COMPLETE
 
 **Goal**: Understand Spark Connect protocol and design server architecture
 
