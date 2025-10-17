@@ -75,6 +75,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
 
             // For MVP, handle SQL queries (both direct and command-wrapped)
             String sql = null;
+            boolean isShowString = false;
+            int showStringNumRows = 20;  // default
+            int showStringTruncate = 20; // default
+            boolean showStringVertical = false;
 
             if (plan.hasRoot()) {
                 Relation root = plan.getRoot();
@@ -82,10 +86,16 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
 
                 // Check for ShowString wrapping a SQL relation
                 if (root.hasShowString() && root.getShowString().hasInput()) {
-                    Relation input = root.getShowString().getInput();
+                    var showString = root.getShowString();
+                    Relation input = showString.getInput();
                     if (input.hasSql()) {
                         sql = input.getSql().getQuery();
-                        logger.debug("Found SQL in ShowString.input: {}", sql);
+                        isShowString = true;
+                        showStringNumRows = showString.getNumRows();
+                        showStringTruncate = showString.getTruncate();
+                        showStringVertical = showString.getVertical();
+                        logger.debug("Found SQL in ShowString.input: {}, numRows={}, truncate={}",
+                            sql, showStringNumRows, showStringTruncate);
                     }
                 } else if (root.hasSql()) {
                     // Direct SQL relation
@@ -100,7 +110,15 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
 
             if (sql != null) {
                 logger.info("Executing SQL: {}", sql);
-                executeSQL(sql, sessionId, responseObserver);
+
+                if (isShowString) {
+                    // For ShowString, format results as text and return in 'show_string' column
+                    executeShowString(sql, sessionId, showStringNumRows, showStringTruncate,
+                        showStringVertical, responseObserver);
+                } else {
+                    // Regular SQL execution
+                    executeSQL(sql, sessionId, responseObserver);
+                }
             } else {
                 // Log more details for debugging
                 String details = String.format("Plan type: %s", plan.getOpTypeCase());
@@ -325,6 +343,191 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             Session session = sessionManager.createSession(sessionId);
             logger.info("New session created: {}", session);
         }
+    }
+
+    /**
+     * Execute SQL query and format results as ShowString (text table).
+     *
+     * @param sql SQL query string
+     * @param sessionId Session ID
+     * @param numRows Maximum rows to show
+     * @param truncate Maximum column width (0 = no truncation)
+     * @param vertical Show vertically if true
+     * @param responseObserver Response stream
+     */
+    private void executeShowString(String sql, String sessionId, int numRows, int truncate,
+                                   boolean vertical, StreamObserver<ExecutePlanResponse> responseObserver) {
+        String operationId = java.util.UUID.randomUUID().toString();
+        long startTime = System.nanoTime();
+
+        try {
+            logger.info("[{}] Executing ShowString SQL for session {}: {}", operationId, sessionId, sql);
+
+            // Create QueryExecutor with connection manager
+            QueryExecutor executor = new QueryExecutor(connectionManager);
+
+            // Execute query and get Arrow results
+            org.apache.arrow.vector.VectorSchemaRoot results = executor.executeQuery(sql);
+
+            // Format results as text table
+            String formattedText = formatAsTextTable(results, numRows, truncate, vertical);
+
+            // Create a new VectorSchemaRoot with single column 'show_string'
+            org.apache.arrow.memory.RootAllocator allocator = new org.apache.arrow.memory.RootAllocator();
+            org.apache.arrow.vector.VarCharVector showStringVector = new org.apache.arrow.vector.VarCharVector(
+                "show_string", allocator);
+
+            java.util.List<org.apache.arrow.vector.FieldVector> vectors = new java.util.ArrayList<>();
+            vectors.add(showStringVector);
+            java.util.List<org.apache.arrow.vector.types.pojo.Field> fields = new java.util.ArrayList<>();
+            fields.add(org.apache.arrow.vector.types.pojo.Field.nullable("show_string",
+                new org.apache.arrow.vector.types.pojo.ArrowType.Utf8()));
+            org.apache.arrow.vector.types.pojo.Schema schema = new org.apache.arrow.vector.types.pojo.Schema(fields);
+
+            org.apache.arrow.vector.VectorSchemaRoot showStringRoot = new org.apache.arrow.vector.VectorSchemaRoot(
+                fields, vectors);
+
+            // Set the formatted text in the vector
+            showStringRoot.setRowCount(1);
+            showStringVector.allocateNew();
+            showStringVector.set(0, formattedText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            showStringVector.setValueCount(1);
+
+            // Stream the ShowString result
+            streamArrowResults(showStringRoot, sessionId, operationId, responseObserver);
+
+            long durationMs = (System.nanoTime() - startTime) / 1_000_000;
+            logger.info("[{}] ShowString completed in {}ms", operationId, durationMs);
+
+            // Clean up resources
+            showStringRoot.close();
+            showStringVector.close();
+            allocator.close();
+            results.close();
+
+        } catch (Exception e) {
+            logger.error("[{}] ShowString execution failed", operationId, e);
+
+            Status status;
+            if (e instanceof java.sql.SQLException) {
+                status = Status.INVALID_ARGUMENT.withDescription("SQL error: " + e.getMessage());
+            } else if (e instanceof IllegalArgumentException) {
+                status = Status.INVALID_ARGUMENT.withDescription(e.getMessage());
+            } else {
+                status = Status.INTERNAL.withDescription("Execution failed: " + e.getMessage());
+            }
+
+            responseObserver.onError(status.asRuntimeException());
+        }
+    }
+
+    /**
+     * Format Arrow results as a text table (similar to Spark's showString).
+     */
+    private String formatAsTextTable(org.apache.arrow.vector.VectorSchemaRoot root,
+                                      int maxRows, int truncate, boolean vertical) {
+        StringBuilder sb = new StringBuilder();
+
+        int rowCount = Math.min(root.getRowCount(), maxRows);
+        java.util.List<org.apache.arrow.vector.FieldVector> vectors = root.getFieldVectors();
+
+        if (vertical) {
+            // Vertical format: one column per line
+            for (int row = 0; row < rowCount; row++) {
+                sb.append("-RECORD ").append(row).append("-\n");
+                for (org.apache.arrow.vector.FieldVector vector : vectors) {
+                    String colName = vector.getField().getName();
+                    String value = getValueAsString(vector, row, truncate);
+                    sb.append(" ").append(colName).append(" : ").append(value).append("\n");
+                }
+            }
+        } else {
+            // Horizontal format: traditional table
+            // Calculate column widths
+            java.util.List<Integer> columnWidths = new java.util.ArrayList<>();
+            java.util.List<String> columnNames = new java.util.ArrayList<>();
+
+            for (org.apache.arrow.vector.FieldVector vector : vectors) {
+                String colName = vector.getField().getName();
+                columnNames.add(colName);
+                int maxWidth = colName.length();
+
+                // Check data widths
+                for (int row = 0; row < rowCount; row++) {
+                    String value = getValueAsString(vector, row, truncate);
+                    maxWidth = Math.max(maxWidth, value.length());
+                }
+                columnWidths.add(maxWidth);
+            }
+
+            // Print separator
+            sb.append("+");
+            for (int width : columnWidths) {
+                for (int i = 0; i < width + 2; i++) sb.append("-");
+                sb.append("+");
+            }
+            sb.append("\n");
+
+            // Print header
+            sb.append("|");
+            for (int i = 0; i < columnNames.size(); i++) {
+                sb.append(" ");
+                sb.append(padRight(columnNames.get(i), columnWidths.get(i)));
+                sb.append(" |");
+            }
+            sb.append("\n");
+
+            // Print separator
+            sb.append("+");
+            for (int width : columnWidths) {
+                for (int i = 0; i < width + 2; i++) sb.append("-");
+                sb.append("+");
+            }
+            sb.append("\n");
+
+            // Print data rows
+            for (int row = 0; row < rowCount; row++) {
+                sb.append("|");
+                for (int col = 0; col < vectors.size(); col++) {
+                    String value = getValueAsString(vectors.get(col), row, truncate);
+                    sb.append(" ");
+                    sb.append(padRight(value, columnWidths.get(col)));
+                    sb.append(" |");
+                }
+                sb.append("\n");
+            }
+
+            // Print final separator
+            sb.append("+");
+            for (int width : columnWidths) {
+                for (int i = 0; i < width + 2; i++) sb.append("-");
+                sb.append("+");
+            }
+            sb.append("\n");
+        }
+
+        // Add row count info if truncated
+        if (root.getRowCount() > maxRows) {
+            sb.append("only showing top ").append(maxRows).append(" rows\n");
+        }
+
+        return sb.toString();
+    }
+
+    private String getValueAsString(org.apache.arrow.vector.FieldVector vector, int index, int truncate) {
+        if (vector.isNull(index)) {
+            return "null";
+        }
+
+        String value = vector.getObject(index).toString();
+        if (truncate > 0 && value.length() > truncate) {
+            value = value.substring(0, truncate - 3) + "...";
+        }
+        return value;
+    }
+
+    private String padRight(String s, int n) {
+        return String.format("%-" + n + "s", s);
     }
 
     /**
