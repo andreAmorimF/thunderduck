@@ -14,6 +14,9 @@ import java.util.Objects;
  */
 public class StructType {
 
+    /** Empty struct type with no fields. */
+    public static final StructType EMPTY = new StructType(Collections.emptyList());
+
     private final List<StructField> fields;
 
     /**
