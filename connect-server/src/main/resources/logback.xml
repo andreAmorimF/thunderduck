@@ -27,7 +27,7 @@
     </root>
 
     <!-- Component-specific logging -->
-    <logger name="com.catalyst2sql.connect" level="INFO" />
+    <logger name="com.catalyst2sql.connect" level="DEBUG" />
     <logger name="com.catalyst2sql.runtime" level="INFO" />
     <logger name="io.grpc" level="WARN" />
     <logger name="org.apache.arrow" level="WARN" />

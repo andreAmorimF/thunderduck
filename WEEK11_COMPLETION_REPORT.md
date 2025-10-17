@@ -245,6 +245,34 @@ The following items from the Week 11 plan are explicitly deferred:
 
 ---
 
+## Post-Completion Bug Fixes (Critical for PySpark Compatibility)
+
+### Fixed Issues (Resolved Post-Report)
+
+After initial completion, testing with PySpark 3.5.3 revealed critical compatibility issues that have been resolved:
+
+1. **SqlCommand Support**: PySpark wraps SQL in `Command → SqlCommand`, not just `Relation → SQL`
+   - **Fix**: Added SqlCommand detection in executePlan (lines 94-97)
+
+2. **ShowString Support**: `df.show()` wraps SQL in `ROOT → ShowString → SQL`
+   - **Fix**: Added ShowString unwrapping logic (lines 83-88)
+
+3. **Reattachable Execution Protocol**: Default PySpark expects `ResultComplete` message
+   - **Fix**: Send ResultComplete after Arrow data (lines 427-432)
+
+4. **Config GetWithDefault**: PySpark calls `config` with default values
+   - **Fix**: Return provided defaults in config RPC (lines 166-176)
+
+5. **ReleaseExecute**: PySpark cleanup calls releaseExecute
+   - **Fix**: Return success response as no-op (lines 240-258)
+
+**Testing Confirmed**: Debug logs show successful execution with PySpark 3.5.3:
+```
+Found SQL in ShowString.input: SELECT 1 AS col
+Query executed in 0ms, 1 rows returned
+Streamed 1 rows (320 bytes)
+```
+
 ## Known Issues
 
 ### 1. Arrow Resource Management
@@ -266,14 +294,6 @@ The following items from the Week 11 plan are explicitly deferred:
 **Mitigation**: Session timeout provides eventual recovery.
 
 **Resolution**: Week 14 will add query timeout and cancellation.
-
-### 3. No Schema Validation
-
-**Issue**: AnalyzePlan doesn't return schema, clients may fail if they expect it.
-
-**Impact**: LOW - Most clients don't require AnalyzePlan.
-
-**Resolution**: Week 12 will add schema extraction when plan deserialization is implemented.
 
 ---
 
