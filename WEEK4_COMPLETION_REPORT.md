@@ -1,6 +1,6 @@
 # Week 4 Completion Report - 100% COMPLETE
 
-**Project**: catalyst2sql - Spark Catalyst to DuckDB SQL Translation
+**Project**: thunderduck - Spark Catalyst to DuckDB SQL Translation
 **Week**: 4 (Optimizer Implementation, Format Support, Benchmarking)
 **Dates**: October 14-15, 2025
 **Status**: ✅ **100% COMPLETE - ALL 13 TASKS DELIVERED**
@@ -58,7 +58,7 @@ Week 4 has achieved complete success with 100% of planned scope delivered across
 - Changed from incorrect 3-argument form to proper Optional-based qualifier
 - Fixed 27 occurrences across 15 test methods
 
-**File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/expression/WindowFunctionTest.java`
+**File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/expression/WindowFunctionTest.java`
 - **Lines**: 485
 - **Tests**: 15 comprehensive window function tests
 - **Status**: ✅ Compiles successfully
@@ -68,7 +68,7 @@ Week 4 has achieved complete success with 100% of planned scope delivered across
 
 **Implementation**: Complete transformation logic for optimizing query plans by pushing filters closer to data sources.
 
-**File**: `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/optimizer/FilterPushdownRule.java`
+**File**: `/workspaces/thunderduck/core/src/main/java/com/thunderduck/optimizer/FilterPushdownRule.java`
 - **Lines**: 488
 - **Methods**: 15 (transform, canPushThroughProject, splitFilterForJoin, canPushThroughAggregate, etc.)
 - **Transformation Cases**: 4 major scenarios
@@ -104,7 +104,7 @@ Week 4 has achieved complete success with 100% of planned scope delivered across
 
 **Implementation**: Complete transformation logic for eliminating unused columns throughout the query plan.
 
-**File**: `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/optimizer/ColumnPruningRule.java`
+**File**: `/workspaces/thunderduck/core/src/main/java/com/thunderduck/optimizer/ColumnPruningRule.java`
 - **Lines**: 496
 - **Methods**: 13 (transform, computeRequiredColumns, pruneNode, etc.)
 - **Plan Node Handlers**: 8 node types
@@ -140,7 +140,7 @@ Phase 2: Apply Pruning (recursive)
 
 **Implementation**: Complete test coverage for all subquery types and execution scenarios.
 
-**File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/expression/SubqueryTest.java`
+**File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/expression/SubqueryTest.java`
 - **Lines**: ~500
 - **Tests**: 15 comprehensive tests
 - **Status**: ✅ Compiles and runs successfully
@@ -171,7 +171,7 @@ Phase 2: Apply Pruning (recursive)
 
 **Implementation**: Complete test coverage for optimizer framework and rule application.
 
-**File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/optimizer/QueryOptimizerTest.java`
+**File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/optimizer/QueryOptimizerTest.java`
 - **Lines**: 599
 - **Tests**: 16 comprehensive tests
 - **Status**: ✅ Compiles and runs successfully
@@ -378,7 +378,7 @@ private LogicalPlan pruneAggregate(Aggregate aggregate, Set<String> required)
 
 #### 1. ProjectionPushdownRule - Complete Implementation ✅
 
-**File**: `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/optimizer/ProjectionPushdownRule.java`
+**File**: `/workspaces/thunderduck/core/src/main/java/com/thunderduck/optimizer/ProjectionPushdownRule.java`
 - **Lines**: 452
 - **Methods**: 10 (transform, pushIntoTableScan, extractRequiredColumns, etc.)
 - **Status**: ✅ Production-ready
@@ -403,7 +403,7 @@ Project(TableScan) → TableScan(pruned_schema)
 
 #### 2. JoinReorderingRule - Complete Implementation ✅
 
-**File**: `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/optimizer/JoinReorderingRule.java`
+**File**: `/workspaces/thunderduck/core/src/main/java/com/thunderduck/optimizer/JoinReorderingRule.java`
 - **Lines**: 436
 - **Methods**: 9 (transform, canReorder, estimateCardinality, etc.)
 - **Status**: ✅ Production-ready
@@ -428,7 +428,7 @@ Join(left, right, INNER, condition) → Join(right, left, INNER, condition)
 
 #### 3. FilterPushdownRuleTest - Comprehensive Test Suite ✅
 
-**File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/optimizer/FilterPushdownRuleTest.java`
+**File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/optimizer/FilterPushdownRuleTest.java`
 - **Lines**: 801
 - **Tests**: 14 comprehensive tests
 - **Status**: ✅ All tests passing
@@ -451,7 +451,7 @@ Join(left, right, INNER, condition) → Join(right, left, INNER, condition)
 
 #### 4. ColumnPruningRuleTest - Comprehensive Test Suite ✅
 
-**File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/optimizer/ColumnPruningRuleTest.java`
+**File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/optimizer/ColumnPruningRuleTest.java`
 - **Lines**: 596
 - **Tests**: 8 comprehensive tests
 - **Status**: ✅ All tests passing
@@ -473,7 +473,7 @@ Join(left, right, INNER, condition) → Join(right, left, INNER, condition)
 
 #### 5. DeltaLakeReader - Complete Time Travel Support ✅
 
-**File**: `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/io/DeltaLakeReader.java`
+**File**: `/workspaces/thunderduck/core/src/main/java/com/thunderduck/io/DeltaLakeReader.java`
 - **Lines**: 389
 - **Status**: ✅ Production-ready with time travel
 
@@ -505,7 +505,7 @@ SELECT * FROM delta_scan('path/to/table', timestamp => '2025-10-14T10:00:00Z')
 
 #### 6. IcebergReader - Complete Snapshot Isolation ✅
 
-**File**: `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/io/IcebergReader.java`
+**File**: `/workspaces/thunderduck/core/src/main/java/com/thunderduck/io/IcebergReader.java`
 - **Lines**: 289
 - **Status**: ✅ Production-ready with snapshot isolation
 
@@ -538,8 +538,8 @@ SELECT * FROM iceberg_scan('path/to/table', as_of => '2025-10-14T10:00:00Z')
 #### 7. ValidationException + QueryValidator - Enhanced Error Handling ✅
 
 **Files**:
-- `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/exception/ValidationException.java` (145 lines)
-- `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/validation/QueryValidator.java` (525 lines)
+- `/workspaces/thunderduck/core/src/main/java/com/thunderduck/exception/ValidationException.java` (145 lines)
+- `/workspaces/thunderduck/core/src/main/java/com/thunderduck/validation/QueryValidator.java` (525 lines)
 - **Total Lines**: 670
 - **Status**: ✅ Production-ready
 
@@ -575,8 +575,8 @@ Validation failed during join validation: JOIN condition cannot be null for INNE
 #### 8. QueryLogger + logback.xml - Structured Logging ✅
 
 **Files**:
-- `/workspaces/catalyst2sql/core/src/main/java/com/catalyst2sql/logging/QueryLogger.java` (245 lines)
-- `/workspaces/catalyst2sql/core/src/main/resources/logback.xml` (77 lines)
+- `/workspaces/thunderduck/core/src/main/java/com/thunderduck/logging/QueryLogger.java` (245 lines)
+- `/workspaces/thunderduck/core/src/main/resources/logback.xml` (77 lines)
 - **Total Lines**: 322
 - **Status**: ✅ Production-ready
 
@@ -615,8 +615,8 @@ Validation failed during join validation: JOIN condition cannot be null for INNE
 #### 9. TPC-H Benchmark Framework - Complete 22-Query Suite ✅
 
 **Files**:
-- `/workspaces/catalyst2sql/benchmarks/src/main/java/com/catalyst2sql/benchmark/TPCHBenchmark.java` (678 lines)
-- `/workspaces/catalyst2sql/benchmarks/src/main/java/com/catalyst2sql/benchmark/TPCHQueries.java` (375 lines)
+- `/workspaces/thunderduck/benchmarks/src/main/java/com/thunderduck/benchmark/TPCHBenchmark.java` (678 lines)
+- `/workspaces/thunderduck/benchmarks/src/main/java/com/thunderduck/benchmark/TPCHQueries.java` (375 lines)
 - **Total Lines**: 1,053
 - **Status**: ✅ Production-ready
 
@@ -1076,8 +1076,8 @@ Validation failed during join validation: JOIN condition cannot be null for INNE
 ## File Structure - Week 4 Complete
 
 ```
-catalyst2sql/
-├── core/src/main/java/com/catalyst2sql/
+thunderduck/
+├── core/src/main/java/com/thunderduck/
 │   ├── expression/
 │   │   ├── WindowFunction.java           ✅ [EXISTS - Week 3]
 │   │   ├── ScalarSubquery.java           ✅ [EXISTS - Week 3]
@@ -1102,7 +1102,7 @@ catalyst2sql/
 │       └── QueryLogger.java              ✅ [COMPLETE - 245 lines, MDC tracking]
 ├── core/src/main/resources/
 │   └── logback.xml                       ✅ [COMPLETE - 77 lines, console + file appenders]
-├── tests/src/test/java/com/catalyst2sql/
+├── tests/src/test/java/com/thunderduck/
 │   ├── expression/
 │   │   ├── WindowFunctionTest.java       ✅ [COMPLETE - 485 lines, 15 tests, PASSING]
 │   │   └── SubqueryTest.java             ✅ [COMPLETE - ~500 lines, 15 tests, PASSING]
@@ -1110,7 +1110,7 @@ catalyst2sql/
 │       ├── QueryOptimizerTest.java       ✅ [COMPLETE - 599 lines, 16 tests, PASSING]
 │       ├── FilterPushdownRuleTest.java   ✅ [COMPLETE - 801 lines, 14 tests, PASSING]
 │       └── ColumnPruningRuleTest.java    ✅ [COMPLETE - 596 lines, 8 tests, PASSING]
-└── benchmarks/src/main/java/com/catalyst2sql/
+└── benchmarks/src/main/java/com/thunderduck/
     └── benchmark/
         ├── TPCHBenchmark.java            ✅ [COMPLETE - 678 lines, 22 queries, JMH]
         └── TPCHQueries.java              ✅ [COMPLETE - 375 lines, query builders]
@@ -1374,7 +1374,7 @@ Week 4 has achieved complete success, delivering all 13 planned tasks with produ
 6. **Documentation**: 100% JavaDoc coverage enables maintainability
 7. **Build Hygiene**: Zero compilation errors maintained throughout
 
-### Impact on catalyst2sql Project
+### Impact on thunderduck Project
 
 **Optimizer Capabilities** (NEW):
 - ✅ 4 production-ready transformation rules
@@ -1411,7 +1411,7 @@ Week 4 has achieved complete success, delivering all 13 planned tasks with produ
 - **429 tests running**: Full codebase stability
 - **Production-ready**: Every component is deployment-ready
 
-This represents a complete transformation of catalyst2sql from a basic translation tool to a production-ready query optimizer with modern format support, comprehensive error handling, structured logging, and performance benchmarking capabilities.
+This represents a complete transformation of thunderduck from a basic translation tool to a production-ready query optimizer with modern format support, comprehensive error handling, structured logging, and performance benchmarking capabilities.
 
 ### Next Steps (Beyond Week 4)
 

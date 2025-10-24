@@ -1,4 +1,4 @@
-# catalyst2sql Implementation Plan
+# thunderduck Implementation Plan
 ## Embedded DuckDB Execution Mode with Comprehensive Testing
 
 **Project**: Spark DataFrame to DuckDB Translation Layer with Spark Connect Server
@@ -102,8 +102,19 @@ LogicalPlan (abstract base)
 - Type mapper: Spark → DuckDB (comprehensive mapping)
 - Function registry: 500+ function mappings (90% direct, 10% UDF)
 - Expression translator: arithmetic, comparison, logical, case/when
+- **No custom optimizer**: Relies on DuckDB's built-in query optimizer
 
 **Estimated Size**: ~30 classes, ~5K LOC
+
+**Optimization Strategy**: Thunderduck delegates all query optimization to DuckDB's excellent built-in optimizer, which automatically performs:
+- Filter pushdown (predicate pushdown to storage layer)
+- Column pruning (read only needed columns)
+- Join reordering (cost-based join ordering)
+- Common subexpression elimination
+- Constant folding
+- Many other optimizations
+
+This design decision keeps thunderduck simple, maintainable, and ensures we benefit from DuckDB's continuous optimization improvements.
 
 #### Execution Runtime
 - DuckDB connection management
@@ -130,9 +141,15 @@ LogicalPlan (abstract base)
 - ✅ Schema evolution awareness
 - ❌ Write: Not in Phase 1-2 (Phase 3+)
 
-### 2.3 Hardware Optimization
+### 2.3 Hardware Optimization - Multi-Architecture Support
 
-#### Intel (i8g, i4i instances)
+**Target Platforms**: thunderduck is designed and optimized for **both x86_64 and ARM64 architectures**:
+- ✅ **x86_64**: Intel/AMD processors (AVX-512, AVX2 SIMD)
+- ✅ **ARM64**: AWS Graviton (c7g, r8g, i4g), Apple Silicon (M1/M2/M3) - ARM NEON SIMD
+
+**Rationale**: ARM64 processors (especially AWS Graviton) offer 40% better price/performance for analytics workloads. Multi-architecture support is a **first-class design goal**, not an afterthought.
+
+#### x86_64 Configuration (Intel i8g, i4i instances)
 ```java
 SET threads TO (cores - 1);
 SET enable_simd = true;              // Auto-detect AVX-512/AVX2
@@ -142,14 +159,19 @@ SET memory_limit = '70%';            // i8g: 70%, i4i: 50%
 SET enable_mmap = true;              // Memory-mapped I/O for NVMe
 ```
 
-#### ARM (r8g instances)
+#### ARM64 Configuration (AWS Graviton r8g, c7g, Apple Silicon M1/M2/M3)
 ```java
 SET threads TO (cores - 1);
-SET enable_simd = true;              // Auto-detect ARM NEON
+SET enable_simd = true;              // Auto-detect ARM NEON SIMD
 SET parallel_parquet = true;
 SET memory_limit = '80%';            // Memory-optimized: 80%
 SET temp_directory = '/mnt/ramdisk'; // Use tmpfs if available
 ```
+
+**Known Issues**:
+- Apache Arrow 17.0.0 requires JVM args on ARM64: `--add-opens=java.base/java.nio=ALL-UNNAMED`
+- Fixed in tests/pom.xml surefire configuration
+- Does not affect runtime performance, only test execution
 
 ---
 
@@ -359,27 +381,28 @@ void tpchQuery1Performance() {
 ### 4.2 Multi-Module Structure
 
 ```
-catalyst2sql-parent/
+thunderduck-parent/
 ├── pom.xml                 # Parent POM (dependency management)
 ├── core/                   # Translation engine
 │   ├── pom.xml
-│   └── src/main/java/com/catalyst2sql/
+│   └── src/main/java/com/thunderduck/
 │       ├── logical/        # Logical plan nodes
 │       ├── expression/     # Expression system
 │       ├── types/          # Type mapping
 │       ├── functions/      # Function registry
-│       ├── sql/            # SQL generation
-│       ├── optimizer/      # Query optimization
-│       └── execution/      # DuckDB execution
+│       ├── generator/      # SQL generation
+│       ├── runtime/        # DuckDB execution
+│       ├── io/             # Format readers
+│       └── logging/        # Query logging
 ├── formats/                # Format readers
 │   ├── pom.xml
-│   └── src/main/java/com/catalyst2sql/formats/
+│   └── src/main/java/com/thunderduck/formats/
 │       ├── parquet/        # Parquet support
 │       ├── delta/          # Delta Lake support
 │       └── iceberg/        # Iceberg support
 ├── api/                    # Spark-compatible API
 │   ├── pom.xml
-│   └── src/main/java/com/catalyst2sql/api/
+│   └── src/main/java/com/thunderduck/api/
 │       ├── session/        # SparkSession
 │       ├── dataset/        # DataFrame, Dataset, Row
 │       ├── reader/         # DataFrameReader
@@ -387,13 +410,13 @@ catalyst2sql-parent/
 │       └── functions/      # SQL functions
 ├── tests/                  # Test suite
 │   ├── pom.xml
-│   └── src/test/java/com/catalyst2sql/tests/
+│   └── src/test/java/com/thunderduck/tests/
 │       ├── unit/           # Unit tests
 │       ├── integration/    # Integration tests
 │       └── differential/   # Spark comparison
 └── benchmarks/             # Performance benchmarks
     ├── pom.xml
-    └── src/main/java/com/catalyst2sql/benchmarks/
+    └── src/main/java/com/thunderduck/benchmarks/
         ├── micro/          # Micro-benchmarks (JMH)
         ├── tpch/           # TPC-H queries
         └── tpcds/          # TPC-DS queries
@@ -500,18 +523,18 @@ mvn clean deploy -Prelease
 - Complete function mappings (500+ functions)
 - Implement join operations (inner, left, right, full, cross)
 - Add semi/anti join support
-- Implement query optimizer framework
 - Write 60+ join test scenarios
 - Run TPC-H Q3, Q5, Q8 (join-heavy queries)
+- **Note**: Custom query optimizer removed - relying on DuckDB's built-in optimizer
 
 #### Week 5: Aggregations & Window Functions ✅ COMPLETE
 - Implement aggregate operations (groupBy, sum, avg, count, etc.)
 - Add window functions (row_number, rank, lag, lead, etc.)
 - Implement HAVING clause, DISTINCT aggregates, ROLLUP/CUBE/GROUPING SETS
 - Implement window frames, named windows, value window functions
-- Add window function optimizations and aggregate pushdown
-- Write 160+ comprehensive tests (aggregation, window, optimization, TPC-H)
+- Write 160+ comprehensive tests (aggregation, window, TPC-H)
 - Run TPC-H Q13, Q18 (aggregation queries)
+- **Note**: Removed custom optimizer tests - DuckDB handles all query optimization
 
 #### Week 6: Delta Lake & Iceberg Support 📋 POSTPONED
 **Status**: Deferred to Phase 5 (post-Connect Server)
@@ -537,7 +560,7 @@ mvn clean deploy -Prelease
 - Implement schema validation framework (with JDBC metadata handling)
 - Implement data comparison utilities (row-by-row, numerical epsilon, CAST rounding tolerance)
 - Write 50 differential test cases (basic operations)
-- Execute tests and resolve all 16 divergences (test framework issues, not catalyst2sql bugs)
+- Execute tests and resolve all 16 divergences (test framework issues, not thunderduck bugs)
 - **Result**: 100% Spark parity achieved (50/50 tests passing)
 
 #### Week 8: Comprehensive Differential Test Coverage (200+ Tests) ✅ COMPLETE
@@ -596,15 +619,15 @@ DUCKDB EXPLAIN
 **Usage Examples**:
 ```bash
 # Run single query with EXPLAIN
-java -cp benchmarks.jar com.catalyst2sql.tpch.TPCHCommandLine \
+java -cp benchmarks.jar com.thunderduck.tpch.TPCHCommandLine \
   --query 1 --mode explain --data ./data/tpch_sf001
 
 # Run with EXPLAIN ANALYZE
-java -cp benchmarks.jar com.catalyst2sql.tpch.TPCHCommandLine \
+java -cp benchmarks.jar com.thunderduck.tpch.TPCHCommandLine \
   --query 1 --mode analyze --data ./data/tpch_sf001
 
 # Run full benchmark suite
-java -cp benchmarks.jar com.catalyst2sql.tpch.TPCHCommandLine \
+java -cp benchmarks.jar com.thunderduck.tpch.TPCHCommandLine \
   --query all --mode execute --data ./data/tpch_sf1
 ```
 
@@ -689,9 +712,9 @@ tpchgen-cli -s 0.01 --format=parquet --output=data/tpch_sf001
 
 **Goal**: Production-ready gRPC server implementing Spark Connect protocol for remote client connectivity
 
-**Strategic Pivot**: Moving from embedded-only mode to a full Spark Connect Server implementation enables catalyst2sql to serve as a drop-in replacement for Spark, supporting standard Spark clients (PySpark, Scala Spark) via the Spark Connect protocol.
+**Strategic Pivot**: Moving from embedded-only mode to a full Spark Connect Server implementation enables thunderduck to serve as a drop-in replacement for Spark, supporting standard Spark clients (PySpark, Scala Spark) via the Spark Connect protocol.
 
-**Architecture Reference**: See `/workspaces/catalyst2sql/docs/architect/SPARK_CONNECT_ARCHITECTURE.md` (to be created)
+**Architecture Reference**: See `/workspaces/thunderduck/docs/architect/SPARK_CONNECT_ARCHITECTURE.md` (to be created)
 
 ---
 
@@ -1142,7 +1165,7 @@ logging.level=INFO
    - Write deployment guide (Docker, Kubernetes)
    - Create operations runbook (start, stop, monitor, troubleshoot)
    - Document client configuration
-   - Write migration guide (from Spark to catalyst2sql)
+   - Write migration guide (from Spark to thunderduck)
    - Create architecture diagrams
 
 **Deliverables**:
@@ -1757,7 +1780,7 @@ public void benchmarkParquetScan() {
 ### 7.2 Testing Approach
 
 **Differential Testing**:
-- Execute identical operations on Spark 3.5.3 and catalyst2sql
+- Execute identical operations on Spark 3.5.3 and thunderduck
 - Compare schemas, data, and numerical results
 - Validate that we replicate Spark's FIXED behavior (not bugs)
 
@@ -1937,14 +1960,14 @@ public void benchmarkParquetScan() {
 ### 11.1 Technical Documentation
 
 1. **Architecture Design** (✅ Complete)
-   - `/workspaces/catalyst2sql/docs/Analysis_and_Design.md`
+   - `/workspaces/thunderduck/docs/Analysis_and_Design.md`
 
 2. **Testing Strategy** (✅ Complete)
-   - `/workspaces/catalyst2sql/docs/Testing_Strategy.md`
-   - `/workspaces/catalyst2sql/docs/Test_Design.md`
+   - `/workspaces/thunderduck/docs/Testing_Strategy.md`
+   - `/workspaces/thunderduck/docs/Test_Design.md`
 
 3. **Build Infrastructure** (✅ Complete)
-   - `/workspaces/catalyst2sql/docs/coder/01_Build_Infrastructure_Design.md`
+   - `/workspaces/thunderduck/docs/coder/01_Build_Infrastructure_Design.md`
 
 4. **API Reference** (⏳ Phase 3)
    - Javadoc for all public APIs
@@ -1958,7 +1981,7 @@ public void benchmarkParquetScan() {
    - Common patterns
 
 2. **Migration Guide** (⏳ Phase 3)
-   - Spark → catalyst2sql conversion
+   - Spark → thunderduck conversion
    - API differences
    - Performance tuning tips
 

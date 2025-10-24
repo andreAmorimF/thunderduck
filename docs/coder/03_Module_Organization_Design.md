@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document defines the complete code organization, module structure, package hierarchy, and class responsibilities for the catalyst2sql project. The architecture follows clean separation of concerns with 5 core modules.
+This document defines the complete code organization, module structure, package hierarchy, and class responsibilities for the thunderduck project. The architecture follows clean separation of concerns with 5 core modules.
 
 **Design Principles:**
 - **Modularity**: Clear module boundaries with minimal coupling
@@ -13,7 +13,7 @@ This document defines the complete code organization, module structure, package 
 ## 1. Module Architecture
 
 ```
-catalyst2sql-parent (reactor POM)
+thunderduck-parent (reactor POM)
 ├── core                    # Translation engine, logical plan, SQL generation
 ├── formats                 # Format readers (Parquet, Delta, Iceberg)
 ├── api                     # Spark-compatible DataFrame API
@@ -46,7 +46,7 @@ catalyst2sql-parent (reactor POM)
 ### Package Structure
 
 ```
-com.catalyst2sql.core/
+com.thunderduck.core/
 ├── logical/                    # Logical plan representation
 │   ├── LogicalPlan.java        # Base class
 │   ├── LeafNode.java           # Leaf node base
@@ -101,9 +101,9 @@ com.catalyst2sql.core/
 
 #### LogicalPlan.java
 ```java
-package com.catalyst2sql.core.logical;
+package com.thunderduck.core.logical;
 
-import com.catalyst2sql.core.types.StructType;
+import com.thunderduck.core.types.StructType;
 import java.util.List;
 
 /**
@@ -140,11 +140,11 @@ public abstract class LogicalPlan {
 
 #### SQLGenerator.java
 ```java
-package com.catalyst2sql.core.sql;
+package com.thunderduck.core.sql;
 
-import com.catalyst2sql.core.logical.LogicalPlan;
-import com.catalyst2sql.core.functions.FunctionRegistry;
-import com.catalyst2sql.core.types.TypeMapper;
+import com.thunderduck.core.logical.LogicalPlan;
+import com.thunderduck.core.functions.FunctionRegistry;
+import com.thunderduck.core.types.TypeMapper;
 
 /**
  * Translates logical plans to DuckDB SQL.
@@ -171,7 +171,7 @@ public class SQLGenerator {
 
 #### TypeMapper.java
 ```java
-package com.catalyst2sql.core.types;
+package com.thunderduck.core.types;
 
 import org.apache.spark.sql.types.*;
 
@@ -218,7 +218,7 @@ public class TypeMapper {
 ### Package Structure
 
 ```
-com.catalyst2sql.formats/
+com.thunderduck.formats/
 ├── parquet/
 │   ├── ParquetReader.java      # Parquet file reader
 │   ├── ParquetWriter.java      # Parquet file writer
@@ -244,10 +244,10 @@ com.catalyst2sql.formats/
 
 #### ParquetReader.java
 ```java
-package com.catalyst2sql.formats.parquet;
+package com.thunderduck.formats.parquet;
 
-import com.catalyst2sql.core.logical.TableScan;
-import com.catalyst2sql.core.execution.DuckDBConnection;
+import com.thunderduck.core.logical.TableScan;
+import com.thunderduck.core.execution.DuckDBConnection;
 
 /**
  * Reads Parquet files using DuckDB's native Parquet reader.
@@ -291,10 +291,10 @@ public class ParquetReader {
 
 #### DeltaReader.java
 ```java
-package com.catalyst2sql.formats.delta;
+package com.thunderduck.formats.delta;
 
-import com.catalyst2sql.core.logical.TableScan;
-import com.catalyst2sql.core.execution.DuckDBConnection;
+import com.thunderduck.core.logical.TableScan;
+import com.thunderduck.core.execution.DuckDBConnection;
 
 /**
  * Reads Delta Lake tables using DuckDB's delta extension.
@@ -341,10 +341,10 @@ public class DeltaReader {
 ### Package Structure
 
 ```
-com.catalyst2sql.api/
+com.thunderduck.api/
 ├── session/
 │   ├── SparkSession.java       # Spark session implementation
-│   ├── Catalyst2SQLSession.java # Session builder
+│   ├── ThunderduckSession.java # Session builder
 │   └── SessionConfig.java      # Configuration options
 ├── dataset/
 │   ├── DataFrame.java          # DataFrame implementation
@@ -366,13 +366,13 @@ com.catalyst2sql.api/
 
 #### SparkSession.java
 ```java
-package com.catalyst2sql.api.session;
+package com.thunderduck.api.session;
 
-import com.catalyst2sql.api.reader.DataFrameReader;
-import com.catalyst2sql.core.execution.DuckDBConnection;
+import com.thunderduck.api.reader.DataFrameReader;
+import com.thunderduck.core.execution.DuckDBConnection;
 
 /**
- * Main entry point for catalyst2sql functionality.
+ * Main entry point for thunderduck functionality.
  * Compatible with Spark's SparkSession API.
  */
 public class SparkSession implements AutoCloseable {
@@ -436,11 +436,11 @@ public class SparkSession implements AutoCloseable {
 
 #### DataFrame.java
 ```java
-package com.catalyst2sql.api.dataset;
+package com.thunderduck.api.dataset;
 
-import com.catalyst2sql.core.logical.LogicalPlan;
-import com.catalyst2sql.core.execution.DuckDBConnection;
-import com.catalyst2sql.api.writer.DataFrameWriter;
+import com.thunderduck.core.logical.LogicalPlan;
+import com.thunderduck.core.execution.DuckDBConnection;
+import com.thunderduck.api.writer.DataFrameWriter;
 
 /**
  * Distributed collection of data organized into named columns.
@@ -517,7 +517,7 @@ public class DataFrame {
 ### Package Structure
 
 ```
-com.catalyst2sql.tests/
+com.thunderduck.tests/
 ├── unit/                       # Unit tests
 │   ├── core/
 │   │   ├── TypeMapperTest.java
@@ -550,7 +550,7 @@ com.catalyst2sql.tests/
 ### Package Structure
 
 ```
-com.catalyst2sql.benchmarks/
+com.thunderduck.benchmarks/
 ├── micro/                      # Micro-benchmarks
 │   ├── ParquetReadBenchmark.java
 │   ├── SQLGenerationBenchmark.java
@@ -602,22 +602,22 @@ public class SQLGenerator {
 
 ```java
 // Custom exception hierarchy
-package com.catalyst2sql.core.exception;
+package com.thunderduck.core.exception;
 
-public class Catalyst2SQLException extends RuntimeException {
-    public Catalyst2SQLException(String message) { super(message); }
-    public Catalyst2SQLException(String message, Throwable cause) { super(message, cause); }
+public class ThunderduckException extends RuntimeException {
+    public ThunderduckException(String message) { super(message); }
+    public ThunderduckException(String message, Throwable cause) { super(message, cause); }
 }
 
-public class SQLGenerationException extends Catalyst2SQLException { }
-public class TypeMappingException extends Catalyst2SQLException { }
-public class UnsupportedOperationException extends Catalyst2SQLException { }
+public class SQLGenerationException extends ThunderduckException { }
+public class TypeMappingException extends ThunderduckException { }
+public class UnsupportedOperationException extends ThunderduckException { }
 ```
 
 ### Configuration Management
 
 ```java
-package com.catalyst2sql.api.session;
+package com.thunderduck.api.session;
 
 import java.util.Properties;
 
@@ -628,10 +628,10 @@ public class SessionConfig {
     public static final String APP_NAME = "spark.app.name";
     public static final String EXECUTOR_MEMORY = "spark.executor.memory";
 
-    // catalyst2sql specific configs
-    public static final String DUCKDB_THREADS = "catalyst2sql.duckdb.threads";
-    public static final String DUCKDB_MEMORY_LIMIT = "catalyst2sql.duckdb.memory.limit";
-    public static final String ENABLE_OPTIMIZATION = "catalyst2sql.optimizer.enabled";
+    // thunderduck specific configs
+    public static final String DUCKDB_THREADS = "thunderduck.duckdb.threads";
+    public static final String DUCKDB_MEMORY_LIMIT = "thunderduck.duckdb.memory.limit";
+    public static final String ENABLE_OPTIMIZATION = "thunderduck.optimizer.enabled";
 
     public void set(String key, String value) {
         properties.setProperty(key, value);
@@ -671,13 +671,13 @@ public class FunctionRegistryGenerator {
 ### API Version Compatibility
 
 ```java
-package com.catalyst2sql.api;
+package com.thunderduck.api;
 
 /**
- * Version information for catalyst2sql.
+ * Version information for thunderduck.
  */
 public final class Version {
-    public static final String CATALYST2SQL_VERSION = "0.1.0-SNAPSHOT";
+    public static final String THUNDERDUCK_VERSION = "0.1.0-SNAPSHOT";
     public static final String SPARK_API_VERSION = "3.5";
     public static final String DUCKDB_VERSION = "1.1.3";
 

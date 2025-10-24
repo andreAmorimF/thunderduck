@@ -1,5 +1,5 @@
 # Spark Connect Protocol Quick Reference
-## Cheat Sheet for catalyst2sql Developers
+## Cheat Sheet for thunderduck Developers
 
 **Version:** 1.0
 **Date:** 2025-10-16
@@ -201,11 +201,11 @@ ExecutePlanRequest {
 
 ---
 
-## catalyst2sql Integration Points
+## thunderduck Integration Points
 
 ### Protobuf → LogicalPlan Mapping
 
-| Protobuf | catalyst2sql LogicalPlan |
+| Protobuf | thunderduck LogicalPlan |
 |----------|-------------------------|
 | proto.Relation.Read | TableScan(source) |
 | proto.Relation.Filter | Filter(input, condition) |
@@ -217,7 +217,7 @@ ExecutePlanRequest {
 
 ### Expression Mapping
 
-| Protobuf | catalyst2sql Expression |
+| Protobuf | thunderduck Expression |
 |----------|------------------------|
 | proto.Literal | Literal(value, type) |
 | proto.UnresolvedAttribute | ColumnReference(name) |
@@ -289,7 +289,7 @@ message ErrorResponse {
 ```
 
 ### Error Type Mapping
-| catalyst2sql Exception | ErrorType |
+| thunderduck Exception | ErrorType |
 |------------------------|-----------|
 | SQLGenerationException | INVALID_PLAN_INPUT |
 | UnsupportedOperationException | NOT_IMPLEMENTED |
@@ -405,7 +405,7 @@ https://github.com/apache/spark/blob/v3.5.3/connector/connect/common/src/main/pr
 
 ### Local Path (after extraction)
 ```
-catalyst2sql/connect-server/src/main/proto/spark/connect/
+thunderduck/connect-server/src/main/proto/spark/connect/
 ├── base.proto
 ├── relations.proto
 ├── expressions.proto
@@ -520,7 +520,7 @@ mvn clean compile -pl connect-server
 
 ### Run Server
 ```bash
-mvn exec:java -pl connect-server -Dexec.mainClass="com.catalyst2sql.connect.SparkConnectServer"
+mvn exec:java -pl connect-server -Dexec.mainClass="com.thunderduck.connect.SparkConnectServer"
 ```
 
 ### Test with PySpark
@@ -546,8 +546,8 @@ grpcurl -plaintext localhost:15002 list
 
 ## References
 
-**Full Specification**: `/workspaces/catalyst2sql/docs/SPARK_CONNECT_PROTOCOL_SPEC.md`
-**Implementation Plan**: `/workspaces/catalyst2sql/IMPLEMENTATION_PLAN.md` (Phase 4)
+**Full Specification**: `/workspaces/thunderduck/docs/SPARK_CONNECT_PROTOCOL_SPEC.md`
+**Implementation Plan**: `/workspaces/thunderduck/IMPLEMENTATION_PLAN.md` (Phase 4)
 
 **Official Docs**: https://spark.apache.org/docs/3.5.3/spark-connect-overview.html
 **Proto Files**: https://github.com/apache/spark/tree/v3.5.3/connector/connect/common/src/main/protobuf

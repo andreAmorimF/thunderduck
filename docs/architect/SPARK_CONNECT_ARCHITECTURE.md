@@ -1,4 +1,4 @@
-# Spark Connect Server Architecture for catalyst2sql
+# Spark Connect Server Architecture for thunderduck
 
 **Document Version**: 1.0
 **Date**: 2025-10-16
@@ -28,7 +28,7 @@
 
 ### 1.1 Strategic Vision
 
-catalyst2sql is evolving from an **embedded-only** DuckDB translation layer to a **single-user Spark Connect Server** implementation. This architectural shift enables:
+thunderduck is evolving from an **embedded-only** DuckDB translation layer to a **single-user Spark Connect Server** implementation. This architectural shift enables:
 
 - **Drop-in Spark replacement**: Standard Spark clients (PySpark, Scala Spark) can connect without modification
 - **Remote execution**: Clients connect over gRPC instead of embedding the engine
@@ -45,7 +45,7 @@ catalyst2sql is evolving from an **embedded-only** DuckDB translation layer to a
 ├─────────────────────────────────────────────────┤
 │  Application Code (Test/Benchmark)              │
 │         ↓                                        │
-│  catalyst2sql Core Engine                       │
+│  thunderduck Core Engine                       │
 │  ├─ LogicalPlan (14+ node types)               │
 │  ├─ Expression System (500+ functions)         │
 │  ├─ SQL Generator (DuckDB SQL)                 │
@@ -80,7 +80,7 @@ catalyst2sql is evolving from an **embedded-only** DuckDB translation layer to a
           └──────────────────┴──────────────────┘
                              ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│              Spark Connect Server (catalyst2sql)                 │
+│              Spark Connect Server (thunderduck)                 │
 ├──────────────────────────────────────────────────────────────────┤
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │         SparkConnectService (gRPC Layer)                   │ │
@@ -93,7 +93,7 @@ catalyst2sql is evolving from an **embedded-only** DuckDB translation layer to a
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │      Translation Layer (connect-server module)             │ │
 │  │  ├─ PlanTranslator: Spark Connect Plan → LogicalPlan      │ │
-│  │  ├─ ExpressionTranslator: Spark Expr → catalyst2sql Expr  │ │
+│  │  ├─ ExpressionTranslator: Spark Expr → thunderduck Expr  │ │
 │  │  ├─ TypeMapper: Spark Types → DuckDB Types                │ │
 │  │  └─ ResultSerializer: Arrow → gRPC Response                │ │
 │  └────────────────────┬───────────────────────────────────────┘ │
@@ -162,12 +162,12 @@ catalyst2sql is evolving from an **embedded-only** DuckDB translation layer to a
 │              TRANSLATION LAYER (NEW)                            │
 │  ┌───────────────────────────────────────────────────────────┐ │
 │  │ PlanTranslator                                            │ │
-│  │  - Spark Connect Plan → catalyst2sql LogicalPlan         │ │
+│  │  - Spark Connect Plan → thunderduck LogicalPlan         │ │
 │  │  - Preserves plan semantics and optimizations            │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │  ┌───────────────────────────────────────────────────────────┐ │
 │  │ ExpressionTranslator                                      │ │
-│  │  - Spark expressions → catalyst2sql expressions          │ │
+│  │  - Spark expressions → thunderduck expressions          │ │
 │  │  - Function name mapping (500+ functions)                │ │
 │  └───────────────────────────────────────────────────────────┘ │
 └────────────────────┬────────────────────────────────────────────┘
@@ -240,7 +240,7 @@ catalyst2sql is evolving from an **embedded-only** DuckDB translation layer to a
 ### 3.1 Component Hierarchy
 
 ```
-catalyst2sql-parent/
+thunderduck-parent/
 ├── core/                          # EXISTING: Core translation engine
 │   ├── logical/                   # LogicalPlan, Filter, Join, Aggregate, etc.
 │   ├── expression/                # Expression, FunctionCall, etc.
@@ -255,7 +255,7 @@ catalyst2sql-parent/
 │   │   ├── SparkConnectServiceImpl.java
 │   │   ├── RequestHandler.java
 │   │   └── ResponseSerializer.java
-│   ├── translation/               # Spark Connect → catalyst2sql
+│   ├── translation/               # Spark Connect → thunderduck
 │   │   ├── PlanTranslator.java
 │   │   ├── ExpressionTranslator.java
 │   │   ├── TypeMapper.java
@@ -337,7 +337,7 @@ catalyst2sql-parent/
 ┌──────────────────────────────────────────────────┐
 │ PlanTranslator.translate(sparkPlan)              │
 │  1. Walk Spark Connect Plan tree                │
-│  2. Convert to catalyst2sql LogicalPlan          │
+│  2. Convert to thunderduck LogicalPlan          │
 │  3. Apply type conversions                       │
 │  Output: LogicalPlan (e.g., Filter → Project)    │
 └─────┬────────────────────────────────────────────┘
@@ -465,10 +465,10 @@ catalyst2sql-parent/
 ### 5.1 Maven Multi-Module Layout
 
 ```xml
-<!-- catalyst2sql-parent/pom.xml -->
+<!-- thunderduck-parent/pom.xml -->
 <project>
-  <groupId>com.catalyst2sql</groupId>
-  <artifactId>catalyst2sql-parent</artifactId>
+  <groupId>com.thunderduck</groupId>
+  <artifactId>thunderduck-parent</artifactId>
   <version>0.2.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
@@ -495,19 +495,19 @@ catalyst2sql-parent/
 <!-- connect-server/pom.xml -->
 <project>
   <parent>
-    <groupId>com.catalyst2sql</groupId>
-    <artifactId>catalyst2sql-parent</artifactId>
+    <groupId>com.thunderduck</groupId>
+    <artifactId>thunderduck-parent</artifactId>
     <version>0.2.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>catalyst2sql-connect-server</artifactId>
+  <artifactId>thunderduck-connect-server</artifactId>
   <packaging>jar</packaging>
 
   <dependencies>
     <!-- Internal: Core translation engine -->
     <dependency>
-      <groupId>com.catalyst2sql</groupId>
-      <artifactId>catalyst2sql-core</artifactId>
+      <groupId>com.thunderduck</groupId>
+      <artifactId>thunderduck-core</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -596,7 +596,7 @@ catalyst2sql-parent/
             <configuration>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.catalyst2sql.server.SparkConnectServer</mainClass>
+                  <mainClass>com.thunderduck.server.SparkConnectServer</mainClass>
                 </transformer>
               </transformers>
             </configuration>
@@ -629,15 +629,15 @@ catalyst2sql-parent/
 
 ### 6.1 SparkConnectService (gRPC Interface)
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/protocol/SparkConnectServiceImpl.java`
+**File**: `connect-server/src/main/java/com/thunderduck/protocol/SparkConnectServiceImpl.java`
 
 ```java
-package com.catalyst2sql.protocol;
+package com.thunderduck.protocol;
 
 import org.apache.spark.connect.proto.*;
 import io.grpc.stub.StreamObserver;
-import com.catalyst2sql.session.SessionManager;
-import com.catalyst2sql.translation.PlanTranslator;
+import com.thunderduck.session.SessionManager;
+import com.thunderduck.translation.PlanTranslator;
 
 /**
  * gRPC service implementation for Spark Connect protocol.
@@ -752,17 +752,17 @@ public class SparkConnectServiceImpl
 
 ### 6.2 PlanTranslator (Spark Connect → LogicalPlan)
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/translation/PlanTranslator.java`
+**File**: `connect-server/src/main/java/com/thunderduck/translation/PlanTranslator.java`
 
 ```java
-package com.catalyst2sql.translation;
+package com.thunderduck.translation;
 
 import org.apache.spark.connect.proto.Relation;
-import com.catalyst2sql.logical.*;
-import com.catalyst2sql.expression.*;
+import com.thunderduck.logical.*;
+import com.thunderduck.expression.*;
 
 /**
- * Translates Spark Connect logical plans to catalyst2sql LogicalPlan.
+ * Translates Spark Connect logical plans to thunderduck LogicalPlan.
  *
  * Handles plan node types:
  * - Read (table scan, Parquet files)
@@ -790,7 +790,7 @@ public class PlanTranslator {
      * Translate Spark Connect Relation to LogicalPlan.
      *
      * @param relation Spark Connect relation (from Protobuf)
-     * @return catalyst2sql LogicalPlan
+     * @return thunderduck LogicalPlan
      */
     public LogicalPlan translate(Relation relation) {
         switch (relation.getRelTypeCase()) {
@@ -924,7 +924,7 @@ public class PlanTranslator {
 
 **Key Responsibilities**:
 - Walk Spark Connect plan tree recursively
-- Map Spark plan nodes to catalyst2sql LogicalPlan nodes
+- Map Spark plan nodes to thunderduck LogicalPlan nodes
 - Preserve plan semantics (no optimization at this layer)
 - Handle unsupported operations gracefully
 
@@ -932,14 +932,14 @@ public class PlanTranslator {
 
 ### 6.3 SessionManager (Single-Session Management)
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/session/SessionManager.java`
+**File**: `connect-server/src/main/java/com/thunderduck/session/SessionManager.java`
 
 **Note**: This is an illustrative design for the single-session architecture described in Section 7. See `docs/architect/SINGLE_SESSION_ARCHITECTURE.md` for the authoritative single-session design.
 
 ```java
-package com.catalyst2sql.session;
+package com.thunderduck.session;
 
-import com.catalyst2sql.runtime.DuckDBConnectionManager;
+import com.thunderduck.runtime.DuckDBConnectionManager;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -1144,13 +1144,13 @@ public class SessionManager {
 
 ### 6.4 Session (Per-Client State)
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/session/Session.java`
+**File**: `connect-server/src/main/java/com/thunderduck/session/Session.java`
 
 ```java
-package com.catalyst2sql.session;
+package com.thunderduck.session;
 
-import com.catalyst2sql.runtime.QueryExecutor;
-import com.catalyst2sql.logical.LogicalPlan;
+import com.thunderduck.runtime.QueryExecutor;
+import com.thunderduck.logical.LogicalPlan;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.duckdb.DuckDBConnection;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1325,10 +1325,10 @@ public class Session {
 
 ### 6.5 ArrowStreamWriter (Result Streaming)
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/streaming/ArrowStreamWriter.java`
+**File**: `connect-server/src/main/java/com/thunderduck/streaming/ArrowStreamWriter.java`
 
 ```java
-package com.catalyst2sql.streaming;
+package com.thunderduck.streaming;
 
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowStreamWriter;
@@ -1476,7 +1476,7 @@ public class ArrowStreamWriter {
 
 ### 7.1 Single-Session Architecture
 
-**Core Principle**: catalyst2sql implements a **single-session model** aligned with DuckDB's single-user nature.
+**Core Principle**: thunderduck implements a **single-session model** aligned with DuckDB's single-user nature.
 
 **State Machine**:
 ```
@@ -1589,10 +1589,10 @@ SessionManager config:
 **Configurable via Environment**:
 ```bash
 # Session timeout in seconds (default: 300)
-export CATALYST2SQL_SESSION_TIMEOUT=300
+export THUNDERDUCK_SESSION_TIMEOUT=300
 
 # Timeout check interval in seconds (default: 30)
-export CATALYST2SQL_TIMEOUT_CHECK_INTERVAL=30
+export THUNDERDUCK_TIMEOUT_CHECK_INTERVAL=30
 ```
 
 **Timeout Logic**:
@@ -1727,14 +1727,14 @@ conn.createStatement().execute("SET memory_limit='16GB'");
 
 ### 8.2 Error Handler Implementation
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/protocol/ErrorHandler.java`
+**File**: `connect-server/src/main/java/com/thunderduck/protocol/ErrorHandler.java`
 
 ```java
-package com.catalyst2sql.protocol;
+package com.thunderduck.protocol;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import com.catalyst2sql.exception.*;
+import com.thunderduck.exception.*;
 import java.sql.SQLException;
 
 /**
@@ -1822,7 +1822,7 @@ try:
     spark.sql("SELECT * FROM non_existent_table").show()
 except Exception as e:
     # Spark: AnalysisException: Table or view not found: non_existent_table
-    # catalyst2sql: AnalysisException: Table not found: non_existent_table
+    # thunderduck: AnalysisException: Table not found: non_existent_table
     print(e)
 ```
 
@@ -1840,7 +1840,7 @@ except Exception as e:
 | Metric | Target | Baseline (Spark 3.5.3) |
 |--------|--------|------------------------|
 | Query execution | 5-10x faster | Spark Connect local mode |
-| Server overhead | < 15% | vs embedded catalyst2sql |
+| Server overhead | < 15% | vs embedded thunderduck |
 | Session model | Single-session | Multi-session (Spark Connect) |
 | Memory usage | < 100 MB base | ~500 MB+ (Spark) |
 | Latency (simple query) | < 50 ms | ~200 ms (Spark) |
@@ -1989,7 +1989,7 @@ spark = SparkSession.builder \
 
 **Current**: Embedded mode (Week 1-9)
 ```java
-// Application embeds catalyst2sql
+// Application embeds thunderduck
 DuckDBConnectionManager manager = new DuckDBConnectionManager();
 QueryExecutor executor = new QueryExecutor(manager);
 
@@ -2019,14 +2019,14 @@ df.show()
 - Benchmarking
 - Local development
 
-### 11.2 From Spark to catalyst2sql
+### 11.2 From Spark to thunderduck
 
-**Spark 3.5.3 → catalyst2sql Migration**:
+**Spark 3.5.3 → thunderduck Migration**:
 
-**Step 1**: Install catalyst2sql server
+**Step 1**: Install thunderduck server
 ```bash
 # Docker deployment
-docker run -p 15002:15002 catalyst2sql/connect-server:latest
+docker run -p 15002:15002 thunderduck/connect-server:latest
 ```
 
 **Step 2**: Update client connection string
@@ -2036,9 +2036,9 @@ spark = SparkSession.builder \
     .master("local[*]") \
     .getOrCreate()
 
-# AFTER (catalyst2sql via Spark Connect)
+# AFTER (thunderduck via Spark Connect)
 spark = SparkSession.builder \
-    .remote("sc://catalyst2sql-host:15002") \
+    .remote("sc://thunderduck-host:15002") \
     .getOrCreate()
 ```
 
@@ -2049,7 +2049,7 @@ spark = SparkSession.builder \
 
 **Compatibility Matrix**:
 
-| Feature | Spark 3.5.3 | catalyst2sql Week 12 | catalyst2sql Week 16 |
+| Feature | Spark 3.5.3 | thunderduck Week 12 | thunderduck Week 16 |
 |---------|-------------|----------------------|----------------------|
 | SELECT, WHERE, LIMIT | ✅ | ✅ | ✅ |
 | JOIN (all types) | ✅ | ✅ | ✅ |
@@ -2070,7 +2070,7 @@ spark = SparkSession.builder \
 **Single-Node Deployment** (Development, Testing):
 ```
 ┌────────────────────────────────────────┐
-│         catalyst2sql Server            │
+│         thunderduck Server            │
 │  ┌──────────────────────────────────┐  │
 │  │  SparkConnectService (gRPC)      │  │
 │  │  Port: 15002                     │  │
@@ -2109,7 +2109,7 @@ FROM eclipse-temurin:17-jre-alpine
 RUN apk add --no-cache libstdc++
 
 # Copy application JAR
-COPY target/catalyst2sql-connect-server-0.2.0-SNAPSHOT.jar /app/server.jar
+COPY target/thunderduck-connect-server-0.2.0-SNAPSHOT.jar /app/server.jar
 
 # Expose Spark Connect port
 EXPOSE 15002
@@ -2126,15 +2126,15 @@ ENTRYPOINT ["java", "-jar", "/app/server.jar"]
 ```yaml
 version: '3.8'
 services:
-  catalyst2sql:
+  thunderduck:
     build: .
     ports:
       - "15002:15002"
     environment:
-      - CATALYST2SQL_PORT=15002
-      - CATALYST2SQL_MAX_SESSIONS=100
-      - CATALYST2SQL_SESSION_TIMEOUT=30m
-      - CATALYST2SQL_MEMORY_LIMIT=16GB
+      - THUNDERDUCK_PORT=15002
+      - THUNDERDUCK_MAX_SESSIONS=100
+      - THUNDERDUCK_SESSION_TIMEOUT=30m
+      - THUNDERDUCK_MEMORY_LIMIT=16GB
     volumes:
       - ./data:/data  # Mount TPC-H data
     restart: unless-stopped
@@ -2147,27 +2147,27 @@ services:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: catalyst2sql-server
+  name: thunderduck-server
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: catalyst2sql
+      app: thunderduck
   template:
     metadata:
       labels:
-        app: catalyst2sql
+        app: thunderduck
     spec:
       containers:
       - name: server
-        image: catalyst2sql/connect-server:0.2.0
+        image: thunderduck/connect-server:0.2.0
         ports:
         - containerPort: 15002
           name: grpc
         env:
-        - name: CATALYST2SQL_PORT
+        - name: THUNDERDUCK_PORT
           value: "15002"
-        - name: CATALYST2SQL_MAX_SESSIONS
+        - name: THUNDERDUCK_MAX_SESSIONS
           value: "100"
         resources:
           requests:
@@ -2190,10 +2190,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: catalyst2sql-service
+  name: thunderduck-service
 spec:
   selector:
-    app: catalyst2sql
+    app: thunderduck
   ports:
   - protocol: TCP
     port: 15002
@@ -2206,12 +2206,12 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: catalyst2sql-hpa
+  name: thunderduck-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: catalyst2sql-server
+    name: thunderduck-server
   minReplicas: 3
   maxReplicas: 10
   metrics:
@@ -2319,7 +2319,7 @@ public interface SessionManager {
 
 **TPC-H SF=0.01 (10 MB, Week 12 target)**:
 
-| Query | Spark 3.5.3 | catalyst2sql (projected) | Speedup |
+| Query | Spark 3.5.3 | thunderduck (projected) | Speedup |
 |-------|-------------|--------------------------|---------|
 | Q1 | 3.0s | 0.5s | 6.0x |
 | Q3 | 8.0s | 1.2s | 6.7x |
@@ -2336,9 +2336,9 @@ public interface SessionManager {
 
 ### 14.1 Internal Documents
 
-- `/workspaces/catalyst2sql/IMPLEMENTATION_PLAN.md` - Overall project plan
-- `/workspaces/catalyst2sql/docs/Testing_Strategy.md` - Testing approach
-- `/workspaces/catalyst2sql/benchmarks/README.md` - TPC-H benchmarking
+- `/workspaces/thunderduck/IMPLEMENTATION_PLAN.md` - Overall project plan
+- `/workspaces/thunderduck/docs/Testing_Strategy.md` - Testing approach
+- `/workspaces/thunderduck/benchmarks/README.md` - TPC-H benchmarking
 
 ### 14.2 External References
 

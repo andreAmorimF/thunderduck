@@ -2,7 +2,7 @@
 
 ## Mission Accomplished
 
-As the CODER agent in the Hive Mind collective intelligence system, I have completed the design of build infrastructure, testing infrastructure, module organization, CI/CD integration, and data generation pipelines for the catalyst2sql project.
+As the CODER agent in the Hive Mind collective intelligence system, I have completed the design of build infrastructure, testing infrastructure, module organization, CI/CD integration, and data generation pipelines for the thunderduck project.
 
 ## Deliverables
 
@@ -17,7 +17,7 @@ As the CODER agent in the Hive Mind collective intelligence system, I have compl
 
 **Module Organization:**
 ```
-catalyst2sql-parent/
+thunderduck-parent/
 ├── core/          # Translation engine, logical plan, SQL generation
 ├── formats/       # Format readers (Parquet, Delta, Iceberg)
 ├── api/           # Spark-compatible DataFrame API
@@ -72,7 +72,7 @@ catalyst2sql-parent/
 
 **Package Structure:**
 
-**Core Module** (`com.catalyst2sql.core`):
+**Core Module** (`com.thunderduck.core`):
 - `logical/` - Logical plan nodes (TableScan, Project, Filter, Join, etc.)
 - `expression/` - Expression representation (literals, columns, functions)
 - `types/` - Type mapping (Spark → DuckDB)
@@ -81,13 +81,13 @@ catalyst2sql-parent/
 - `optimizer/` - Query optimization (filter pushdown, column pruning)
 - `execution/` - DuckDB execution wrapper
 
-**Formats Module** (`com.catalyst2sql.formats`):
+**Formats Module** (`com.thunderduck.formats`):
 - `parquet/` - Parquet reader/writer
 - `delta/` - Delta Lake support
 - `iceberg/` - Iceberg support
 - `common/` - Format detection and metadata
 
-**API Module** (`com.catalyst2sql.api`):
+**API Module** (`com.thunderduck.api`):
 - `session/` - SparkSession implementation
 - `dataset/` - DataFrame and Dataset API
 - `reader/` - DataFrameReader API
@@ -267,8 +267,8 @@ java -jar testdata.jar synthetic --format delta --versions 5
 ### Initial Setup
 ```bash
 # Clone repository
-git clone https://github.com/catalyst2sql/catalyst2sql.git
-cd catalyst2sql
+git clone https://github.com/thunderduck/thunderduck.git
+cd thunderduck
 
 # Build project
 mvn clean install
@@ -278,7 +278,7 @@ mvn test
 
 # Generate test data
 cd tests
-mvn exec:java -Dexec.mainClass="com.catalyst2sql.testdata.DataGenerator"
+mvn exec:java -Dexec.mainClass="com.thunderduck.testdata.DataGenerator"
 ```
 
 ### Development Cycle
@@ -443,7 +443,7 @@ java -jar target/benchmarks.jar ParquetReadBenchmark
 ### Shared Memory Keys
 
 All design documents stored in:
-- `/workspaces/catalyst2sql/docs/coder/`
+- `/workspaces/thunderduck/docs/coder/`
 
 Key findings:
 - `workers/coder/build_system` → Maven multi-module

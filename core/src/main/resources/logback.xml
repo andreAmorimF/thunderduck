@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Logback configuration for Catalyst2SQL structured logging.
+  Logback configuration for Thunderduck structured logging.
 
   Features:
   - Console appender for development and debugging
@@ -31,11 +31,11 @@
     -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <!-- Current log file location -->
-        <file>logs/catalyst2sql.log</file>
+        <file>logs/thunderduck.log</file>
 
         <!-- Rolling policy: new file each day, keep 30 days of history -->
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/catalyst2sql.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>logs/thunderduck.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>30</maxHistory>
             <totalSizeCap>1GB</totalSizeCap>
         </rollingPolicy>
@@ -48,9 +48,9 @@
 
     <!--
       Package-specific logger configuration.
-      Set DEBUG level for catalyst2sql package to capture detailed query processing.
+      Set DEBUG level for thunderduck package to capture detailed query processing.
     -->
-    <logger name="com.catalyst2sql" level="DEBUG"/>
+    <logger name="com.thunderduck" level="DEBUG"/>
 
     <!--
       Spark logging can be verbose, set to WARN to reduce noise.

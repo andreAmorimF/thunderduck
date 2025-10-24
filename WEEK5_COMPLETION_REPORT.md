@@ -1,6 +1,6 @@
 # Week 5: Advanced Aggregation & Window Functions - 100% COMPLETION REPORT
 
-**Project**: catalyst2sql - Spark Catalyst to DuckDB SQL Translation
+**Project**: thunderduck - Spark Catalyst to DuckDB SQL Translation
 **Week**: 5 (Advanced Aggregation & Window Function Features)
 **Date**: October 15, 2025
 **Status**: ✅ **100% COMPLETE** (All Core Tasks + Optimization Tasks)
@@ -28,8 +28,8 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-1: HAVING Clause Support (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- Enhanced: `core/src/main/java/com/catalyst2sql/logical/Aggregate.java`
-- Tests: `tests/src/test/java/com/catalyst2sql/aggregate/HavingClauseTest.java` (16 tests)
+- Enhanced: `core/src/main/java/com/thunderduck/logical/Aggregate.java`
+- Tests: `tests/src/test/java/com/thunderduck/aggregate/HavingClauseTest.java` (16 tests)
 
 **Features**:
 - HAVING clause with complex predicates
@@ -41,7 +41,7 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 **Status**: Implemented and tested
 **Files Created**:
 - Enhanced: `Aggregate.AggregateExpression` with `boolean distinct` field
-- Tests: `tests/src/test/java/com/catalyst2sql/aggregate/DistinctAggregateTest.java` (14 tests)
+- Tests: `tests/src/test/java/com/thunderduck/aggregate/DistinctAggregateTest.java` (14 tests)
 
 **Features**:
 - COUNT(DISTINCT column)
@@ -52,9 +52,9 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-3: ROLLUP, CUBE, GROUPING SETS (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- `core/src/main/java/com/catalyst2sql/logical/GroupingType.java`
-- `core/src/main/java/com/catalyst2sql/logical/GroupingSets.java`
-- Tests: `tests/src/test/java/com/catalyst2sql/aggregate/GroupingSetsTest.java` (27 tests)
+- `core/src/main/java/com/thunderduck/logical/GroupingType.java`
+- `core/src/main/java/com/thunderduck/logical/GroupingSets.java`
+- Tests: `tests/src/test/java/com/thunderduck/aggregate/GroupingSetsTest.java` (27 tests)
 
 **Features**:
 - ROLLUP for hierarchical aggregation
@@ -65,7 +65,7 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-4: Advanced Aggregate Functions (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- Tests: `tests/src/test/java/com/catalyst2sql/aggregate/AdvancedAggregatesTest.java` (20 tests)
+- Tests: `tests/src/test/java/com/thunderduck/aggregate/AdvancedAggregatesTest.java` (20 tests)
 
 **Features**:
 - STDDEV_SAMP, STDDEV_POP (standard deviation)
@@ -80,9 +80,9 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-5: Window Frame Specifications (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- `core/src/main/java/com/catalyst2sql/expression/window/FrameBoundary.java`
-- `core/src/main/java/com/catalyst2sql/expression/window/WindowFrame.java`
-- Tests: `tests/src/test/java/com/catalyst2sql/expression/window/WindowFrameTest.java` (17 tests)
+- `core/src/main/java/com/thunderduck/expression/window/FrameBoundary.java`
+- `core/src/main/java/com/thunderduck/expression/window/WindowFrame.java`
+- Tests: `tests/src/test/java/com/thunderduck/expression/window/WindowFrameTest.java` (17 tests)
 
 **Features**:
 - ROWS BETWEEN ... AND ...
@@ -94,10 +94,10 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-6: Named Windows (WINDOW Clause) (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- `core/src/main/java/com/catalyst2sql/expression/window/NamedWindow.java`
-- `core/src/main/java/com/catalyst2sql/expression/window/WindowClause.java`
-- Enhanced: `core/src/main/java/com/catalyst2sql/expression/WindowFunction.java`
-- Tests: `tests/src/test/java/com/catalyst2sql/expression/window/NamedWindowTest.java` (13 tests)
+- `core/src/main/java/com/thunderduck/expression/window/NamedWindow.java`
+- `core/src/main/java/com/thunderduck/expression/window/WindowClause.java`
+- Enhanced: `core/src/main/java/com/thunderduck/expression/WindowFunction.java`
+- Tests: `tests/src/test/java/com/thunderduck/expression/window/NamedWindowTest.java` (13 tests)
 
 **Features**:
 - Named window definitions with WINDOW clause
@@ -108,7 +108,7 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-7: Value Window Functions (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- Tests: `tests/src/test/java/com/catalyst2sql/expression/window/ValueWindowFunctionsTest.java` (15 tests)
+- Tests: `tests/src/test/java/com/thunderduck/expression/window/ValueWindowFunctionsTest.java` (15 tests)
 
 **Features**:
 - NTH_VALUE(expr, N) - value at specific position
@@ -119,8 +119,8 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-8: Window Function Optimizations (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- `core/src/main/java/com/catalyst2sql/optimizer/WindowFunctionOptimizationRule.java`
-- Tests: `tests/src/test/java/com/catalyst2sql/optimizer/WindowOptimizationTest.java` (6 tests)
+- `core/src/main/java/com/thunderduck/optimizer/WindowFunctionOptimizationRule.java`
+- Tests: `tests/src/test/java/com/thunderduck/optimizer/WindowOptimizationTest.java` (6 tests)
 
 **Features**:
 - Window merging (functions with same OVER clause)
@@ -135,8 +135,8 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-9: TPC-H Q13, Q18 Implementation (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- `benchmarks/src/main/java/com/catalyst2sql/tpch/TPCHQueryPlans.java`
-- Tests: `tests/src/test/java/com/catalyst2sql/tpch/TPCHAggregationQueriesTest.java` (6 tests)
+- `benchmarks/src/main/java/com/thunderduck/tpch/TPCHQueryPlans.java`
+- Tests: `tests/src/test/java/com/thunderduck/tpch/TPCHAggregationQueriesTest.java` (6 tests)
 
 **Features**:
 - TPC-H Q13: Customer Distribution (LEFT OUTER JOIN + nested aggregation)
@@ -147,8 +147,8 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-10: Aggregate Pushdown Optimization (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- `core/src/main/java/com/catalyst2sql/optimizer/AggregatePushdownRule.java`
-- Tests: `tests/src/test/java/com/catalyst2sql/optimizer/AggregatePushdownTest.java` (8 tests)
+- `core/src/main/java/com/thunderduck/optimizer/AggregatePushdownRule.java`
+- Tests: `tests/src/test/java/com/thunderduck/optimizer/AggregatePushdownTest.java` (8 tests)
 
 **Features**:
 - Push aggregates through INNER joins when safe
@@ -159,7 +159,7 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-11: Integration Tests (Complete)
 **Status**: Implemented and tested (from previous session)
 **Files Created**:
-- `tests/src/test/java/com/catalyst2sql/integration/Week5IntegrationTest.java` (12 tests)
+- `tests/src/test/java/com/thunderduck/integration/Week5IntegrationTest.java` (12 tests)
 
 **Features**:
 - DISTINCT + HAVING combinations
@@ -170,7 +170,7 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ### ✅ Task W5-12: Memory Efficiency Tests (Complete)
 **Status**: Implemented and tested
 **Files Created**:
-- `tests/src/test/java/com/catalyst2sql/performance/MemoryEfficiencyTest.java` (6 tests)
+- `tests/src/test/java/com/thunderduck/performance/MemoryEfficiencyTest.java` (6 tests)
 
 **Features**:
 - Large GROUP BY memory usage validation
@@ -271,10 +271,10 @@ Week 5 implementation has reached **100% completion**, delivering all planned fe
 ```
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-[INFO] catalyst2sql-parent ................................ SUCCESS
-[INFO] Catalyst2SQL Core .................................. SUCCESS
-[INFO] Catalyst2SQL Tests ................................. SUCCESS
-[INFO] Catalyst2SQL Benchmarks ............................ SUCCESS
+[INFO] thunderduck-parent ................................ SUCCESS
+[INFO] Thunderduck Core .................................. SUCCESS
+[INFO] Thunderduck Tests ................................. SUCCESS
+[INFO] Thunderduck Benchmarks ............................ SUCCESS
 [INFO] ------------------------------------------------------------------------
 ```
 
@@ -406,7 +406,7 @@ Week 5 implementation has achieved **100% completion** of all planned features:
 - ✅ Production-ready code quality with full JavaDoc
 - ✅ All SQL features validated and tested
 
-The catalyst2sql project now has **enterprise-grade aggregation and window function support**, positioning it for production use in complex analytical workloads. All Week 5 objectives have been met or exceeded, with comprehensive testing and optimization features delivered.
+The thunderduck project now has **enterprise-grade aggregation and window function support**, positioning it for production use in complex analytical workloads. All Week 5 objectives have been met or exceeded, with comprehensive testing and optimization features delivered.
 
 ---
 

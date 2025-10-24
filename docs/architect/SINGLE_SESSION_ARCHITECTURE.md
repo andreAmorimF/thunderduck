@@ -1,4 +1,4 @@
-# Single-Session Architecture for catalyst2sql Spark Connect Server
+# Single-Session Architecture for thunderduck Spark Connect Server
 
 **Document Version**: 1.0
 **Date**: 2025-10-16
@@ -28,7 +28,7 @@
 
 ### 1.1 Purpose
 
-This document defines the **single-session architecture** for the catalyst2sql Spark Connect Server. This design aligns with DuckDB's single-user nature and prioritizes simplicity and performance over multi-client concurrency.
+This document defines the **single-session architecture** for the thunderduck Spark Connect Server. This design aligns with DuckDB's single-user nature and prioritizes simplicity and performance over multi-client concurrency.
 
 ### 1.2 Key Principles
 
@@ -243,10 +243,10 @@ assert lastActivityTime > 0;
 
 ### 4.2 SessionManager Design
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/session/SessionManager.java`
+**File**: `connect-server/src/main/java/com/thunderduck/session/SessionManager.java`
 
 ```java
-package com.catalyst2sql.session;
+package com.thunderduck.session;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -258,7 +258,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Manages single-session state for catalyst2sql Spark Connect Server.
+ * Manages single-session state for thunderduck Spark Connect Server.
  *
  * <p>This class implements a simple state machine:
  * <ul>
@@ -442,7 +442,7 @@ public class SessionManager {
 ### 4.3 Session Class
 
 ```java
-package com.catalyst2sql.session;
+package com.thunderduck.session;
 
 /**
  * Represents a client session.
@@ -683,7 +683,7 @@ from pyspark.sql import SparkSession
 
 def connect_with_retry(server_url, max_retries=5, retry_delay=10):
     """
-    Connect to catalyst2sql server with retry on RESOURCE_EXHAUSTED.
+    Connect to thunderduck server with retry on RESOURCE_EXHAUSTED.
     """
     for attempt in range(max_retries):
         try:
@@ -1081,7 +1081,7 @@ void testSingleSessionLatencyOverhead() {
 
 ### 13.1 Summary
 
-The **single-session architecture** for catalyst2sql Spark Connect Server provides:
+The **single-session architecture** for thunderduck Spark Connect Server provides:
 
 1. **Simplicity**: 67% less code than multi-session design
 2. **Alignment**: Matches DuckDB's single-user philosophy

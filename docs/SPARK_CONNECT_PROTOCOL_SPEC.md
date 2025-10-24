@@ -1,5 +1,5 @@
 # Spark Connect Protocol Specification
-## catalyst2sql Implementation Guide
+## thunderduck Implementation Guide
 
 **Version:** 1.0
 **Target Spark Version:** 3.5.3
@@ -20,7 +20,7 @@
 8. [Session Management](#session-management)
 9. [Error Handling](#error-handling)
 10. [Minimal Protocol Subset for TPC-H Q1](#minimal-protocol-subset-for-tpc-h-q1)
-11. [Integration with catalyst2sql](#integration-with-catalyst2sql)
+11. [Integration with thunderduck](#integration-with-thunderduck)
 12. [Implementation Roadmap](#implementation-roadmap)
 13. [References](#references)
 
@@ -35,17 +35,17 @@ Spark Connect is a decoupled client-server architecture introduced in Apache Spa
 - **Apache Arrow** for efficient data transfer
 - **Unresolved Logical Plans** as the query representation
 
-### Key Benefits for catalyst2sql
+### Key Benefits for thunderduck
 
 1. **Ecosystem Compatibility**: Standard Spark clients (PySpark, Scala, Java) can connect without modification
-2. **Remote Access**: Clients don't need catalyst2sql embedded, only Spark Connect client library
+2. **Remote Access**: Clients don't need thunderduck embedded, only Spark Connect client library
 3. **Language Agnostic**: Protocol Buffers enable multi-language support
 4. **Performance**: Arrow-based data transfer is 3-5x faster than JDBC/ODBC
 5. **Drop-in Replacement**: Can replace Spark Connect Server for 5-10x performance gains
 
 ### Strategic Value
 
-catalyst2sql implementing Spark Connect transforms it from an embedded library into a **high-performance alternative to Apache Spark** that works with the entire Spark ecosystem.
+thunderduck implementing Spark Connect transforms it from an embedded library into a **high-performance alternative to Apache Spark** that works with the entire Spark ecosystem.
 
 ---
 
@@ -55,7 +55,7 @@ catalyst2sql implementing Spark Connect transforms it from an embedded library i
 
 ```
 ┌─────────────────┐                    ┌─────────────────┐
-│  Spark Client   │                    │ catalyst2sql    │
+│  Spark Client   │                    │ thunderduck    │
 │  (PySpark/      │  gRPC (HTTP/2)     │ Connect Server  │
 │   Scala/Java)   │ ◄─────────────────►│                 │
 │                 │                    │                 │
@@ -125,7 +125,7 @@ catalyst2sql implementing Spark Connect transforms it from an embedded library i
            Network (HTTP/2)
 ```
 
-### 3.2 Server Architecture (catalyst2sql)
+### 3.2 Server Architecture (thunderduck)
 
 ```
            Network (HTTP/2)
@@ -155,7 +155,7 @@ catalyst2sql implementing Spark Connect transforms it from an embedded library i
 └────────────────┬───────────────────────────┘
                  │
 ┌────────────────▼───────────────────────────┐
-│   Existing catalyst2sql Components         │
+│   Existing thunderduck Components         │
 │  - SQL Generator (LogicalPlan → SQL)      │
 │  - Query Executor (DuckDB execution)      │
 │  - Arrow Interchange (ResultSet → Arrow)  │
@@ -175,7 +175,7 @@ catalyst2sql implementing Spark Connect transforms it from an embedded library i
 | SQL Generator | LogicalPlan → SQL | **Already Implemented** |
 | Query Executor | Execute SQL, return Arrow | **Already Implemented** |
 
-**Key Insight**: catalyst2sql already has 60% of the required components. The main work is implementing the Protobuf deserialization layer.
+**Key Insight**: thunderduck already has 60% of the required components. The main work is implementing the Protobuf deserialization layer.
 
 ---
 
@@ -213,7 +213,7 @@ service SparkConnectService {
 }
 ```
 
-### 4.2 RPC Methods Priority (for catalyst2sql)
+### 4.2 RPC Methods Priority (for thunderduck)
 
 | RPC | Priority | Reason |
 |-----|----------|--------|
@@ -385,7 +385,7 @@ message Expression {
 ### 6.1 Simple Query Flow
 
 ```
-Client                            Server (catalyst2sql)
+Client                            Server (thunderduck)
   │                                      │
   │ 1. Build LogicalPlan                │
   │    df = spark.read.parquet(...)     │
@@ -483,7 +483,7 @@ Plan {
 }
 ```
 
-**catalyst2sql Processing**:
+**thunderduck Processing**:
 1. Deserialize Protobuf → Internal LogicalPlan tree
 2. Translate to DuckDB SQL (already implemented in SQLGenerator)
 3. Execute SQL → DuckDB ResultSet
@@ -579,7 +579,7 @@ Arrow data is serialized using the **Arrow IPC (Inter-Process Communication)** f
 └────────────────────────────────────┘
 ```
 
-### 7.3 catalyst2sql Arrow Integration
+### 7.3 thunderduck Arrow Integration
 
 **Current Implementation** (already exists):
 - `ArrowInterchange.fromResultSet()`: Converts JDBC ResultSet → Arrow VectorSchemaRoot
@@ -720,7 +720,7 @@ public class SessionManager {
         return sessions.computeIfAbsent(sessionId, id -> {
             // Create new SparkSession
             SparkSession spark = SparkSession.builder()
-                .appId("catalyst2sql-" + sessionId)
+                .appId("thunderduck-" + sessionId)
                 .userId(user.getUserId())
                 .build();
 
@@ -830,9 +830,9 @@ Client                            Server
   │                                      │
 ```
 
-### 9.4 catalyst2sql Error Mapping
+### 9.4 thunderduck Error Mapping
 
-| catalyst2sql Exception | Spark Connect ErrorType |
+| thunderduck Exception | Spark Connect ErrorType |
 |------------------------|------------------------|
 | `SQLGenerationException` | `INVALID_PLAN_INPUT` |
 | `UnsupportedOperationException` | `NOT_IMPLEMENTED` |
@@ -911,7 +911,7 @@ Client                            Server
 
 ---
 
-## 11. Integration with catalyst2sql
+## 11. Integration with thunderduck
 
 ### 11.1 Existing Components (Reusable)
 
@@ -971,7 +971,7 @@ Client                            Server
 ### 11.4 Maven Module Structure
 
 ```
-catalyst2sql/
+thunderduck/
 ├── core/                      # Existing
 │   ├── LogicalPlan
 │   ├── SQLGenerator
@@ -986,7 +986,7 @@ catalyst2sql/
 │   │       ├── relations.proto
 │   │       └── expressions.proto
 │   │
-│   └── src/main/java/com/catalyst2sql/connect/
+│   └── src/main/java/com/thunderduck/connect/
 │       ├── SparkConnectService.java       # gRPC service
 │       ├── SessionManager.java            # Session lifecycle
 │       ├── PlanConverter.java             # Protobuf → LogicalPlan
@@ -1263,7 +1263,7 @@ ExecutePlanRequest {
 }
 ```
 
-### Corresponding catalyst2sql LogicalPlan
+### Corresponding thunderduck LogicalPlan
 
 ```java
 Sort(
@@ -1318,13 +1318,13 @@ ORDER BY l_returnflag ASC, l_linestatus ASC
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>com.catalyst2sql</groupId>
-    <artifactId>catalyst2sql-parent</artifactId>
+    <groupId>com.thunderduck</groupId>
+    <artifactId>thunderduck-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>catalyst2sql-connect-server</artifactId>
-  <name>catalyst2sql Spark Connect Server</name>
+  <artifactId>thunderduck-connect-server</artifactId>
+  <name>thunderduck Spark Connect Server</name>
 
   <properties>
     <grpc.version>1.58.0</grpc.version>
@@ -1332,10 +1332,10 @@ ORDER BY l_returnflag ASC, l_linestatus ASC
   </properties>
 
   <dependencies>
-    <!-- catalyst2sql core (existing) -->
+    <!-- thunderduck core (existing) -->
     <dependency>
-      <groupId>com.catalyst2sql</groupId>
-      <artifactId>catalyst2sql-core</artifactId>
+      <groupId>com.thunderduck</groupId>
+      <artifactId>thunderduck-core</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -1435,7 +1435,7 @@ ORDER BY l_returnflag ASC, l_linestatus ASC
                                 │ gRPC/HTTP/2 (Protocol Buffers)
                                 │
 ┌───────────────────────────────▼───────────────────────────────────────────┐
-│                     catalyst2sql Spark Connect Server                     │
+│                     thunderduck Spark Connect Server                     │
 │                                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │                    gRPC Service (Port 15002)                        │  │
@@ -1462,7 +1462,7 @@ ORDER BY l_returnflag ASC, l_linestatus ASC
 │          └────────────┴────────────┴────────────┘                          │
 │                               │                                            │
 │  ┌────────────────────────────▼────────────────────────────────────────┐   │
-│  │            Existing catalyst2sql Core Components                    │   │
+│  │            Existing thunderduck Core Components                    │   │
 │  │                                                                      │   │
 │  │  ┌───────────────┐      ┌───────────────┐      ┌───────────────┐   │   │
 │  │  │  LogicalPlan  │──────►  SQLGenerator │──────►QueryExecutor  │   │   │
@@ -1499,4 +1499,4 @@ ORDER BY l_returnflag ASC, l_linestatus ASC
 
 **End of Specification**
 
-This document provides a complete specification for implementing a Spark Connect Server for catalyst2sql. For questions or clarifications, refer to the official Spark Connect documentation or the catalyst2sql development team.
+This document provides a complete specification for implementing a Spark Connect Server for thunderduck. For questions or clarifications, refer to the official Spark Connect documentation or the thunderduck development team.

@@ -38,3 +38,6 @@ dependency-reduced-pom.xml
 # OS artifacts
 .DS_Store
 Thumbs.db
+# Claude Code authentication (auto-generated, keep secret)
+.devcontainer/.claude-token
+.devcontainer/.claude-oauth.json

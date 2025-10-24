@@ -1,10 +1,10 @@
 # Claude Code Project Rules
 
-This file contains project-specific rules and guidelines for working with catalyst2sql.
+This file contains project-specific rules and guidelines for working with thunderduck.
 
 ## Documentation Structure Rules
 
-**Permanent Rule**: The catalyst2sql project follows a strict documentation structure pattern:
+**Permanent Rule**: The thunderduck project follows a strict documentation structure pattern:
 
 1. **ONE high-level plan** (`IMPLEMENTATION_PLAN.md`)
    - Contains the 16-week development roadmap
@@ -42,7 +42,7 @@ When creating new documentation:
 ### Current Structure
 
 ```
-catalyst2sql/
+thunderduck/
 ├── IMPLEMENTATION_PLAN.md              # ONE high-level plan
 ├── README.md                            # Project overview
 ├── WEEK11_IMPLEMENTATION_PLAN.md        # Current milestone (active)

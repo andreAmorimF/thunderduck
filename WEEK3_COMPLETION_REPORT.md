@@ -1,13 +1,13 @@
 # Week 3 Completion Report
 
-**Project**: catalyst2sql - Spark Catalyst to DuckDB SQL Translation
+**Project**: thunderduck - Spark Catalyst to DuckDB SQL Translation
 **Week**: 3 (Advanced SQL Features)
 **Date**: October 14, 2025
 **Status**: ✅ **100% COMPLETE**
 
 ## Executive Summary
 
-Week 3 successfully implemented all advanced SQL features planned for the catalyst2sql query engine. The implementation followed a phased approach (stubs → high-priority → remaining features) with comprehensive testing and two commits. All deliverables achieved 100% completion.
+Week 3 successfully implemented all advanced SQL features planned for the thunderduck query engine. The implementation followed a phased approach (stubs → high-priority → remaining features) with comprehensive testing and two commits. All deliverables achieved 100% completion.
 
 **Key Achievements**:
 - ✅ **11 new classes** created (5 subqueries, 5 optimizer components, 1 window function)
@@ -122,7 +122,7 @@ UNION ALL
 - `SQLGenerator.java` (generator package)
   - Made `generateSubqueryAlias()` public
   - Updated visit methods to delegate to `plan.toSQL(this)`
-  - Added `implements com.catalyst2sql.logical.SQLGenerator`
+  - Added `implements com.thunderduck.logical.SQLGenerator`
 
 - `SQLGenerator.java` (logical package - interface)
   - Added `String generate(LogicalPlan plan)` method
@@ -356,8 +356,8 @@ LogicalPlan optimized = optimizer.optimize(plan);
 ## File Structure
 
 ```
-catalyst2sql/
-├── core/src/main/java/com/catalyst2sql/
+thunderduck/
+├── core/src/main/java/com/thunderduck/
 │   ├── expression/
 │   │   ├── WindowFunction.java          [NEW - Phase 1]
 │   │   ├── SubqueryExpression.java      [NEW - Phase 1]
@@ -378,7 +378,7 @@ catalyst2sql/
 │       ├── ColumnPruningRule.java       [NEW - Phase 1]
 │       ├── ProjectionPushdownRule.java  [NEW - Phase 1]
 │       └── JoinReorderingRule.java      [NEW - Phase 1]
-└── tests/src/test/java/com/catalyst2sql/
+└── tests/src/test/java/com/thunderduck/
     └── logical/
         └── Phase2IntegrationTest.java   [NEW - Phase 2, 16 tests]
 ```
@@ -462,7 +462,7 @@ catalyst2sql/
 
 ## Conclusion
 
-Week 3 successfully delivered all planned advanced SQL features for catalyst2sql. The implementation achieved:
+Week 3 successfully delivered all planned advanced SQL features for thunderduck. The implementation achieved:
 
 ✅ **100% Feature Completion**: All JOIN types, Aggregate, UNION, Window Functions, Subqueries, Query Optimizer
 ✅ **100% Test Pass Rate**: 16/16 Phase 2 integration tests passing
@@ -472,7 +472,7 @@ Week 3 successfully delivered all planned advanced SQL features for catalyst2sql
 
 The phased approach (stubs → high-priority → advanced features) proved highly effective, allowing incremental progress while maintaining a working codebase at each step. The test suite provided immediate feedback on implementation quality.
 
-The catalyst2sql query engine now supports a comprehensive set of advanced SQL features, positioning it well for real-world usage and further optimization work in subsequent weeks.
+The thunderduck query engine now supports a comprehensive set of advanced SQL features, positioning it well for real-world usage and further optimization work in subsequent weeks.
 
 ---
 

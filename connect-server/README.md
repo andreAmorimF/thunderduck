@@ -1,4 +1,4 @@
-# Catalyst2SQL Spark Connect Server
+# Thunderduck Spark Connect Server
 
 A minimal Spark Connect-compatible server backed by DuckDB for 5-10x performance improvement over Spark local mode.
 
@@ -25,7 +25,7 @@ A minimal Spark Connect-compatible server backed by DuckDB for 5-10x performance
 
 - Java 11 or later
 - Maven 3.9+
-- Build catalyst2sql core module first
+- Build thunderduck core module first
 
 ### Build
 
@@ -41,16 +41,16 @@ mvn clean install
 
 ```bash
 # Default configuration (port 15002, in-memory, 5-minute timeout)
-java -cp connect-server/target/catalyst2sql-connect-server-0.1.0-SNAPSHOT.jar \
-  com.catalyst2sql.connect.server.SparkConnectServer
+java -cp connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar \
+  com.thunderduck.connect.server.SparkConnectServer
 
 # Custom port
-java -cp connect-server/target/catalyst2sql-connect-server-0.1.0-SNAPSHOT.jar \
-  com.catalyst2sql.connect.server.SparkConnectServer 50051
+java -cp connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar \
+  com.thunderduck.connect.server.SparkConnectServer 50051
 
 # Persistent database
-java -cp connect-server/target/catalyst2sql-connect-server-0.1.0-SNAPSHOT.jar \
-  com.catalyst2sql.connect.server.SparkConnectServer 15002 300000 /data/my.duckdb
+java -cp connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar \
+  com.thunderduck.connect.server.SparkConnectServer 15002 300000 /data/my.duckdb
 ```
 
 ### Connect with PySpark
@@ -156,7 +156,7 @@ mvn verify -pl connect-server
 **Enable DEBUG logging**: Edit `src/main/resources/logback.xml`
 
 ```xml
-<logger name="com.catalyst2sql.connect" level="DEBUG" />
+<logger name="com.thunderduck.connect" level="DEBUG" />
 ```
 
 ## Upcoming Features

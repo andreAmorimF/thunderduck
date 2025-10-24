@@ -1,10 +1,10 @@
-# catalyst2sql
+# thunderduck
 
 [![Maven Build](https://img.shields.io/badge/maven-3.9+-blue.svg)](https://maven.apache.org/)
 [![Java](https://img.shields.io/badge/java-11-orange.svg)](https://openjdk.java.net/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 
-**catalyst2sql** is a high-performance embedded execution engine that translates Spark DataFrame operations to DuckDB SQL, delivering 5-10x faster query execution than Spark local mode with 6-8x better memory efficiency.
+**thunderduck** is a high-performance embedded execution engine that translates Spark DataFrame operations to DuckDB SQL, delivering 5-10x faster query execution than Spark local mode with 6-8x better memory efficiency.
 
 ## Table of Contents
 
@@ -25,34 +25,54 @@
 
 ## Overview
 
-catalyst2sql provides a Spark-compatible API that translates DataFrame operations into optimized DuckDB SQL for embedded execution. It combines the familiar Spark programming model with the high-performance vectorized execution of DuckDB.
+thunderduck provides a Spark-compatible API that translates DataFrame operations into optimized DuckDB SQL for embedded execution. It combines the familiar Spark programming model with the high-performance vectorized execution of DuckDB.
 
 ### Key Features
 
 - **5-10x faster** than Spark local mode
 - **6-8x better memory efficiency**
+- **Multi-architecture support**: x86_64 (Intel/AMD) and ARM64 (AWS Graviton, Apple Silicon)
 - **Zero-copy Arrow data paths** for efficient data interchange
 - **Format support**: Parquet, Delta Lake, Iceberg
 - **Comprehensive Spark API compatibility** with 200+ differential tests
 - **SQL introspection** via EXPLAIN statements
 - **TPC-H benchmark framework** for performance validation
+- **Spark Connect Server** for remote client connectivity (PySpark, Scala Spark)
 
-### Why catalyst2sql?
+### Why thunderduck?
 
 Spark's local mode has significant performance limitations for single-node workloads:
 - JVM overhead and row-based processing
 - High memory consumption (6-8x more than necessary)
 - Poor single-node CPU/memory utilization
 
-catalyst2sql addresses these issues by:
+thunderduck addresses these issues by:
 - Direct translation to DuckDB SQL (vectorized, SIMD-optimized execution)
-- Hardware-aware optimization (Intel AVX-512, ARM NEON)
+- Hardware-aware optimization:
+  - **x86_64**: Intel AVX-512, AVX2 SIMD instructions
+  - **ARM64**: ARM NEON SIMD instructions (AWS Graviton, Apple Silicon)
 - Zero-copy Arrow data interchange
 - Native format readers (Parquet, Delta, Iceberg)
 
+### Platform Support
+
+thunderduck is designed and tested for **both x86_64 and ARM64 architectures**:
+
+| Platform | Architecture | Status | Use Cases |
+|----------|--------------|--------|-----------|
+| **AWS Graviton** (c7g, r8g, etc.) | ARM64 (aarch64) | ✅ Fully Supported | Cost-effective cloud analytics (40% better price/performance) |
+| **Apple Silicon** (M1, M2, M3) | ARM64 (aarch64) | ✅ Fully Supported | Local development, data science workflows |
+| **Intel/AMD** (x86_64) | x86_64 | ✅ Fully Supported | Traditional cloud and on-premise deployments |
+| **AWS EC2** (i8g, i4i, r8g) | Both | ✅ Fully Supported | High-performance analytics workloads |
+
+**Performance Optimization**:
+- Automatic SIMD detection and optimization per architecture
+- Hardware-aware thread pool sizing
+- Architecture-specific memory management tuning
+
 ## Architecture
 
-catalyst2sql uses a three-layer architecture:
+thunderduck uses a three-layer architecture:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -85,6 +105,8 @@ catalyst2sql uses a three-layer architecture:
 - **Runtime Execution** (`core/runtime/`): Connection management, Arrow interchange
 - **Format Readers** (`core/io/`): Parquet, Delta Lake, Iceberg support
 
+**Note**: thunderduck relies on **DuckDB's world-class query optimizer** rather than implementing custom optimization rules. DuckDB automatically performs filter pushdown, column pruning, join reordering, and many other optimizations.
+
 ## Quick Start
 
 ### Prerequisites
@@ -95,12 +117,12 @@ catalyst2sql uses a three-layer architecture:
 
 ### Installation
 
-Add catalyst2sql as a dependency to your Maven project:
+Add thunderduck as a dependency to your Maven project:
 
 ```xml
 <dependency>
-    <groupId>com.catalyst2sql</groupId>
-    <artifactId>catalyst2sql-core</artifactId>
+    <groupId>com.thunderduck</groupId>
+    <artifactId>thunderduck-core</artifactId>
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -108,8 +130,8 @@ Add catalyst2sql as a dependency to your Maven project:
 ### Basic Usage
 
 ```java
-import com.catalyst2sql.runtime.DuckDBConnectionManager;
-import com.catalyst2sql.runtime.QueryExecutor;
+import com.thunderduck.runtime.DuckDBConnectionManager;
+import com.thunderduck.runtime.QueryExecutor;
 import org.apache.arrow.vector.VectorSchemaRoot;
 
 // Create connection manager and executor
@@ -133,8 +155,8 @@ connectionManager.close();
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/catalyst2sql.git
-cd catalyst2sql
+git clone https://github.com/yourusername/thunderduck.git
+cd thunderduck
 ```
 
 ### Build All Modules
@@ -171,14 +193,14 @@ ls -lh core/target/*.jar
 ls -lh benchmarks/target/*.jar
 
 # Expected output:
-# core/target/catalyst2sql-core-0.1.0-SNAPSHOT.jar
-# benchmarks/target/catalyst2sql-benchmarks-0.1.0-SNAPSHOT.jar
+# core/target/thunderduck-core-0.1.0-SNAPSHOT.jar
+# benchmarks/target/thunderduck-benchmarks-0.1.0-SNAPSHOT.jar
 # benchmarks/target/benchmarks.jar
 ```
 
 ## TPC-H Benchmark
 
-catalyst2sql includes a comprehensive TPC-H benchmark framework for performance testing and SQL introspection.
+thunderduck includes a comprehensive TPC-H benchmark framework for performance testing and SQL introspection.
 
 ### Data Generation
 
@@ -289,14 +311,14 @@ ls -lh data/tpch_sf001/
 
 # Verify Parquet files are valid
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query 1 --mode explain --data ./data/tpch_sf001
 ```
 
 #### Required Directory Structure
 
 ```
-catalyst2sql/
+thunderduck/
 └── data/
     ├── tpch_sf001/          # Scale Factor 0.01 (10MB)
     │   ├── customer.parquet
@@ -333,21 +355,21 @@ mvn clean package -pl benchmarks
 
 # Run single query with EXPLAIN
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query 1 \
   --mode explain \
   --data ./data/tpch_sf001
 
 # Run with EXPLAIN ANALYZE (includes execution statistics)
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query 6 \
   --mode analyze \
   --data ./data/tpch_sf001
 
 # Execute query and show results
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query 3 \
   --mode execute \
   --data ./data/tpch_sf001
@@ -359,7 +381,7 @@ java -cp benchmarks/target/benchmarks.jar \
 
 ```bash
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query 1 \
   --mode explain \
   --data ./data/tpch_sf001
@@ -407,7 +429,7 @@ Execution time: 15 ms
 
 ```bash
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query 6 \
   --mode analyze \
   --data ./data/tpch_sf001
@@ -422,7 +444,7 @@ This shows execution statistics including:
 
 ```bash
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query 3 \
   --mode execute \
   --data ./data/tpch_sf001
@@ -434,7 +456,7 @@ Shows actual query results in tabular format.
 
 ```bash
 java -cp benchmarks/target/benchmarks.jar \
-  com.catalyst2sql.tpch.TPCHCommandLine \
+  com.thunderduck.tpch.TPCHCommandLine \
   --query all \
   --mode execute \
   --data ./data/tpch_sf001
@@ -447,7 +469,7 @@ Currently executes queries 1, 3, and 6 (more queries coming soon).
 You can also use the `TPCHClient` Java API in your code:
 
 ```java
-import com.catalyst2sql.tpch.TPCHClient;
+import com.thunderduck.tpch.TPCHClient;
 import org.apache.arrow.vector.VectorSchemaRoot;
 
 // Create client
@@ -473,29 +495,29 @@ client.close();
 ## Project Structure
 
 ```
-catalyst2sql/
+thunderduck/
 ├── pom.xml                    # Parent POM (dependency management)
 ├── core/                      # Core translation engine
-│   ├── src/main/java/com/catalyst2sql/
+│   ├── src/main/java/com/thunderduck/
 │   │   ├── logical/           # Logical plan nodes
 │   │   ├── expression/        # Expression system
 │   │   ├── types/             # Type mapping
 │   │   ├── functions/         # Function registry
 │   │   ├── generator/         # SQL generation
-│   │   ├── optimizer/         # Query optimization
 │   │   ├── runtime/           # DuckDB execution
 │   │   ├── io/                # Format readers (Parquet, Delta, Iceberg)
-│   │   └── logging/           # Structured query logging
+│   │   ├── logging/           # Structured query logging
+│   │   └── exception/         # Exception types
 │   └── pom.xml
 ├── benchmarks/                # TPC-H/TPC-DS benchmarks
-│   ├── src/main/java/com/catalyst2sql/
+│   ├── src/main/java/com/thunderduck/
 │   │   └── tpch/              # TPC-H queries and utilities
 │   │       ├── TPCHClient.java         # Programmatic API
 │   │       └── TPCHCommandLine.java    # CLI tool
 │   ├── README.md
 │   └── pom.xml
 ├── tests/                     # Comprehensive test suite
-│   ├── src/test/java/com/catalyst2sql/
+│   ├── src/test/java/com/thunderduck/
 │   │   ├── differential/      # Spark comparison tests (200+)
 │   │   ├── integration/       # Integration tests
 │   │   ├── logging/           # Logging system tests
@@ -535,7 +557,7 @@ Based on TPC-H benchmark at scale factor 10 (10GB):
 
 ## Testing
 
-catalyst2sql includes a comprehensive test suite with 500+ tests:
+thunderduck includes a comprehensive test suite with 500+ tests:
 
 ### Test Categories
 
@@ -603,8 +625,8 @@ We welcome contributions! Please see the following guidelines:
 
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/catalyst2sql.git
-cd catalyst2sql
+git clone https://github.com/yourusername/thunderduck.git
+cd thunderduck
 
 # Create feature branch
 git checkout -b feature/my-new-feature

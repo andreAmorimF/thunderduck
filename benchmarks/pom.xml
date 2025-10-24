@@ -5,15 +5,15 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.catalyst2sql</groupId>
-        <artifactId>catalyst2sql-parent</artifactId>
+        <groupId>com.thunderduck</groupId>
+        <artifactId>thunderduck-parent</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>catalyst2sql-benchmarks</artifactId>
+    <artifactId>thunderduck-benchmarks</artifactId>
     <packaging>jar</packaging>
 
-    <name>Catalyst2SQL Benchmarks</name>
+    <name>Thunderduck Benchmarks</name>
     <description>TPC-H benchmark framework for query optimizer performance testing</description>
 
     <properties>
@@ -24,8 +24,8 @@
     <dependencies>
         <!-- Core module dependency -->
         <dependency>
-            <groupId>com.catalyst2sql</groupId>
-            <artifactId>catalyst2sql-core</artifactId>
+            <groupId>com.thunderduck</groupId>
+            <artifactId>thunderduck-core</artifactId>
             <version>${project.version}</version>
         </dependency>
 
@@ -104,7 +104,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>com.catalyst2sql.tpch.TPCHBenchmark</mainClass>
+                    <mainClass>com.thunderduck.tpch.TPCHBenchmark</mainClass>
                 </configuration>
             </plugin>
         </plugins>

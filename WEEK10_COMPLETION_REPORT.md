@@ -108,7 +108,7 @@ All prerequisites for Week 11 (Minimal Viable Server) are complete. The foundati
 connect-server/
 ├── src/
 │   ├── main/
-│   │   ├── java/com/catalyst2sql/
+│   │   ├── java/com/thunderduck/
 │   │   │   ├── protocol/         # gRPC service implementation
 │   │   │   ├── translation/      # Protobuf → LogicalPlan
 │   │   │   ├── session/          # Session management
@@ -116,7 +116,7 @@ connect-server/
 │   │   ├── proto/spark/connect/  # Spark Connect .proto files (8 files)
 │   │   └── resources/            # Configuration files
 │   └── test/
-│       ├── java/com/catalyst2sql/
+│       ├── java/com/thunderduck/
 │       │   ├── protocol/         # Protocol tests
 │       │   ├── translation/      # Translation tests
 │       │   ├── session/          # Session tests
@@ -127,13 +127,13 @@ connect-server/
 │   │   └── protobuf/
 │   │       ├── java/             # 259 generated classes (10 MB)
 │   │       └── grpc-java/        # 1 gRPC service stub (45 KB)
-│   └── catalyst2sql-connect-server-0.1.0-SNAPSHOT.jar (12.5 MB)
+│   └── thunderduck-connect-server-0.1.0-SNAPSHOT.jar (12.5 MB)
 ├── pom.xml                       # Maven configuration
 └── PROTO_EXTRACTION_REPORT.md    # Protobuf extraction documentation
 ```
 
 #### POM Configuration
-- **artifactId**: catalyst2sql-connect-server
+- **artifactId**: thunderduck-connect-server
 - **packaging**: jar
 - **dependencies**: 15 (core, gRPC, Protobuf, Arrow, logging, testing)
 - **plugins**: protobuf-maven-plugin, compiler, surefire
@@ -218,13 +218,13 @@ connect-server/
 
 #### Maven Reactor Build
 ```
-[INFO] Reactor Summary for catalyst2sql-parent 0.1.0-SNAPSHOT:
+[INFO] Reactor Summary for thunderduck-parent 0.1.0-SNAPSHOT:
 [INFO]
-[INFO] catalyst2sql-parent ................................ SUCCESS [  1.072 s]
-[INFO] Catalyst2SQL Core .................................. SUCCESS [ 15.262 s]
-[INFO] Catalyst2SQL Tests ................................. SUCCESS [ 12.886 s]
-[INFO] Catalyst2SQL Benchmarks ............................ SUCCESS [ 22.835 s]
-[INFO] Catalyst2SQL Spark Connect Server .................. SUCCESS [ 38.775 s]
+[INFO] thunderduck-parent ................................ SUCCESS [  1.072 s]
+[INFO] Thunderduck Core .................................. SUCCESS [ 15.262 s]
+[INFO] Thunderduck Tests ................................. SUCCESS [ 12.886 s]
+[INFO] Thunderduck Benchmarks ............................ SUCCESS [ 22.835 s]
+[INFO] Thunderduck Spark Connect Server .................. SUCCESS [ 38.775 s]
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
@@ -286,7 +286,7 @@ connect-server/
 - `grpc-stub` - Client/server stubs
 
 **Core Integration**:
-- `catalyst2sql-core` - Translation engine (existing)
+- `thunderduck-core` - Translation engine (existing)
 
 **Apache Arrow**:
 - `arrow-vector` - Columnar data format
@@ -317,7 +317,7 @@ Protobuf Serialization (Plan → bytes)
 gRPC/HTTP/2 Transport
         ↓
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-catalyst2sql Spark Connect Server (NEW)
+thunderduck Spark Connect Server (NEW)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         ↓
 SparkConnectServiceGrpc (Generated)
@@ -340,7 +340,7 @@ Client receives Arrow batches
 ### Module Architecture
 
 ```
-catalyst2sql-parent/
+thunderduck-parent/
 ├── core/                  [EXISTING - NO CHANGES]
 │   ├── logical/           # LogicalPlan nodes (14+ types)
 │   ├── expression/        # Expression system (500+ functions)
@@ -447,10 +447,10 @@ catalyst2sql-parent/
 - **Compilation**: 38 seconds (connect-server)
 
 ### Module Sizes
-- **catalyst2sql-core**: 169 KB
-- **catalyst2sql-tests**: 2.5 MB
-- **catalyst2sql-benchmarks**: 80 MB (includes JMH)
-- **catalyst2sql-connect-server**: 12.5 MB (includes all protos)
+- **thunderduck-core**: 169 KB
+- **thunderduck-tests**: 2.5 MB
+- **thunderduck-benchmarks**: 80 MB (includes JMH)
+- **thunderduck-connect-server**: 12.5 MB (includes all protos)
 
 ---
 
@@ -467,7 +467,7 @@ catalyst2sql-parent/
 **2. Simple Plan Deserialization** (6 hours)
 - Create `PlanDeserializer` class
 - Handle `SQL` relation type (simplest)
-- Convert to catalyst2sql `LogicalPlan`
+- Convert to thunderduck `LogicalPlan`
 - Unit tests for deserialization
 
 **3. Session Management Basics** (4 hours)

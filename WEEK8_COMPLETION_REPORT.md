@@ -1,6 +1,6 @@
 # Week 8: Differential Test Coverage Expansion - Completion Report
 
-**Project**: catalyst2sql
+**Project**: thunderduck
 **Date**: October 15, 2025
 **Status**: ✅ COMPLETE - 200 Differential Tests Delivered
 
@@ -77,7 +77,7 @@ Added 6 new data generation methods to support advanced test scenarios:
 - **Use Case**: Set operations with overlapping/disjoint data
 
 **Files Modified**:
-- `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/datagen/SyntheticDataGenerator.java`
+- `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/datagen/SyntheticDataGenerator.java`
 - **Lines Added**: 174 lines (6 methods + documentation)
 
 ---
@@ -129,7 +129,7 @@ Added 6 new data generation methods to support advanced test scenarios:
 30. Mixed subquery types in single query ✅
 
 **Implementation Details**:
-- **File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/tests/SubqueryTests.java`
+- **File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/tests/SubqueryTests.java`
 - **Lines of Code**: 996 lines
 - **Tests Implemented**: 28 enabled + 2 disabled = 30 total
 - **Pass Rate**: 100% (28/28)
@@ -183,7 +183,7 @@ Added 6 new data generation methods to support advanced test scenarios:
 30. Mixed frame types in single query ✅
 
 **Implementation Details**:
-- **File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/tests/WindowFunctionTests.java`
+- **File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/tests/WindowFunctionTests.java`
 - **Lines of Code**: 645 lines
 - **Tests Implemented**: 26 enabled + 4 disabled = 30 total
 - **Pass Rate**: 100% (26/26)
@@ -225,7 +225,7 @@ Added 6 new data generation methods to support advanced test scenarios:
 20. EXCEPT with ORDER BY ✅
 
 **Implementation Details**:
-- **File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/tests/SetOperationTests.java`
+- **File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/tests/SetOperationTests.java`
 - **Lines of Code**: 592 lines
 - **Tests Implemented**: 13 enabled + 7 disabled = 20 total
 - **Pass Rate**: 100% (13/13)
@@ -267,7 +267,7 @@ Added 6 new data generation methods to support advanced test scenarios:
 20. Large dataset approximation ⚠️ (**disabled** - approximation differs)
 
 **Implementation Details**:
-- **File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/tests/AdvancedAggregateTests.java`
+- **File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/tests/AdvancedAggregateTests.java`
 - **Lines of Code**: 270 lines
 - **Tests Implemented**: 4 enabled + 16 disabled = 20 total
 - **Pass Rate**: 100% (4/4)
@@ -290,7 +290,7 @@ All ⚠️ **disabled** - DuckDB uses ROW(), different schema handling
 All ⚠️ **disabled** - Limited MAP support in DuckDB
 
 **Implementation Details**:
-- **File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/tests/ComplexTypeTests.java**
+- **File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/tests/ComplexTypeTests.java**
 - **Lines of Code**: 172 lines
 - **Tests Implemented**: 0 enabled + 20 disabled = 20 total
 - **Pass Rate**: N/A (all disabled)
@@ -326,7 +326,7 @@ All ⚠️ **disabled** - Limited MAP support in DuckDB
 15. Recursive CTE ⚠️ (**disabled** - limited Spark support)
 
 **Implementation Details**:
-- **File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/tests/CTETests.java`
+- **File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/tests/CTETests.java`
 - **Lines of Code**: 397 lines
 - **Tests Implemented**: 11 enabled + 4 disabled = 15 total
 - **Pass Rate**: 100% (11/11)
@@ -361,7 +361,7 @@ All ⚠️ **disabled** - Limited MAP support in DuckDB
 15. NULL handling in complex expressions ✅
 
 **Implementation Details**:
-- **File**: `/workspaces/catalyst2sql/tests/src/test/java/com/catalyst2sql/differential/tests/AdditionalCoverageTests.java`
+- **File**: `/workspaces/thunderduck/tests/src/test/java/com/thunderduck/differential/tests/AdditionalCoverageTests.java`
 - **Lines of Code**: 387 lines
 - **Tests Implemented**: 10 enabled + 5 disabled = 15 total
 - **Pass Rate**: 100% (10/10)
@@ -452,7 +452,7 @@ Execution Time: 2:36 min
 
 ### Ready for Production Use ✅
 
-catalyst2sql now has **200 differential tests** (161 enabled, 39 documented as disabled) validating:
+thunderduck now has **200 differential tests** (161 enabled, 39 documented as disabled) validating:
 
 ✅ **Core SQL Operations**:
 - SELECT, WHERE, JOIN, GROUP BY, ORDER BY, LIMIT
@@ -530,7 +530,7 @@ Week 8 **successfully delivered 100% of the planned test coverage expansion** - 
 - ✅ Production-ready framework with documented limitations
 - ✅ Infrastructure foundation for future expansion
 
-**Confidence Level**: **HIGH** - catalyst2sql is ready for production use with the tested feature set
+**Confidence Level**: **HIGH** - thunderduck is ready for production use with the tested feature set
 
 **Test Framework Status**: **MATURE** - Well-documented, consistent patterns, comprehensive coverage
 

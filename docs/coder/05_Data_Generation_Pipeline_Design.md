@@ -1,4 +1,4 @@
-# Data Generation Pipeline Design for catalyst2sql
+# Data Generation Pipeline Design for thunderduck
 
 ## Executive Summary
 
@@ -52,8 +52,8 @@ This document defines comprehensive data generation strategies for testing and b
 ### Schema-Based Generation
 
 ```java
-// testdata/src/main/java/com/catalyst2sql/testdata/SyntheticDataGenerator.java
-package com.catalyst2sql.testdata;
+// testdata/src/main/java/com/thunderduck/testdata/SyntheticDataGenerator.java
+package com.thunderduck.testdata;
 
 import org.apache.spark.sql.types.*;
 import java.util.Random;
@@ -193,8 +193,8 @@ public class SyntheticDataGenerator {
 ### Data Profiles
 
 ```java
-// testdata/src/main/java/com/catalyst2sql/testdata/DataProfile.java
-package com.catalyst2sql.testdata;
+// testdata/src/main/java/com/thunderduck/testdata/DataProfile.java
+package com.thunderduck.testdata;
 
 /**
  * Defines statistical properties for generated data.
@@ -291,8 +291,8 @@ df.write().mode("overwrite").parquet("data/customers.parquet");
 ### TPC-H Pipeline
 
 ```java
-// benchmarks/src/main/java/com/catalyst2sql/benchmarks/datagen/TPCHDataGenerator.java
-package com.catalyst2sql.benchmarks.datagen;
+// benchmarks/src/main/java/com/thunderduck/benchmarks/datagen/TPCHDataGenerator.java
+package com.thunderduck.benchmarks.datagen;
 
 /**
  * Generates TPC-H benchmark data using dbgen.
@@ -514,8 +514,8 @@ public class TPCHDataStats {
 ## 4. TPC-DS Data Generation
 
 ```java
-// benchmarks/src/main/java/com/catalyst2sql/benchmarks/datagen/TPCDSDataGenerator.java
-package com.catalyst2sql.benchmarks.datagen;
+// benchmarks/src/main/java/com/thunderduck/benchmarks/datagen/TPCDSDataGenerator.java
+package com.thunderduck.benchmarks.datagen;
 
 /**
  * Generates TPC-DS benchmark data using dsdgen.
@@ -541,8 +541,8 @@ public class TPCDSDataGenerator {
 ### Delta Lake Table Generator
 
 ```java
-// testdata/src/main/java/com/catalyst2sql/testdata/DeltaTableGenerator.java
-package com.catalyst2sql.testdata;
+// testdata/src/main/java/com/thunderduck/testdata/DeltaTableGenerator.java
+package com.thunderduck.testdata;
 
 import io.delta.tables.DeltaTable;
 
@@ -583,8 +583,8 @@ public class DeltaTableGenerator {
 ### Iceberg Table Generator
 
 ```java
-// testdata/src/main/java/com/catalyst2sql/testdata/IcebergTableGenerator.java
-package com.catalyst2sql.testdata;
+// testdata/src/main/java/com/thunderduck/testdata/IcebergTableGenerator.java
+package com.thunderduck.testdata;
 
 import org.apache.iceberg.*;
 import org.apache.iceberg.catalog.*;
@@ -606,8 +606,8 @@ public class IcebergTableGenerator {
 ### Command-Line Tool
 
 ```java
-// testdata/src/main/java/com/catalyst2sql/testdata/DataGeneratorCLI.java
-package com.catalyst2sql.testdata;
+// testdata/src/main/java/com/thunderduck/testdata/DataGeneratorCLI.java
+package com.thunderduck.testdata;
 
 import picocli.CommandLine;
 
@@ -677,8 +677,8 @@ java -jar testdata.jar synthetic --format delta --versions 5
 ### Validation Framework
 
 ```java
-// testdata/src/main/java/com/catalyst2sql/testdata/DataValidator.java
-package com.catalyst2sql.testdata;
+// testdata/src/main/java/com/thunderduck/testdata/DataValidator.java
+package com.thunderduck.testdata;
 
 /**
  * Validates generated data for correctness and consistency.

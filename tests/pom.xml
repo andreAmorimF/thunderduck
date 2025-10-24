@@ -5,22 +5,22 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.catalyst2sql</groupId>
-        <artifactId>catalyst2sql-parent</artifactId>
+        <groupId>com.thunderduck</groupId>
+        <artifactId>thunderduck-parent</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>catalyst2sql-tests</artifactId>
+    <artifactId>thunderduck-tests</artifactId>
     <packaging>jar</packaging>
 
-    <name>Catalyst2SQL Tests</name>
-    <description>Integration and end-to-end tests for Catalyst2SQL</description>
+    <name>Thunderduck Tests</name>
+    <description>Integration and end-to-end tests for Thunderduck</description>
 
     <dependencies>
         <!-- Core module dependency -->
         <dependency>
-            <groupId>com.catalyst2sql</groupId>
-            <artifactId>catalyst2sql-core</artifactId>
+            <groupId>com.thunderduck</groupId>
+            <artifactId>thunderduck-core</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
@@ -85,6 +85,14 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Fix for Apache Arrow on ARM64 (AWS Graviton, Apple Silicon) -->
+                    <!-- See: https://github.com/apache/arrow/issues/44310 -->
+                    <argLine>
+                        --add-opens=java.base/java.nio=ALL-UNNAMED
+                        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+                    </argLine>
+                </configuration>
             </plugin>
         </plugins>
     </build>

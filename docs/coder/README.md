@@ -1,6 +1,6 @@
 # CODER Agent Design Documentation
 
-This directory contains comprehensive infrastructure and architectural designs for the catalyst2sql project, created by the CODER agent in the Hive Mind collective intelligence system.
+This directory contains comprehensive infrastructure and architectural designs for the thunderduck project, created by the CODER agent in the Hive Mind collective intelligence system.
 
 ## Document Index
 

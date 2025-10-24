@@ -1,8 +1,8 @@
-# Build Infrastructure Design for catalyst2sql
+# Build Infrastructure Design for thunderduck
 
 ## Executive Summary
 
-This document defines the complete build infrastructure for the catalyst2sql project, including build tools, dependency management, CI/CD integration, and performance optimization strategies.
+This document defines the complete build infrastructure for the thunderduck project, including build tools, dependency management, CI/CD integration, and performance optimization strategies.
 
 **Key Decisions:**
 - **Build Tool**: Maven 3.9+ (over Gradle/sbt)
@@ -39,25 +39,25 @@ This document defines the complete build infrastructure for the catalyst2sql pro
 ### Multi-Module Organization
 
 ```
-catalyst2sql/
+thunderduck/
 ├── pom.xml                           # Parent POM
 ├── core/                             # Core translation engine
 │   ├── pom.xml
 │   └── src/
 │       ├── main/java/
-│       │   └── com/catalyst2sql/
+│       │   └── com/thunderduck/
 │       │       ├── logical/          # Logical plan nodes
 │       │       ├── sql/              # SQL generation
 │       │       ├── types/            # Type mapping
 │       │       └── functions/        # Function registry
 │       └── test/java/
-│           └── com/catalyst2sql/
+│           └── com/thunderduck/
 │               └── core/
 ├── formats/                          # Format readers
 │   ├── pom.xml
 │   └── src/
 │       ├── main/java/
-│       │   └── com/catalyst2sql/formats/
+│       │   └── com/thunderduck/formats/
 │       │       ├── parquet/          # Parquet reader/writer
 │       │       ├── delta/            # Delta Lake support
 │       │       └── iceberg/          # Iceberg support
@@ -66,7 +66,7 @@ catalyst2sql/
 │   ├── pom.xml
 │   └── src/
 │       ├── main/java/
-│       │   └── com/catalyst2sql/api/
+│       │   └── com/thunderduck/api/
 │       │       ├── DataFrame.java
 │       │       ├── SparkSession.java
 │       │       ├── DataFrameReader.java
@@ -76,7 +76,7 @@ catalyst2sql/
 │   ├── pom.xml
 │   └── src/
 │       └── test/java/
-│           └── com/catalyst2sql/tests/
+│           └── com/thunderduck/tests/
 │               ├── unit/             # Unit tests
 │               ├── integration/      # Integration tests
 │               └── differential/     # Spark comparison tests
@@ -84,7 +84,7 @@ catalyst2sql/
 │   ├── pom.xml
 │   └── src/
 │       └── main/java/
-│           └── com/catalyst2sql/benchmarks/
+│           └── com/thunderduck/benchmarks/
 │               ├── tpch/             # TPC-H queries
 │               ├── tpcds/            # TPC-DS queries
 │               └── micro/            # Micro-benchmarks
@@ -109,12 +109,12 @@ benchmarks → api
 <project>
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.catalyst2sql</groupId>
-    <artifactId>catalyst2sql-parent</artifactId>
+    <groupId>com.thunderduck</groupId>
+    <artifactId>thunderduck-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>catalyst2sql</name>
+    <name>thunderduck</name>
     <description>High-performance Spark DataFrame to DuckDB SQL translation layer</description>
 
     <properties>
@@ -400,7 +400,7 @@ public class ExtensionManager {
         </descriptorRefs>
         <archive>
             <manifest>
-                <mainClass>com.catalyst2sql.Main</mainClass>
+                <mainClass>com.thunderduck.Main</mainClass>
             </manifest>
         </archive>
     </configuration>

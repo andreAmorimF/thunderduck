@@ -19,7 +19,7 @@ Week 11 successfully delivered a **minimal viable Spark Connect Server** with co
 
 ### 1. Core gRPC Service Implementation
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/connect/service/SparkConnectServiceImpl.java`
+**File**: `connect-server/src/main/java/com/thunderduck/connect/service/SparkConnectServiceImpl.java`
 
 **Implemented**:
 - ✅ **ExecutePlan RPC** with Arrow streaming
@@ -50,7 +50,7 @@ Week 11 successfully delivered a **minimal viable Spark Connect Server** with co
 
 ### 2. Session Management (from Week 10)
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/connect/session/SessionManager.java`
+**File**: `connect-server/src/main/java/com/thunderduck/connect/session/SessionManager.java`
 
 **Features** (already implemented in Week 10):
 - ✅ Single-session state machine (IDLE ↔ ACTIVE)
@@ -65,7 +65,7 @@ Week 11 successfully delivered a **minimal viable Spark Connect Server** with co
 
 ### 3. Server Bootstrap (from Week 10)
 
-**File**: `connect-server/src/main/java/com/catalyst2sql/connect/server/SparkConnectServer.java`
+**File**: `connect-server/src/main/java/com/thunderduck/connect/server/SparkConnectServer.java`
 
 **Features** (already implemented in Week 10):
 - ✅ Singleton DuckDB connection initialization
@@ -136,7 +136,7 @@ The server is ready for manual testing:
 ```bash
 # Terminal 1: Start server
 mvn exec:java -pl connect-server \
-  -Dexec.mainClass="com.catalyst2sql.connect.server.SparkConnectServer"
+  -Dexec.mainClass="com.thunderduck.connect.server.SparkConnectServer"
 
 # Terminal 2: Test with PySpark
 python3 << 'EOF'
@@ -312,7 +312,7 @@ Week 11 successfully provides:
 
 1. **Plan Deserialization** (Priority: CRITICAL)
    - Implement PlanConverter for SELECT, GROUP BY, ORDER BY
-   - Map Protobuf relations to catalyst2sql LogicalPlan
+   - Map Protobuf relations to thunderduck LogicalPlan
    - Support TPC-H Q1 query structure
 
 2. **Test Infrastructure** (Priority: HIGH)

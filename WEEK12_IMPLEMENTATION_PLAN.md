@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Week 12 extends the MVP Spark Connect Server from Week 11 to support TPC-H Query 1, requiring plan deserialization for DataFrame operations. This involves translating Spark Connect protocol plans (Protobuf) into catalyst2sql LogicalPlans, then generating DuckDB SQL for execution. TPC-H Q1 is the perfect test case as it includes column expressions, GROUP BY, aggregations, and ORDER BY.
+Week 12 extends the MVP Spark Connect Server from Week 11 to support TPC-H Query 1, requiring plan deserialization for DataFrame operations. This involves translating Spark Connect protocol plans (Protobuf) into thunderduck LogicalPlans, then generating DuckDB SQL for execution. TPC-H Q1 is the perfect test case as it includes column expressions, GROUP BY, aggregations, and ORDER BY.
 
 **Critical Path**: Plan deserialization is the foundation for all DataFrame API support. Without it, clients can only execute raw SQL strings, severely limiting functionality.
 
@@ -31,11 +31,11 @@ Week 12 extends the MVP Spark Connect Server from Week 11 to support TPC-H Query
 - Analyze relations.proto for Relation types
 - Study expressions.proto for Expression types
 - Document plan tree structure for TPC-H Q1
-- Map Protobuf types to catalyst2sql LogicalPlan nodes
+- Map Protobuf types to thunderduck LogicalPlan nodes
 
 **Task 1.2: Create PlanConverter Class** (1.5 hours)
 ```java
-// connect-server/src/main/java/com/catalyst2sql/connect/converter/PlanConverter.java
+// connect-server/src/main/java/com/thunderduck/connect/converter/PlanConverter.java
 public class PlanConverter {
     public LogicalPlan convert(Plan plan) { }
     private LogicalPlan convertRelation(Relation relation) { }
@@ -385,14 +385,14 @@ ORDER BY l_returnflag, l_linestatus
 - **PlanConverter**: Main entry point for plan deserialization
 - **RelationConverter**: Handles Relation types (Read, Project, Filter, Aggregate, Sort)
 - **ExpressionConverter**: Handles Expression types (Column, Literal, Function, Cast, Binary)
-- **TypeMapper**: Maps Spark types to catalyst2sql types
+- **TypeMapper**: Maps Spark types to thunderduck types
 - **FunctionRegistry**: Maps Spark functions to DuckDB functions
 
 ---
 
 ## Dependencies on Core Module
 
-From catalyst2sql core:
+From thunderduck core:
 - LogicalPlan hierarchy
 - Expression classes
 - SQLGenerator

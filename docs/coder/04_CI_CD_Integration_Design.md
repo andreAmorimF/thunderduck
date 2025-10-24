@@ -1,4 +1,4 @@
-# CI/CD Integration Strategy for catalyst2sql
+# CI/CD Integration Strategy for thunderduck
 
 ## Executive Summary
 
@@ -185,7 +185,7 @@ jobs:
       - name: Generate test data
         run: |
           mvn test-compile -B
-          mvn exec:java -Dexec.mainClass="com.catalyst2sql.testdata.DataGenerator" -pl tests
+          mvn exec:java -Dexec.mainClass="com.thunderduck.testdata.DataGenerator" -pl tests
 
       - name: Run differential tests
         run: mvn test -Dgroups=differential -B
@@ -385,9 +385,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            api/target/catalyst2sql-api-*.jar
-            core/target/catalyst2sql-core-*.jar
-            formats/target/catalyst2sql-formats-*.jar
+            api/target/thunderduck-api-*.jar
+            core/target/thunderduck-core-*.jar
+            formats/target/thunderduck-formats-*.jar
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -606,8 +606,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            catalyst2sql/catalyst2sql:latest
-            catalyst2sql/catalyst2sql:${{ github.ref_name }}
+            thunderduck/thunderduck:latest
+            thunderduck/thunderduck:${{ github.ref_name }}
 ```
 
 ## 8. Monitoring and Alerts
@@ -616,9 +616,9 @@ jobs:
 
 ```markdown
 # README.md badges
-[![Build Status](https://github.com/catalyst2sql/catalyst2sql/workflows/Build%20and%20Test/badge.svg)](https://github.com/catalyst2sql/catalyst2sql/actions)
-[![Code Coverage](https://codecov.io/gh/catalyst2sql/catalyst2sql/branch/main/graph/badge.svg)](https://codecov.io/gh/catalyst2sql/catalyst2sql)
-[![Maven Central](https://img.shields.io/maven-central/v/com.catalyst2sql/catalyst2sql-api)](https://central.sonatype.com/artifact/com.catalyst2sql/catalyst2sql-api)
+[![Build Status](https://github.com/thunderduck/thunderduck/workflows/Build%20and%20Test/badge.svg)](https://github.com/thunderduck/thunderduck/actions)
+[![Code Coverage](https://codecov.io/gh/thunderduck/thunderduck/branch/main/graph/badge.svg)](https://codecov.io/gh/thunderduck/thunderduck)
+[![Maven Central](https://img.shields.io/maven-central/v/com.thunderduck/thunderduck-api)](https://central.sonatype.com/artifact/com.thunderduck/thunderduck-api)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ```
 

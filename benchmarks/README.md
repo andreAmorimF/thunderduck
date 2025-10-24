@@ -83,7 +83,7 @@ For quick testing without JMH:
 
 ```bash
 cd benchmarks
-mvn compile exec:java -Dexec.mainClass="com.catalyst2sql.tpch.TPCHBenchmark"
+mvn compile exec:java -Dexec.mainClass="com.thunderduck.tpch.TPCHBenchmark"
 ```
 
 ## Scale Factors

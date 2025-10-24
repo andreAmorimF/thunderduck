@@ -1,4 +1,4 @@
-# Testing Infrastructure Design for catalyst2sql
+# Testing Infrastructure Design for thunderduck
 
 ## Executive Summary
 
@@ -41,8 +41,8 @@ This document defines a comprehensive testing strategy with four testing tiers: 
 ### JUnit 5 Configuration
 
 ```java
-// test/java/com/catalyst2sql/core/TypeMapperTest.java
-package com.catalyst2sql.core;
+// test/java/com/thunderduck/core/TypeMapperTest.java
+package com.thunderduck.core;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -105,7 +105,7 @@ public class TypeMapperTest {
 ### Test Organization
 
 ```
-tests/src/test/java/com/catalyst2sql/
+tests/src/test/java/com/thunderduck/
 ├── core/
 │   ├── TypeMapperTest.java           # Type mapping tests
 │   ├── FunctionRegistryTest.java     # Function translation tests
@@ -146,7 +146,7 @@ public abstract class BaseTest {
 
         // Initialize test Spark session (for differential tests)
         spark = SparkSession.builder()
-            .appName("catalyst2sql-test")
+            .appName("thunderduck-test")
             .master("local[*]")
             .getOrCreate();
     }
@@ -273,7 +273,7 @@ public class S3IntegrationIT {
 // differential/BaseDifferentialTest.java
 public abstract class BaseDifferentialTest {
     protected SparkSession realSpark;      // Real Apache Spark
-    protected SparkSession catalyst2sql;   // Our implementation
+    protected SparkSession thunderduck;   // Our implementation
 
     @BeforeEach
     public void setupSessions() {
@@ -283,9 +283,9 @@ public abstract class BaseDifferentialTest {
             .master("local[*]")
             .getOrCreate();
 
-        // catalyst2sql implementation
-        catalyst2sql = Catalyst2SQLSession.builder()
-            .appName("catalyst2sql")
+        // thunderduck implementation
+        thunderduck = ThunderduckSession.builder()
+            .appName("thunderduck")
             .getOrCreate();
     }
 
@@ -296,9 +296,9 @@ public abstract class BaseDifferentialTest {
             realSpark.read().parquet(parquetPath)
         ).collect();
 
-        // Execute on catalyst2sql
+        // Execute on thunderduck
         Dataset<Row> c2sResult = operations.apply(
-            catalyst2sql.read().parquet(parquetPath)
+            thunderduck.read().parquet(parquetPath)
         ).collect();
 
         // Compare schemas
@@ -461,7 +461,7 @@ public class NumericalConsistencyTest extends BaseDifferentialTest {
 ### Micro-Benchmarks
 
 ```java
-// benchmarks/src/main/java/com/catalyst2sql/benchmarks/ParquetReadBenchmark.java
+// benchmarks/src/main/java/com/thunderduck/benchmarks/ParquetReadBenchmark.java
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -471,7 +471,7 @@ public class NumericalConsistencyTest extends BaseDifferentialTest {
 public class ParquetReadBenchmark {
 
     private SparkSession realSpark;
-    private SparkSession catalyst2sql;
+    private SparkSession thunderduck;
     private String testFile;
 
     @Setup
@@ -483,7 +483,7 @@ public class ParquetReadBenchmark {
             .master("local[*]")
             .getOrCreate();
 
-        catalyst2sql = Catalyst2SQLSession.builder()
+        thunderduck = ThunderduckSession.builder()
             .getOrCreate();
     }
 
@@ -493,14 +493,14 @@ public class ParquetReadBenchmark {
     }
 
     @Benchmark
-    public long benchmarkCatalyst2SQLRead() {
-        return catalyst2sql.read().parquet(testFile).count();
+    public long benchmarkThunderduckRead() {
+        return thunderduck.read().parquet(testFile).count();
     }
 
     @TearDown
     public void teardown() {
         realSpark.stop();
-        catalyst2sql.stop();
+        thunderduck.stop();
         new File(testFile).delete();
     }
 }
@@ -509,7 +509,7 @@ public class ParquetReadBenchmark {
 ### TPC-H Benchmark Suite
 
 ```java
-// benchmarks/src/main/java/com/catalyst2sql/benchmarks/TPCHBenchmark.java
+// benchmarks/src/main/java/com/thunderduck/benchmarks/TPCHBenchmark.java
 @State(Scope.Benchmark)
 public class TPCHBenchmark {
 
@@ -524,7 +524,7 @@ public class TPCHBenchmark {
         // Generate TPC-H data
         dataPath = TPCHDataGenerator.generate(scaleFactor);
 
-        session = Catalyst2SQLSession.builder().getOrCreate();
+        session = ThunderduckSession.builder().getOrCreate();
 
         // Load tables
         loadTPCHTables(session, dataPath);
@@ -557,7 +557,7 @@ public class TPCHBenchmark {
 ### Parquet Data Generator
 
 ```java
-// test/java/com/catalyst2sql/testdata/ParquetGenerator.java
+// test/java/com/thunderduck/testdata/ParquetGenerator.java
 public class ParquetGenerator {
 
     public static void generateParquet(String path, Schema schema, long rows)
@@ -605,7 +605,7 @@ public class ParquetGenerator {
 ### TPC-H Data Generation
 
 ```java
-// benchmarks/src/main/java/com/catalyst2sql/benchmarks/datagen/TPCHDataGenerator.java
+// benchmarks/src/main/java/com/thunderduck/benchmarks/datagen/TPCHDataGenerator.java
 public class TPCHDataGenerator {
 
     public static String generate(int scaleFactor) throws Exception {
@@ -729,7 +729,7 @@ jobs:
         with:
           java-version: 17
       - name: Generate test data
-        run: mvn test-compile exec:java -Dexec.mainClass="com.catalyst2sql.testdata.DataGenerator"
+        run: mvn test-compile exec:java -Dexec.mainClass="com.thunderduck.testdata.DataGenerator"
       - name: Run differential tests
         run: mvn test -Dgroups=differential
 

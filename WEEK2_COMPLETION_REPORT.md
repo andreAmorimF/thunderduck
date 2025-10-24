@@ -1,11 +1,11 @@
 # PHASE 1 - WEEK 2 COMPLETION REPORT
-**Catalyst2SQL: Spark Catalyst to DuckDB SQL Translator**
+**Thunderduck: Spark Catalyst to DuckDB SQL Translator**
 
 ---
 
 ## 🎯 EXECUTIVE SUMMARY
 
-Week 2 implementation is **100% COMPLETE** with all critical objectives achieved and security vulnerabilities addressed. The catalyst2sql runtime engine now has:
+Week 2 implementation is **100% COMPLETE** with all critical objectives achieved and security vulnerabilities addressed. The thunderduck runtime engine now has:
 
 - ✅ **SQL Generation** for 5 core operators (Project, Filter, TableScan, Sort, Limit)
 - ✅ **DuckDB Connection Manager** with hardware-aware optimization and leak prevention
@@ -238,7 +238,7 @@ Week 2 implementation is **100% COMPLETE** with all critical objectives achieved
 - Skipped: 25 (integration tests pending DuckDB setup)
 
 #### **Type Mapping Tests** (190+ tests)
-**File**: `tests/src/test/java/com/catalyst2sql/types/TypeMapperTest.java`
+**File**: `tests/src/test/java/com/thunderduck/types/TypeMapperTest.java`
 **Status**: ✅ 100% PASSING
 
 **Coverage**:
@@ -252,7 +252,7 @@ Week 2 implementation is **100% COMPLETE** with all critical objectives achieved
 - Edge Cases: NULL handling, overflow, precision
 
 #### **Function Mapping Tests** (140+ tests)
-**File**: `tests/src/test/java/com/catalyst2sql/functions/FunctionRegistryTest.java`
+**File**: `tests/src/test/java/com/thunderduck/functions/FunctionRegistryTest.java`
 **Status**: ✅ 100% PASSING
 
 **Coverage**:
@@ -265,7 +265,7 @@ Week 2 implementation is **100% COMPLETE** with all critical objectives achieved
 - Conditional Functions: IF, CASE, COALESCE
 
 #### **Expression Tests** (60+ tests)
-**File**: `tests/src/test/java/com/catalyst2sql/expression/ExpressionTest.java`
+**File**: `tests/src/test/java/com/thunderduck/expression/ExpressionTest.java`
 **Status**: ✅ 100% PASSING
 
 **Coverage**:
@@ -302,7 +302,7 @@ Week 2 implementation is **100% COMPLETE** with all critical objectives achieved
 **Status**: ⏳ Pending DuckDB configuration
 
 #### **Performance Benchmarks** (@Disabled)
-**File**: `tests/src/test/java/com/catalyst2sql/benchmark/SQLGenerationBenchmark.java`
+**File**: `tests/src/test/java/com/thunderduck/benchmark/SQLGenerationBenchmark.java`
 **Status**: ⏳ Pending performance validation
 
 **Planned Coverage**:
@@ -317,31 +317,31 @@ Week 2 implementation is **100% COMPLETE** with all critical objectives achieved
 ## 📁 FILES CREATED (15 NEW FILES)
 
 ### Core Runtime Components (9 files)
-1. `core/src/main/java/com/catalyst2sql/generator/SQLGenerator.java` (13 KB)
-2. `core/src/main/java/com/catalyst2sql/runtime/HardwareProfile.java` (6.1 KB)
-3. `core/src/main/java/com/catalyst2sql/runtime/DuckDBConnectionManager.java` (9.7 KB)
-4. `core/src/main/java/com/catalyst2sql/runtime/QueryExecutor.java` (7.0 KB)
-5. `core/src/main/java/com/catalyst2sql/runtime/ArrowInterchange.java` (15 KB)
-6. `core/src/main/java/com/catalyst2sql/io/ParquetReader.java` (8.1 KB)
-7. `core/src/main/java/com/catalyst2sql/io/ParquetWriter.java` (11 KB)
-8. `core/src/main/java/com/catalyst2sql/runtime/PooledConnection.java` (90 lines)
-9. `core/src/main/java/com/catalyst2sql/generator/SQLQuoting.java` (274 lines)
+1. `core/src/main/java/com/thunderduck/generator/SQLGenerator.java` (13 KB)
+2. `core/src/main/java/com/thunderduck/runtime/HardwareProfile.java` (6.1 KB)
+3. `core/src/main/java/com/thunderduck/runtime/DuckDBConnectionManager.java` (9.7 KB)
+4. `core/src/main/java/com/thunderduck/runtime/QueryExecutor.java` (7.0 KB)
+5. `core/src/main/java/com/thunderduck/runtime/ArrowInterchange.java` (15 KB)
+6. `core/src/main/java/com/thunderduck/io/ParquetReader.java` (8.1 KB)
+7. `core/src/main/java/com/thunderduck/io/ParquetWriter.java` (11 KB)
+8. `core/src/main/java/com/thunderduck/runtime/PooledConnection.java` (90 lines)
+9. `core/src/main/java/com/thunderduck/generator/SQLQuoting.java` (274 lines)
 
 ### Exception Handling (2 files)
-10. `core/src/main/java/com/catalyst2sql/exception/SQLGenerationException.java` (130 lines)
-11. `core/src/main/java/com/catalyst2sql/exception/QueryExecutionException.java` (230 lines)
+10. `core/src/main/java/com/thunderduck/exception/SQLGenerationException.java` (130 lines)
+11. `core/src/main/java/com/thunderduck/exception/QueryExecutionException.java` (230 lines)
 
 ### Test Suites (4 files)
-12. `tests/src/test/java/com/catalyst2sql/translation/ExpressionTranslationTest.java` (1,435 lines, 115 tests)
-13. `tests/src/test/java/com/catalyst2sql/integration/EndToEndQueryTest.java` (496 lines, 30 tests)
-14. `tests/src/test/java/com/catalyst2sql/integration/ParquetIOTest.java` (477 lines, 23 tests)
-15. `tests/src/test/java/com/catalyst2sql/benchmark/SQLGenerationBenchmark.java` (548 lines, 18 tests)
+12. `tests/src/test/java/com/thunderduck/translation/ExpressionTranslationTest.java` (1,435 lines, 115 tests)
+13. `tests/src/test/java/com/thunderduck/integration/EndToEndQueryTest.java` (496 lines, 30 tests)
+14. `tests/src/test/java/com/thunderduck/integration/ParquetIOTest.java` (477 lines, 23 tests)
+15. `tests/src/test/java/com/thunderduck/benchmark/SQLGenerationBenchmark.java` (548 lines, 18 tests)
 
 ### Security Test Suites (4 files, created by Hive Mind)
-16. `tests/src/test/java/com/catalyst2sql/runtime/ConnectionPoolTest.java` (20 tests)
-17. `tests/src/test/java/com/catalyst2sql/security/SQLInjectionTest.java` (35 tests)
-18. `tests/src/test/java/com/catalyst2sql/exception/ErrorHandlingTest.java` (20 tests)
-19. `tests/src/test/java/com/catalyst2sql/integration/SecurityIntegrationTest.java` (15 tests)
+16. `tests/src/test/java/com/thunderduck/runtime/ConnectionPoolTest.java` (20 tests)
+17. `tests/src/test/java/com/thunderduck/security/SQLInjectionTest.java` (35 tests)
+18. `tests/src/test/java/com/thunderduck/exception/ErrorHandlingTest.java` (20 tests)
+19. `tests/src/test/java/com/thunderduck/integration/SecurityIntegrationTest.java` (15 tests)
 
 **Total**: 19 new files, ~73 KB production code, ~2,956 lines test code
 
@@ -349,12 +349,12 @@ Week 2 implementation is **100% COMPLETE** with all critical objectives achieved
 
 ## 📝 FILES MODIFIED (6 FILES)
 
-1. `core/src/main/java/com/catalyst2sql/logical/Project.java` - Added toSQL() implementation
-2. `core/src/main/java/com/catalyst2sql/logical/Filter.java` - Added toSQL() implementation
-3. `core/src/main/java/com/catalyst2sql/logical/TableScan.java` - Added toSQL() with security fixes
-4. `core/src/main/java/com/catalyst2sql/logical/Sort.java` - Added toSQL() implementation
-5. `core/src/main/java/com/catalyst2sql/logical/Limit.java` - Added toSQL() implementation
-6. `core/src/main/java/com/catalyst2sql/io/ParquetWriter.java` - Added security fixes
+1. `core/src/main/java/com/thunderduck/logical/Project.java` - Added toSQL() implementation
+2. `core/src/main/java/com/thunderduck/logical/Filter.java` - Added toSQL() implementation
+3. `core/src/main/java/com/thunderduck/logical/TableScan.java` - Added toSQL() with security fixes
+4. `core/src/main/java/com/thunderduck/logical/Sort.java` - Added toSQL() implementation
+5. `core/src/main/java/com/thunderduck/logical/Limit.java` - Added toSQL() implementation
+6. `core/src/main/java/com/thunderduck/io/ParquetWriter.java` - Added security fixes
 
 ---
 
@@ -696,7 +696,7 @@ Week 2 implementation is **100% COMPLETE** with all critical objectives achieved
 
 ## 📧 CONTACT & SUPPORT
 
-**Project**: catalyst2sql - Spark Catalyst to DuckDB SQL Translator
+**Project**: thunderduck - Spark Catalyst to DuckDB SQL Translator
 **Phase**: 1 (Foundation)
 **Week**: 2 (SQL Generation & DuckDB Execution)
 **Status**: 100% Complete ✅
@@ -716,7 +716,7 @@ Week 2 has been an **outstanding success**, delivering:
 - ✅ Production-ready code quality
 - ✅ Comprehensive documentation
 
-The catalyst2sql runtime engine is now **production-ready** for the 5 core SQL operators with strong security guarantees and comprehensive test coverage.
+The thunderduck runtime engine is now **production-ready** for the 5 core SQL operators with strong security guarantees and comprehensive test coverage.
 
 **Completed Work**:
 - ✅ All 9 test failures fixed (~2 hours)
