@@ -85,18 +85,35 @@ public class RelationConverter {
             if ("parquet".equals(format) || format == null || format.isEmpty()) {
                 Map<String, String> options = dataSource.getOptionsMap();
 
-                // Get the path from options
-                String path = options.get("path");
+                // Get the path from options or paths list (PySpark uses various methods)
+                String path = null;
+
+                // Method 1: Check paths list first (most common for read.parquet())
+                if (dataSource.getPathsCount() > 0) {
+                    path = dataSource.getPaths(0);
+                    logger.debug("Got path from paths list: {}", path);
+                }
+
+                // Method 2: Check options map
                 if (path == null || path.isEmpty()) {
-                    // Try paths for multiple files
-                    String paths = options.get("paths");
-                    if (paths != null && !paths.isEmpty()) {
-                        // Take the first path for now
-                        path = paths.split(",")[0].trim();
+                    path = options.get("path");
+                    if (path != null && !path.isEmpty()) {
+                        logger.debug("Got path from options['path']: {}", path);
+                    }
+                }
+
+                // Method 3: Check paths option
+                if (path == null || path.isEmpty()) {
+                    String pathsOption = options.get("paths");
+                    if (pathsOption != null && !pathsOption.isEmpty()) {
+                        path = pathsOption.split(",")[0].trim();
+                        logger.debug("Got path from options['paths']: {}", path);
                     }
                 }
 
                 if (path == null || path.isEmpty()) {
+                    logger.error("No path found. Options: {}, Paths count: {}",
+                        options, dataSource.getPathsCount());
                     throw new PlanConversionException("No path specified for parquet read");
                 }
 
