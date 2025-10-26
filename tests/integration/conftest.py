@@ -174,12 +174,19 @@ def tpch_tables(spark_session, tpch_data_dir):
         'supplier', 'partsupp', 'nation', 'region'
     ]
 
-    print("\nVerifying TPC-H tables exist...")
+    print("\nLoading TPC-H tables and creating temp views...")
     for table in tables:
         parquet_path = tpch_data_dir / f"{table}.parquet"
         if not parquet_path.exists():
             pytest.skip(f"TPC-H table not found: {parquet_path}")
-        print(f"  ✓ Found {table}.parquet")
+
+        # Load table and create temp view
+        df = spark_session.read.parquet(str(parquet_path))
+        df.createOrReplaceTempView(table)
+        row_count = df.count()
+        print(f"  ✓ {table}: {row_count:,} rows")
+
+    print(f"✓ All {len(tables)} TPC-H tables registered as temp views")
 
     return tables
 

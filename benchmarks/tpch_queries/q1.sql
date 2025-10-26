@@ -22,4 +22,4 @@ GROUP BY
     l_linestatus
 ORDER BY
     l_returnflag,
-    l_linestatus;
+    l_linestatus

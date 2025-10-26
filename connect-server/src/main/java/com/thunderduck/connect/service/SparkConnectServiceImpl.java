@@ -14,6 +14,8 @@ import org.apache.spark.connect.proto.Relation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.thunderduck.generator.SQLQuoting.quoteIdentifier;
+
 /**
  * Implementation of Spark Connect gRPC service.
  *
@@ -126,6 +128,13 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                 // SQL command (e.g., spark.sql(...))
                 sql = plan.getCommand().getSqlCommand().getSql();
                 logger.debug("Found SQL command: {}", sql);
+            } else if (plan.hasCommand()) {
+                // Handle non-SQL commands (CreateTempView, DropTempView, etc.)
+                Command command = plan.getCommand();
+                logger.debug("Handling COMMAND: {}", command.getCommandTypeCase());
+
+                executeCommand(command, sessionId, responseObserver);
+                return; // Command handling is complete
             }
 
             if (sql != null) {
@@ -173,6 +182,100 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             logger.error("Error executing plan for session " + sessionId, e);
             responseObserver.onError(Status.INTERNAL
                 .withDescription("Execution failed: " + e.getMessage())
+                .withCause(e)
+                .asRuntimeException());
+        }
+    }
+
+    /**
+     * Execute a Command (non-query operation).
+     *
+     * Handles:
+     * - CreateDataFrameViewCommand (createOrReplaceTempView)
+     * - DropTempViewCommand (dropTempView)
+     * - Other commands as needed
+     *
+     * @param command The command to execute
+     * @param sessionId Session identifier
+     * @param responseObserver Stream observer for responses
+     */
+    private void executeCommand(Command command, String sessionId,
+                               StreamObserver<ExecutePlanResponse> responseObserver) {
+
+        try {
+            if (command.hasCreateDataframeView()) {
+                // Handle createOrReplaceTempView
+                CreateDataFrameViewCommand viewCmd = command.getCreateDataframeView();
+                String viewName = viewCmd.getName();
+                Relation input = viewCmd.getInput();
+                boolean replace = viewCmd.getReplace();
+
+                logger.info("Creating temp view: '{}' (replace={})", viewName, replace);
+
+                // Convert input relation to LogicalPlan
+                LogicalPlan logicalPlan = planConverter.convertRelation(input);
+
+                // Get session and register view
+                Session session = sessionManager.getSession(sessionId);
+                if (session == null) {
+                    responseObserver.onError(Status.INTERNAL
+                        .withDescription("Session not found: " + sessionId)
+                        .asRuntimeException());
+                    return;
+                }
+
+                // Check if view already exists and replace=false
+                if (!replace && session.getTempView(viewName).isPresent()) {
+                    responseObserver.onError(Status.ALREADY_EXISTS
+                        .withDescription("Temp view already exists: " + viewName)
+                        .asRuntimeException());
+                    return;
+                }
+
+                session.registerTempView(viewName, logicalPlan);
+
+                // Generate SQL from the plan and create DuckDB temp view
+                String viewSQL = sqlGenerator.generate(logicalPlan);
+                String createViewSQL = String.format("CREATE OR REPLACE TEMP VIEW %s AS %s",
+                    quoteIdentifier(viewName), viewSQL);
+
+                logger.debug("Creating DuckDB temp view: {}", createViewSQL);
+
+                // Execute the CREATE VIEW statement in DuckDB
+                QueryExecutor executor = new QueryExecutor(connectionManager);
+                try {
+                    executor.execute(createViewSQL);
+                } catch (Exception e) {
+                    logger.error("Failed to create DuckDB temp view", e);
+                    responseObserver.onError(Status.INTERNAL
+                        .withDescription("Failed to create DuckDB temp view: " + e.getMessage())
+                        .asRuntimeException());
+                    return;
+                }
+
+                // Return success response (empty result with operation ID)
+                String operationId = java.util.UUID.randomUUID().toString();
+                ExecutePlanResponse response = ExecutePlanResponse.newBuilder()
+                    .setSessionId(sessionId)
+                    .setOperationId(operationId)
+                    .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+
+                logger.info("✓ Temp view created in DuckDB: '{}' (session: {})", viewName, sessionId);
+
+            } else {
+                // Unsupported command type
+                responseObserver.onError(Status.UNIMPLEMENTED
+                    .withDescription("Unsupported command type: " + command.getCommandTypeCase())
+                    .asRuntimeException());
+            }
+
+        } catch (Exception e) {
+            logger.error("Command execution failed", e);
+            responseObserver.onError(Status.INTERNAL
+                .withDescription("Command execution failed: " + e.getMessage())
                 .withCause(e)
                 .asRuntimeException());
         }
@@ -371,11 +474,19 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             sessionId, operationId);
 
         // For MVP, we don't maintain execution state. Queries complete immediately.
-        // Return NOT_FOUND to indicate the execution is already complete.
-        responseObserver.onError(Status.NOT_FOUND
-            .withDescription("Operation " + operationId + " not found. " +
-                "Queries complete immediately in MVP and cannot be reattached.")
-            .asRuntimeException());
+        // Return empty stream with ResultComplete to indicate execution is done.
+        // This allows PySpark clients with reattachable execution to work properly.
+
+        ExecutePlanResponse response = ExecutePlanResponse.newBuilder()
+            .setSessionId(sessionId)
+            .setOperationId(operationId)
+            .setResultComplete(ExecutePlanResponse.ResultComplete.newBuilder().build())
+            .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+
+        logger.debug("Reattach completed (operation already finished): {}", operationId);
     }
 
     /**

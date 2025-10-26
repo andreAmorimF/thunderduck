@@ -36,6 +36,9 @@ public class SessionManager {
     /** Currently active session ID (null when IDLE) */
     private String currentSessionId = null;
 
+    /** Currently active session object (null when IDLE) */
+    private Session currentSession = null;
+
     /** Last activity timestamp (milliseconds since epoch) */
     private long lastActivityTime = 0;
 
@@ -94,10 +97,11 @@ public class SessionManager {
             // Transition to ACTIVE state
             state = ServerState.ACTIVE;
             currentSessionId = sessionId;
+            currentSession = new Session(sessionId);
             lastActivityTime = System.currentTimeMillis();
 
             logger.info("Session created: {} (state: IDLE -> ACTIVE)", sessionId);
-            return new Session(sessionId);
+            return currentSession;
         }
     }
 
@@ -154,6 +158,7 @@ public class SessionManager {
             // Transition to IDLE state
             state = ServerState.IDLE;
             currentSessionId = null;
+            currentSession = null;
             lastActivityTime = 0;
 
             logger.info("Session closed: {} (state: ACTIVE -> IDLE)", sessionId);
@@ -177,6 +182,7 @@ public class SessionManager {
                     state = ServerState.IDLE;
                     String oldSessionId = currentSessionId;
                     currentSessionId = null;
+                    currentSession = null;
                     lastActivityTime = 0;
 
                     logger.info("Session '{}' forcibly closed due to timeout (state: ACTIVE -> IDLE)",
@@ -201,6 +207,34 @@ public class SessionManager {
                     ? System.currentTimeMillis() - lastActivityTime
                     : 0
             );
+        }
+    }
+
+    /**
+     * Get the currently active session.
+     *
+     * @return Active session, or null if no session is active
+     */
+    public Session getActiveSession() {
+        synchronized (lock) {
+            return currentSession;
+        }
+    }
+
+    /**
+     * Get a session by ID.
+     *
+     * For single-session architecture, returns the current session if IDs match.
+     *
+     * @param sessionId Session identifier
+     * @return Session if it exists and matches, null otherwise
+     */
+    public Session getSession(String sessionId) {
+        synchronized (lock) {
+            if (currentSession != null && currentSession.getSessionId().equals(sessionId)) {
+                return currentSession;
+            }
+            return null;
         }
     }
 

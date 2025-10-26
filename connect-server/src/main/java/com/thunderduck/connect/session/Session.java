@@ -1,7 +1,11 @@
 package com.thunderduck.connect.session;
 
+import com.thunderduck.logical.LogicalPlan;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a single Spark Connect session.
@@ -10,11 +14,13 @@ import java.util.Map;
  * - Unique session ID
  * - Session-scoped configuration
  * - Creation timestamp
+ * - Temporary view registry
  */
 public class Session {
     private final String sessionId;
     private final long createdAt;
     private final Map<String, String> config;
+    private final Map<String, LogicalPlan> tempViews;
 
     /**
      * Create a new session with the given ID.
@@ -25,6 +31,7 @@ public class Session {
         this.sessionId = sessionId;
         this.createdAt = System.currentTimeMillis();
         this.config = new HashMap<>();
+        this.tempViews = new ConcurrentHashMap<>();
 
         // Set default configuration
         config.put("spark.app.name", "thunderduck-connect");
@@ -78,8 +85,55 @@ public class Session {
         return new HashMap<>(config);
     }
 
+    /**
+     * Register a temporary view.
+     *
+     * @param name View name
+     * @param plan Logical plan representing the view
+     */
+    public void registerTempView(String name, LogicalPlan plan) {
+        tempViews.put(name, plan);
+    }
+
+    /**
+     * Get a temporary view by name.
+     *
+     * @param name View name
+     * @return Logical plan if view exists, empty otherwise
+     */
+    public Optional<LogicalPlan> getTempView(String name) {
+        return Optional.ofNullable(tempViews.get(name));
+    }
+
+    /**
+     * Drop a temporary view.
+     *
+     * @param name View name
+     * @return true if view existed and was dropped, false otherwise
+     */
+    public boolean dropTempView(String name) {
+        return tempViews.remove(name) != null;
+    }
+
+    /**
+     * Get all temporary view names.
+     *
+     * @return Set of view names
+     */
+    public Set<String> getTempViewNames() {
+        return tempViews.keySet();
+    }
+
+    /**
+     * Clear all temporary views.
+     */
+    public void clearTempViews() {
+        tempViews.clear();
+    }
+
     @Override
     public String toString() {
-        return String.format("Session[id=%s, created=%d]", sessionId, createdAt);
+        return String.format("Session[id=%s, created=%d, views=%d]",
+            sessionId, createdAt, tempViews.size());
     }
 }
