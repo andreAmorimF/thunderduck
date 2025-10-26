@@ -67,9 +67,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         // Save state for recursive calls or rollback
         int savedLength = sql.length();
-        int savedAliasCounter = aliasCounter;
-        int savedSubqueryDepth = subqueryDepth;
-
+        
         if (!isRecursive) {
             // Top-level call: reset all state
             sql.setLength(0);

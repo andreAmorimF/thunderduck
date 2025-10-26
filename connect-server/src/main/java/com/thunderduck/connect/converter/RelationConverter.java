@@ -2,12 +2,8 @@ package com.thunderduck.connect.converter;
 
 import com.thunderduck.logical.*;
 import com.thunderduck.expression.Expression;
-import com.thunderduck.expression.ColumnReference;
-import com.thunderduck.expression.BinaryExpression;
 import com.thunderduck.expression.FunctionCall;
 import com.thunderduck.expression.AliasExpression;
-import com.thunderduck.types.StructType;
-import com.thunderduck.types.StructField;
 
 import org.apache.spark.connect.proto.*;
 import org.slf4j.Logger;

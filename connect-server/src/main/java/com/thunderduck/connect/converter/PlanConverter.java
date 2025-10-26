@@ -1,27 +1,13 @@
 package com.thunderduck.connect.converter;
 
 import com.thunderduck.logical.LogicalPlan;
-import com.thunderduck.logical.TableScan;
-import com.thunderduck.logical.Project;
-import com.thunderduck.logical.Filter;
-import com.thunderduck.logical.Aggregate;
-import com.thunderduck.logical.Sort;
-import com.thunderduck.logical.Limit;
 import com.thunderduck.expression.Expression;
-import com.thunderduck.expression.ColumnReference;
-import com.thunderduck.expression.Literal;
-import com.thunderduck.expression.FunctionCall;
-import com.thunderduck.expression.BinaryExpression;
-import com.thunderduck.types.DataType;
-import com.thunderduck.types.StructType;
-import com.thunderduck.types.StructField;
 
 import org.apache.spark.connect.proto.Plan;
 import org.apache.spark.connect.proto.Relation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 

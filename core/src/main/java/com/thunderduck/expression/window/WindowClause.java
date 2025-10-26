@@ -1,7 +1,6 @@
 package com.thunderduck.expression.window;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Represents a WINDOW clause containing multiple named window definitions.

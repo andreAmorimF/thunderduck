@@ -1,6 +1,5 @@
 package com.thunderduck.io;
 
-import com.thunderduck.logical.LogicalPlan;
 import com.thunderduck.logical.TableScan;
 import java.util.HashMap;
 import java.util.Map;

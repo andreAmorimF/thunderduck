@@ -2,7 +2,6 @@ package com.thunderduck.connect.session;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Represents a single Spark Connect session.

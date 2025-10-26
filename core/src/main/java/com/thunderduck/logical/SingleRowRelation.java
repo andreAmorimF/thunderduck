@@ -1,7 +1,6 @@
 package com.thunderduck.logical;
 
 import com.thunderduck.types.StructType;
-import com.thunderduck.types.StructField;
 import java.util.Collections;
 
 /**

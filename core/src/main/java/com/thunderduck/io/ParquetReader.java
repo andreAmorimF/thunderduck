@@ -3,7 +3,6 @@ package com.thunderduck.io;
 import com.thunderduck.logical.LogicalPlan;
 import com.thunderduck.logical.TableScan;
 import com.thunderduck.types.StructType;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 

@@ -1,7 +1,6 @@
 package com.thunderduck.expression;
 
 import com.thunderduck.logical.LogicalPlan;
-import com.thunderduck.types.DataType;
 import java.util.Objects;
 
 /**
