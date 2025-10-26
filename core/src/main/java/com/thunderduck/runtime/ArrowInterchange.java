@@ -61,7 +61,9 @@ public class ArrowInterchange {
         // Build Arrow schema
         List<Field> fields = new ArrayList<>();
         for (int i = 1; i <= columnCount; i++) {
-            String name = meta.getColumnName(i);
+            // Use getColumnLabel() to get aliases (e.g., "sum_qty" from SUM(x) AS "sum_qty")
+            // Falls back to getColumnName() if no alias is present
+            String name = meta.getColumnLabel(i);
             int sqlType = meta.getColumnType(i);
             FieldType fieldType = sqlTypeToArrowType(sqlType, meta, i);
             fields.add(new Field(name, fieldType, null));
