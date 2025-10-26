@@ -87,8 +87,14 @@ public class ArrowInterchange {
         root.setRowCount(rows.size());
         for (int col = 0; col < columnCount; col++) {
             FieldVector vector = root.getVector(col);
+            String vectorType = vector.getClass().getSimpleName();
+            String columnName = vector.getName();
+            System.err.println("DEBUG: Column " + columnName + " uses " + vectorType);
             for (int row = 0; row < rows.size(); row++) {
                 Object value = rows.get(row).get(col);
+                if (row == 0) {
+                    System.err.println("DEBUG:   Row 0 value: " + value + " (type: " + (value != null ? value.getClass().getSimpleName() : "null") + ")");
+                }
                 setVectorValue(vector, row, value);
             }
         }
@@ -230,6 +236,18 @@ public class ArrowInterchange {
             ((Float4Vector) vector).setSafe(index, ((Number) value).floatValue());
         } else if (vector instanceof Float8Vector) {
             ((Float8Vector) vector).setSafe(index, ((Number) value).doubleValue());
+        } else if (vector instanceof DecimalVector) {
+            // Handle DECIMAL/NUMERIC types (e.g., SUM on integers returns HUGEINT/DECIMAL)
+            if (value instanceof Number) {
+                java.math.BigDecimal decimal = new java.math.BigDecimal(value.toString());
+                ((DecimalVector) vector).setSafe(index, decimal);
+            }
+        } else if (vector instanceof Decimal256Vector) {
+            // Handle 256-bit decimals
+            if (value instanceof Number) {
+                java.math.BigDecimal decimal = new java.math.BigDecimal(value.toString());
+                ((Decimal256Vector) vector).setSafe(index, decimal);
+            }
         } else if (vector instanceof VarCharVector) {
             byte[] bytes = value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             ((VarCharVector) vector).setSafe(index, bytes);
@@ -282,6 +300,14 @@ public class ArrowInterchange {
             return ((Float4Vector) vector).get(index);
         } else if (vector instanceof Float8Vector) {
             return ((Float8Vector) vector).get(index);
+        } else if (vector instanceof DecimalVector) {
+            // Handle DECIMAL/NUMERIC types - convert to double for simplicity
+            java.math.BigDecimal decimal = ((DecimalVector) vector).getObject(index);
+            return decimal != null ? decimal.doubleValue() : null;
+        } else if (vector instanceof Decimal256Vector) {
+            // Handle 256-bit decimals
+            java.math.BigDecimal decimal = ((Decimal256Vector) vector).getObject(index);
+            return decimal != null ? decimal.doubleValue() : null;
         } else if (vector instanceof VarCharVector) {
             byte[] bytes = ((VarCharVector) vector).get(index);
             return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
