@@ -1057,63 +1057,115 @@ logging.level=INFO
 
 ---
 
-#### Week 14: Production Hardening & Resilience 📋 PLANNED
+#### Week 14: TPC-H 100% Test Coverage via Spark Connect ⭐ IN PROGRESS
 
-**Goal**: Enhance single-session server reliability and operational excellence
+**Goal**: Achieve 100% TPC-H query coverage (Q1-Q22) using real PySpark Spark Connect client
 
-**Note**: This week focuses on production-readiness features for the **single-session architecture**. The server supports one active session at a time as the final design (see docs/architect/SINGLE_SESSION_ARCHITECTURE.md).
+**Prerequisites** (from Week 13):
+- ✅ DataFrame API fully functional (SUM, AVG, COUNT verified)
+- ✅ Server running reliably (protobuf 3.23.4 + gRPC 1.56.0)
+- ✅ TPC-H data generated (SF=0.01, all 8 tables)
+- ✅ TPC-H Q1 validated via DataFrame API
+- ✅ Arrow marshaling working (getColumnLabel + DecimalVector support)
 
 **Tasks**:
-1. **Enhanced Error Handling** (1 day)
-   - Implement comprehensive error recovery
-   - Add circuit breaker for DuckDB failures
-   - Improve error messages with context
-   - Handle partial query failures gracefully
 
-2. **Connection Resilience** (2 days)
-   - Implement connection health checks
-   - Add automatic reconnection for transient failures
-   - Handle DuckDB connection recovery
-   - Improve client disconnect detection
-   - Better "server busy" UX with wait time estimates
+1. **Build pytest Integration Test Framework** (Day 1: 6 hours)
+   - ServerManager: Server lifecycle management ✅ (from Week 13 work)
+   - ResultValidator: Comprehensive result validation ✅ (from Week 13 work)
+   - pytest fixtures: Session-scoped server + Spark session
+   - TPC-H table fixtures: All 8 tables loaded once
+   - Custom markers: @tpch, @tier1, @tier2, @tier3
 
-3. **Query Timeout & Cancellation** (2 days)
-   - Per-query timeout configuration
-   - Graceful query cancellation
-   - Resource cleanup after timeout
-   - Long-running query warnings
-   - Configurable timeout policies
+2. **TPC-H Tier 1 Queries** (Day 2: 6 hours) - Simple queries
+   - Q1: Pricing Summary Report ✅ (validated in Week 13)
+   - Q3: Shipping Priority (3-way join)
+   - Q5: Local Supplier Volume (multi-way join)
+   - Q6: Forecasting Revenue Change (simple scan + filter)
+   - Q10: Returned Item Reporting (join + aggregate + top-N)
+   - Each query: DataFrame API + SQL versions
+   - Result validation against expected outputs
 
-4. **Operational Monitoring** (1 day)
-   - Basic health check endpoint
-   - Server state visibility (IDLE/ACTIVE)
-   - Session activity tracking
-   - Query execution history (last N queries)
-   - Simple metrics collection (queries/hour, avg latency)
+3. **TPC-H Tier 2 Queries** (Day 3-4: 12 hours) - Medium complexity
+   - Q2: Minimum Cost Supplier (subquery + join)
+   - Q4: Order Priority Checking (semi-join)
+   - Q7: Volume Shipping (join + aggregate)
+   - Q8: National Market Share (complex aggregate)
+   - Q9: Product Type Profit (multi-join + group by)
+   - Q11: Important Stock Identification (having clause)
+   - Q12: Shipping Modes and Order Priority (join + case when)
+   - Q13: Customer Distribution (outer join)
+   - Q14: Promotion Effect (join + case when)
+   - Q16: Parts/Supplier Relationship (not in subquery)
+   - Q17: Small-Quantity Order Revenue (subquery + aggregate)
+   - Q18: Large Volume Customer (join + subquery)
+   - Q19: Discounted Revenue (complex filter logic)
+   - Q20: Potential Part Promotion (exists subquery)
+
+4. **TPC-H Tier 3 Queries** (Day 5: 6 hours) - High complexity
+   - Q15: Top Supplier (WITH clause / views)
+   - Q21: Suppliers Who Kept Orders Waiting (multi-exists)
+   - Q22: Global Sales Opportunity (complex subqueries)
+
+5. **Performance Benchmarking & Reporting** (Day 5: 2 hours)
+   - Measure execution time for all queries
+   - Compare with expected performance targets
+   - Document any queries that fail or need optimization
+   - Create TPC-H performance report
+
+**Test Framework Structure**:
+```
+tests/integration/
+├── conftest.py              # pytest fixtures (server, tables, validation)
+├── test_tpch_tier1.py       # Q1, Q3, Q5, Q6, Q10
+├── test_tpch_tier2.py       # Q2, Q4, Q7-Q14, Q16-Q20
+├── test_tpch_tier3.py       # Q15, Q21, Q22
+├── utils/
+│   ├── server_manager.py    # Server lifecycle
+│   ├── result_validator.py  # Result validation
+│   └── performance_tracker.py # Performance metrics
+└── expected_results/        # Expected query outputs
+    ├── q1_expected.parquet
+    ├── q2_expected.parquet
+    └── ...
+```
 
 **Deliverables**:
-- Enhanced error handling framework
-- Connection resilience utilities
-- Query timeout/cancellation system
-- Basic monitoring endpoints
-- Operational dashboard (simple HTTP endpoint)
+- ✅ pytest framework with 60+ integration tests
+- ✅ All 22 TPC-H queries validated via Spark Connect
+- ✅ Result correctness verification (row counts, values)
+- ✅ Performance baseline established (execution times)
+- ✅ Comprehensive test report with pass/fail status
+- ⏳ Documentation of any unsupported features
 
 **Success Criteria**:
-- Server recovers from DuckDB connection failures
-- Transient errors don't require restart
-- Timeout detection accurate within 1 second
-- Health check endpoint responds < 10ms
-- Clear operational visibility into server state
+- ✅ All TPC-H queries execute successfully (100% coverage)
+- ✅ Results match expected outputs (numerical accuracy)
+- ✅ All tests pass via pytest (automated execution)
+- ✅ Performance < 5 seconds per query (SF=0.01)
+- ✅ Server handles all query patterns reliably
 
 **Dependencies**:
-- Week 11: Single-session state management
-- Week 13: Extended query support
+- Week 13: DataFrame API working (SUM, AVG, COUNT, etc.)
+- Week 13: Server running with Spark 3.5.3 toolchain
+- Week 12: TPC-H data generated
 
-**Testing**:
-- 20+ error recovery tests
-- 15+ timeout and cancellation tests
-- 10+ health check tests
-- Chaos testing (simulated failures)
+**Testing Approach**:
+- **DataFrame API first**: Test each query via PySpark DataFrame operations
+- **SQL version**: Also test via spark.sql() for comparison
+- **Result validation**: Compare row counts, schemas, and sample values
+- **Performance tracking**: Measure and log execution times
+- **Incremental**: Start with Tier 1, validate, then move to Tier 2
+
+**Expected Challenges**:
+- Q15: Requires WITH clause / temp views (may need implementation)
+- Q21, Q22: Complex subqueries may expose edge cases
+- Some queries may require features not yet implemented
+
+**Contingency**:
+- Document any failing queries with root cause
+- Prioritize query categories by business value
+- Implement missing features in Week 15 if needed
 
 ---
 
