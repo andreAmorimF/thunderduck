@@ -463,7 +463,6 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             java.util.List<org.apache.arrow.vector.types.pojo.Field> fields = new java.util.ArrayList<>();
             fields.add(org.apache.arrow.vector.types.pojo.Field.nullable("show_string",
                 new org.apache.arrow.vector.types.pojo.ArrowType.Utf8()));
-            org.apache.arrow.vector.types.pojo.Schema schema = new org.apache.arrow.vector.types.pojo.Schema(fields);
 
             org.apache.arrow.vector.VectorSchemaRoot showStringRoot = new org.apache.arrow.vector.VectorSchemaRoot(
                 fields, vectors);
