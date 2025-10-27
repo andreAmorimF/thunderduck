@@ -1,0 +1,106 @@
+{
+  "query_num": 45,
+  "row_count": 19,
+  "columns": [
+    "ca_zip",
+    "ca_city",
+    "sum(ws_sales_price)"
+  ],
+  "rows": [
+    {
+      "ca_zip": "10150",
+      "ca_city": "Bunker Hill",
+      "sum(ws_sales_price)": 101.73
+    },
+    {
+      "ca_zip": "16098",
+      "ca_city": "Five Points",
+      "sum(ws_sales_price)": 90.64
+    },
+    {
+      "ca_zip": "28048",
+      "ca_city": "Salem",
+      "sum(ws_sales_price)": 9.26
+    },
+    {
+      "ca_zip": "29584",
+      "ca_city": "Oakdale",
+      "sum(ws_sales_price)": 34.55
+    },
+    {
+      "ca_zip": "31289",
+      "ca_city": "Lincoln",
+      "sum(ws_sales_price)": 41.97
+    },
+    {
+      "ca_zip": "34975",
+      "ca_city": "Kingston",
+      "sum(ws_sales_price)": 11.43
+    },
+    {
+      "ca_zip": "36971",
+      "ca_city": "Wilson",
+      "sum(ws_sales_price)": 74.09
+    },
+    {
+      "ca_zip": "38354",
+      "ca_city": "Sulphur Springs",
+      "sum(ws_sales_price)": 102.77
+    },
+    {
+      "ca_zip": "44975",
+      "ca_city": "Kingston",
+      "sum(ws_sales_price)": 51.21
+    },
+    {
+      "ca_zip": "62808",
+      "ca_city": "Hamilton",
+      "sum(ws_sales_price)": 2.48
+    },
+    {
+      "ca_zip": "62812",
+      "ca_city": "Shady Grove",
+      "sum(ws_sales_price)": 28.07
+    },
+    {
+      "ca_zip": "66557",
+      "ca_city": "Arlington",
+      "sum(ws_sales_price)": 172.95
+    },
+    {
+      "ca_zip": "68252",
+      "ca_city": "Maple Grove",
+      "sum(ws_sales_price)": 23.26
+    },
+    {
+      "ca_zip": "69583",
+      "ca_city": "Jackson",
+      "sum(ws_sales_price)": 14.52
+    },
+    {
+      "ca_zip": "73003",
+      "ca_city": "Hillcrest",
+      "sum(ws_sales_price)": 142.64
+    },
+    {
+      "ca_zip": "78222",
+      "ca_city": "Clinton",
+      "sum(ws_sales_price)": 11.62
+    },
+    {
+      "ca_zip": "83683",
+      "ca_city": "Plainview",
+      "sum(ws_sales_price)": 114.33
+    },
+    {
+      "ca_zip": "84536",
+      "ca_city": "Friendship",
+      "sum(ws_sales_price)": 11.65
+    },
+    {
+      "ca_zip": "88370",
+      "ca_city": "Oak Grove",
+      "sum(ws_sales_price)": 8.97
+    }
+  ]
+}

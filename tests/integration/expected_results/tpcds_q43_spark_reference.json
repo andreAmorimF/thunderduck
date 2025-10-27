@@ -1,0 +1,83 @@
+{
+  "query_num": 43,
+  "row_count": 6,
+  "columns": [
+    "s_store_name",
+    "s_store_id",
+    "sun_sales",
+    "mon_sales",
+    "tue_sales",
+    "wed_sales",
+    "thu_sales",
+    "fri_sales",
+    "sat_sales"
+  ],
+  "rows": [
+    {
+      "s_store_name": "able",
+      "s_store_id": "AAAAAAAACAAAAAAA",
+      "sun_sales": 515110.76,
+      "mon_sales": 464120.06,
+      "tue_sales": 500664.51,
+      "wed_sales": 448205.41,
+      "thu_sales": 478045.76,
+      "fri_sales": 461757.71,
+      "sat_sales": 503931.77
+    },
+    {
+      "s_store_name": "ation",
+      "s_store_id": "AAAAAAAAHAAAAAAA",
+      "sun_sales": 502011.9,
+      "mon_sales": 481011.39,
+      "tue_sales": 447377.22,
+      "wed_sales": 486012.34,
+      "thu_sales": 505015.37,
+      "fri_sales": 469140.25,
+      "sat_sales": 508623.72
+    },
+    {
+      "s_store_name": "bar",
+      "s_store_id": "AAAAAAAAKAAAAAAA",
+      "sun_sales": 497068.47,
+      "mon_sales": 468861.3,
+      "tue_sales": 479823.43,
+      "wed_sales": 476073.24,
+      "thu_sales": 472854.26,
+      "fri_sales": 485000.19,
+      "sat_sales": 498871.73
+    },
+    {
+      "s_store_name": "eing",
+      "s_store_id": "AAAAAAAAIAAAAAAA",
+      "sun_sales": 496572.01,
+      "mon_sales": 467279.73,
+      "tue_sales": 481388.19,
+      "wed_sales": 450509.39,
+      "thu_sales": 490318.17,
+      "fri_sales": 473732.21,
+      "sat_sales": 482544.35
+    },
+    {
+      "s_store_name": "ese",
+      "s_store_id": "AAAAAAAAEAAAAAAA",
+      "sun_sales": 491878.78,
+      "mon_sales": 499206.55,
+      "tue_sales": 454298.99,
+      "wed_sales": 469053.78,
+      "thu_sales": 475448.17,
+      "fri_sales": 479807.4,
+      "sat_sales": 500623.05
+    },
+    {
+      "s_store_name": "ought",
+      "s_store_id": "AAAAAAAABAAAAAAA",
+      "sun_sales": 506429.61,
+      "mon_sales": 466670.31,
+      "tue_sales": 465561.55,
+      "wed_sales": 483011.61,
+      "thu_sales": 490414.38,
+      "fri_sales": 471727.31,
+      "sat_sales": 500735.85
+    }
+  ]
+}
