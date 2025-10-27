@@ -1,0 +1,410 @@
+{
+  "query_num": 33,
+  "row_count": 100,
+  "columns": [
+    "i_manufact_id",
+    "total_sales"
+  ],
+  "rows": [
+    {
+      "i_manufact_id": 929,
+      "total_sales": 47.03
+    },
+    {
+      "i_manufact_id": 821,
+      "total_sales": 298.16
+    },
+    {
+      "i_manufact_id": 738,
+      "total_sales": 355.78
+    },
+    {
+      "i_manufact_id": 741,
+      "total_sales": 558.5
+    },
+    {
+      "i_manufact_id": 697,
+      "total_sales": 607.87
+    },
+    {
+      "i_manufact_id": 824,
+      "total_sales": 636.01
+    },
+    {
+      "i_manufact_id": 938,
+      "total_sales": 804.3
+    },
+    {
+      "i_manufact_id": 710,
+      "total_sales": 861.38
+    },
+    {
+      "i_manufact_id": 785,
+      "total_sales": 977.68
+    },
+    {
+      "i_manufact_id": 936,
+      "total_sales": 1254.44
+    },
+    {
+      "i_manufact_id": 849,
+      "total_sales": 1265.74
+    },
+    {
+      "i_manufact_id": 784,
+      "total_sales": 1472.78
+    },
+    {
+      "i_manufact_id": 990,
+      "total_sales": 1635.12
+    },
+    {
+      "i_manufact_id": 880,
+      "total_sales": 1770.51
+    },
+    {
+      "i_manufact_id": 965,
+      "total_sales": 2550.56
+    },
+    {
+      "i_manufact_id": 946,
+      "total_sales": 2560.84
+    },
+    {
+      "i_manufact_id": 783,
+      "total_sales": 2588.4
+    },
+    {
+      "i_manufact_id": 464,
+      "total_sales": 2820.49
+    },
+    {
+      "i_manufact_id": 789,
+      "total_sales": 3061.58
+    },
+    {
+      "i_manufact_id": 705,
+      "total_sales": 3233.11
+    },
+    {
+      "i_manufact_id": 733,
+      "total_sales": 3587.59
+    },
+    {
+      "i_manufact_id": 709,
+      "total_sales": 3593.01
+    },
+    {
+      "i_manufact_id": 928,
+      "total_sales": 3611.76
+    },
+    {
+      "i_manufact_id": 682,
+      "total_sales": 3886.96
+    },
+    {
+      "i_manufact_id": 482,
+      "total_sales": 3949.49
+    },
+    {
+      "i_manufact_id": 812,
+      "total_sales": 3956.44
+    },
+    {
+      "i_manufact_id": 704,
+      "total_sales": 4137.47
+    },
+    {
+      "i_manufact_id": 698,
+      "total_sales": 4197.54
+    },
+    {
+      "i_manufact_id": 840,
+      "total_sales": 4222.19
+    },
+    {
+      "i_manufact_id": 794,
+      "total_sales": 4237.77
+    },
+    {
+      "i_manufact_id": 838,
+      "total_sales": 4293.86
+    },
+    {
+      "i_manufact_id": 853,
+      "total_sales": 4555.12
+    },
+    {
+      "i_manufact_id": 711,
+      "total_sales": 4765.75
+    },
+    {
+      "i_manufact_id": 668,
+      "total_sales": 4983.54
+    },
+    {
+      "i_manufact_id": 780,
+      "total_sales": 5247.14
+    },
+    {
+      "i_manufact_id": 799,
+      "total_sales": 5984.12
+    },
+    {
+      "i_manufact_id": 899,
+      "total_sales": 6013.24
+    },
+    {
+      "i_manufact_id": 798,
+      "total_sales": 6055.88
+    },
+    {
+      "i_manufact_id": 774,
+      "total_sales": 6121.74
+    },
+    {
+      "i_manufact_id": 795,
+      "total_sales": 6379.88
+    },
+    {
+      "i_manufact_id": 713,
+      "total_sales": 6696.51
+    },
+    {
+      "i_manufact_id": 947,
+      "total_sales": 6848.14
+    },
+    {
+      "i_manufact_id": 386,
+      "total_sales": 7008.5
+    },
+    {
+      "i_manufact_id": 811,
+      "total_sales": 7459.85
+    },
+    {
+      "i_manufact_id": 872,
+      "total_sales": 7620.85
+    },
+    {
+      "i_manufact_id": 898,
+      "total_sales": 7720.89
+    },
+    {
+      "i_manufact_id": 920,
+      "total_sales": 7863.79
+    },
+    {
+      "i_manufact_id": 556,
+      "total_sales": 8440.53
+    },
+    {
+      "i_manufact_id": 1000,
+      "total_sales": 8756.3
+    },
+    {
+      "i_manufact_id": 939,
+      "total_sales": 8794.9
+    },
+    {
+      "i_manufact_id": 981,
+      "total_sales": 8861.58
+    },
+    {
+      "i_manufact_id": 851,
+      "total_sales": 8889.27
+    },
+    {
+      "i_manufact_id": 832,
+      "total_sales": 9582.71
+    },
+    {
+      "i_manufact_id": 655,
+      "total_sales": 9666.02
+    },
+    {
+      "i_manufact_id": 723,
+      "total_sales": 9667.53
+    },
+    {
+      "i_manufact_id": 887,
+      "total_sales": 9698.0
+    },
+    {
+      "i_manufact_id": 590,
+      "total_sales": 9700.72
+    },
+    {
+      "i_manufact_id": 974,
+      "total_sales": 9739.11
+    },
+    {
+      "i_manufact_id": 963,
+      "total_sales": 10014.23
+    },
+    {
+      "i_manufact_id": 740,
+      "total_sales": 10060.25
+    },
+    {
+      "i_manufact_id": 358,
+      "total_sales": 10101.34
+    },
+    {
+      "i_manufact_id": 969,
+      "total_sales": 10138.23
+    },
+    {
+      "i_manufact_id": 555,
+      "total_sales": 10260.5
+    },
+    {
+      "i_manufact_id": 484,
+      "total_sales": 10301.91
+    },
+    {
+      "i_manufact_id": 977,
+      "total_sales": 10475.47
+    },
+    {
+      "i_manufact_id": 766,
+      "total_sales": 10534.33
+    },
+    {
+      "i_manufact_id": 855,
+      "total_sales": 10626.45
+    },
+    {
+      "i_manufact_id": 472,
+      "total_sales": 10647.86
+    },
+    {
+      "i_manufact_id": 797,
+      "total_sales": 10772.56
+    },
+    {
+      "i_manufact_id": 363,
+      "total_sales": 10876.09
+    },
+    {
+      "i_manufact_id": 910,
+      "total_sales": 10998.62
+    },
+    {
+      "i_manufact_id": 619,
+      "total_sales": 11012.1
+    },
+    {
+      "i_manufact_id": 828,
+      "total_sales": 11099.19
+    },
+    {
+      "i_manufact_id": 419,
+      "total_sales": 11099.4
+    },
+    {
+      "i_manufact_id": 806,
+      "total_sales": 11113.64
+    },
+    {
+      "i_manufact_id": 166,
+      "total_sales": 11230.73
+    },
+    {
+      "i_manufact_id": 807,
+      "total_sales": 11275.0
+    },
+    {
+      "i_manufact_id": 770,
+      "total_sales": 11282.09
+    },
+    {
+      "i_manufact_id": 376,
+      "total_sales": 11433.19
+    },
+    {
+      "i_manufact_id": 966,
+      "total_sales": 11517.48
+    },
+    {
+      "i_manufact_id": 430,
+      "total_sales": 11761.86
+    },
+    {
+      "i_manufact_id": 607,
+      "total_sales": 11817.18
+    },
+    {
+      "i_manufact_id": 772,
+      "total_sales": 11868.89
+    },
+    {
+      "i_manufact_id": 692,
+      "total_sales": 11953.52
+    },
+    {
+      "i_manufact_id": 708,
+      "total_sales": 12030.48
+    },
+    {
+      "i_manufact_id": 995,
+      "total_sales": 12083.59
+    },
+    {
+      "i_manufact_id": 764,
+      "total_sales": 12163.19
+    },
+    {
+      "i_manufact_id": 581,
+      "total_sales": 12223.47
+    },
+    {
+      "i_manufact_id": 519,
+      "total_sales": 12470.81
+    },
+    {
+      "i_manufact_id": 860,
+      "total_sales": 12525.53
+    },
+    {
+      "i_manufact_id": 810,
+      "total_sales": 12588.58
+    },
+    {
+      "i_manufact_id": 396,
+      "total_sales": 12744.22
+    },
+    {
+      "i_manufact_id": 841,
+      "total_sales": 12764.76
+    },
+    {
+      "i_manufact_id": 564,
+      "total_sales": 13186.25
+    },
+    {
+      "i_manufact_id": 652,
+      "total_sales": 13193.69
+    },
+    {
+      "i_manufact_id": 886,
+      "total_sales": 13322.77
+    },
+    {
+      "i_manufact_id": 826,
+      "total_sales": 13393.73
+    },
+    {
+      "i_manufact_id": 968,
+      "total_sales": 13445.58
+    },
+    {
+      "i_manufact_id": 422,
+      "total_sales": 13634.68
+    },
+    {
+      "i_manufact_id": 986,
+      "total_sales": 13680.84
+    }
+  ]
+}
