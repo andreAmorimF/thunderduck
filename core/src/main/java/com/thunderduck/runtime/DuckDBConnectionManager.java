@@ -251,6 +251,10 @@ public class DuckDBConnectionManager implements AutoCloseable {
 
             // Enable parallel CSV/Parquet reading
             stmt.execute("SET preserve_insertion_order=false");
+
+            // Set NULL ordering to match Spark SQL (NULLs FIRST by default)
+            // Critical for TPC-DS queries using ROLLUP/CUBE which produce NULL subtotals
+            stmt.execute("SET default_null_order='NULLS FIRST'");
         }
 
         return duckConn;
