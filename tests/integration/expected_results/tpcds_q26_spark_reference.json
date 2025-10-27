@@ -1,0 +1,713 @@
+{
+  "query_num": 26,
+  "row_count": 100,
+  "columns": [
+    "i_item_id",
+    "agg1",
+    "agg2",
+    "agg3",
+    "agg4"
+  ],
+  "rows": [
+    {
+      "i_item_id": "AAAAAAAAAAAEAAAA",
+      "agg1": 57.0,
+      "agg2": 60.345,
+      "agg3": 0.0,
+      "agg4": 46.26
+    },
+    {
+      "i_item_id": "AAAAAAAAAABEAAAA",
+      "agg1": 84.0,
+      "agg2": 114.7,
+      "agg3": 0.0,
+      "agg4": 45.88
+    },
+    {
+      "i_item_id": "AAAAAAAAAACAAAAA",
+      "agg1": 18.0,
+      "agg2": 182.5,
+      "agg3": 173.44,
+      "agg4": 40.15
+    },
+    {
+      "i_item_id": "AAAAAAAAAACCAAAA",
+      "agg1": 27.5,
+      "agg2": 80.5,
+      "agg3": 115.58,
+      "agg4": 54.225
+    },
+    {
+      "i_item_id": "AAAAAAAAAADBAAAA",
+      "agg1": 49.0,
+      "agg2": 73.43,
+      "agg3": 172.67,
+      "agg4": 35.24
+    },
+    {
+      "i_item_id": "AAAAAAAAAADEAAAA",
+      "agg1": 48.0,
+      "agg2": 214.41,
+      "agg3": 0.0,
+      "agg4": 92.19
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEAAAAA",
+      "agg1": 40.666666666666664,
+      "agg2": 99.276667,
+      "agg3": 0.0,
+      "agg4": 79.666667
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEBAAAA",
+      "agg1": 93.0,
+      "agg2": 184.23,
+      "agg3": 0.0,
+      "agg4": 103.16
+    },
+    {
+      "i_item_id": "AAAAAAAAAAFCAAAA",
+      "agg1": 24.0,
+      "agg2": 22.03,
+      "agg3": 0.0,
+      "agg4": 12.11
+    },
+    {
+      "i_item_id": "AAAAAAAAAAGEAAAA",
+      "agg1": 84.5,
+      "agg2": 30.755,
+      "agg3": 0.0,
+      "agg4": 15.08
+    },
+    {
+      "i_item_id": "AAAAAAAAAAHBAAAA",
+      "agg1": 1.0,
+      "agg2": 65.61,
+      "agg3": 22.94,
+      "agg4": 34.77
+    },
+    {
+      "i_item_id": "AAAAAAAAAAIDAAAA",
+      "agg1": 24.333333333333332,
+      "agg2": 122.633333,
+      "agg3": 0.0,
+      "agg4": 62.203333
+    },
+    {
+      "i_item_id": "AAAAAAAAAAJBAAAA",
+      "agg1": 48.333333333333336,
+      "agg2": 98.226667,
+      "agg3": 0.0,
+      "agg4": 48.31
+    },
+    {
+      "i_item_id": "AAAAAAAAAAKDAAAA",
+      "agg1": 71.5,
+      "agg2": 72.485,
+      "agg3": 0.0,
+      "agg4": 38.82
+    },
+    {
+      "i_item_id": "AAAAAAAAAALCAAAA",
+      "agg1": 36.0,
+      "agg2": 91.43,
+      "agg3": 0.0,
+      "agg4": 2.74
+    },
+    {
+      "i_item_id": "AAAAAAAAAALDAAAA",
+      "agg1": 57.5,
+      "agg2": 62.59,
+      "agg3": 265.56,
+      "agg4": 27.0
+    },
+    {
+      "i_item_id": "AAAAAAAAAAMCAAAA",
+      "agg1": 47.0,
+      "agg2": 13.57,
+      "agg3": 0.0,
+      "agg4": 12.48
+    },
+    {
+      "i_item_id": "AAAAAAAAAANAAAAA",
+      "agg1": 84.0,
+      "agg2": 150.74,
+      "agg3": 0.0,
+      "agg4": 146.21
+    },
+    {
+      "i_item_id": "AAAAAAAAAANDAAAA",
+      "agg1": 34.0,
+      "agg2": 86.81,
+      "agg3": 0.0,
+      "agg4": 45.14
+    },
+    {
+      "i_item_id": "AAAAAAAAAAOAAAAA",
+      "agg1": 73.5,
+      "agg2": 183.21,
+      "agg3": 0.0,
+      "agg4": 150.435
+    },
+    {
+      "i_item_id": "AAAAAAAAAAOCAAAA",
+      "agg1": 44.333333333333336,
+      "agg2": 127.47,
+      "agg3": 0.0,
+      "agg4": 49.23
+    },
+    {
+      "i_item_id": "AAAAAAAAABABAAAA",
+      "agg1": 22.0,
+      "agg2": 96.9,
+      "agg3": 0.0,
+      "agg4": 64.92
+    },
+    {
+      "i_item_id": "AAAAAAAAABAEAAAA",
+      "agg1": 94.0,
+      "agg2": 94.87,
+      "agg3": 0.0,
+      "agg4": 73.99
+    },
+    {
+      "i_item_id": "AAAAAAAAABBAAAAA",
+      "agg1": 75.0,
+      "agg2": 79.93,
+      "agg3": 4315.5,
+      "agg4": 57.54
+    },
+    {
+      "i_item_id": "AAAAAAAAABBCAAAA",
+      "agg1": 54.0,
+      "agg2": 130.79,
+      "agg3": 0.0,
+      "agg4": 81.08
+    },
+    {
+      "i_item_id": "AAAAAAAAABBDAAAA",
+      "agg1": 38.0,
+      "agg2": 126.11,
+      "agg3": 0.0,
+      "agg4": 103.41
+    },
+    {
+      "i_item_id": "AAAAAAAAABCBAAAA",
+      "agg1": 73.0,
+      "agg2": 25.47,
+      "agg3": 0.0,
+      "agg4": 25.21
+    },
+    {
+      "i_item_id": "AAAAAAAAABEDAAAA",
+      "agg1": 43.0,
+      "agg2": 38.63,
+      "agg3": 0.0,
+      "agg4": 7.72
+    },
+    {
+      "i_item_id": "AAAAAAAAABJAAAAA",
+      "agg1": 82.0,
+      "agg2": 130.88,
+      "agg3": 0.0,
+      "agg4": 95.54
+    },
+    {
+      "i_item_id": "AAAAAAAAABKAAAAA",
+      "agg1": 30.0,
+      "agg2": 54.17,
+      "agg3": 0.0,
+      "agg4": 1.62
+    },
+    {
+      "i_item_id": "AAAAAAAAABLBAAAA",
+      "agg1": 35.0,
+      "agg2": 109.71,
+      "agg3": 1122.94,
+      "agg4": 49.36
+    },
+    {
+      "i_item_id": "AAAAAAAAABOCAAAA",
+      "agg1": 38.0,
+      "agg2": 43.45,
+      "agg3": 32.35,
+      "agg4": 0.86
+    },
+    {
+      "i_item_id": "AAAAAAAAACCAAAAA",
+      "agg1": 74.0,
+      "agg2": 43.095,
+      "agg3": 0.0,
+      "agg4": 25.64
+    },
+    {
+      "i_item_id": "AAAAAAAAACDCAAAA",
+      "agg1": 46.0,
+      "agg2": 67.97,
+      "agg3": 0.0,
+      "agg4": 56.86
+    },
+    {
+      "i_item_id": "AAAAAAAAACDDAAAA",
+      "agg1": 29.5,
+      "agg2": 172.725,
+      "agg3": 0.0,
+      "agg4": 49.245
+    },
+    {
+      "i_item_id": "AAAAAAAAACEEAAAA",
+      "agg1": 18.0,
+      "agg2": 120.76,
+      "agg3": 0.0,
+      "agg4": 36.22
+    },
+    {
+      "i_item_id": "AAAAAAAAACFDAAAA",
+      "agg1": 3.0,
+      "agg2": 88.48,
+      "agg3": 40.6,
+      "agg4": 39.81
+    },
+    {
+      "i_item_id": "AAAAAAAAACGCAAAA",
+      "agg1": 72.0,
+      "agg2": 5.7,
+      "agg3": 0.0,
+      "agg4": 3.42
+    },
+    {
+      "i_item_id": "AAAAAAAAACHBAAAA",
+      "agg1": 61.0,
+      "agg2": 98.57,
+      "agg3": 0.0,
+      "agg4": 6.89
+    },
+    {
+      "i_item_id": "AAAAAAAAACIBAAAA",
+      "agg1": 48.0,
+      "agg2": 165.04,
+      "agg3": 0.0,
+      "agg4": 56.11
+    },
+    {
+      "i_item_id": "AAAAAAAAACKBAAAA",
+      "agg1": 57.0,
+      "agg2": 102.31,
+      "agg3": 0.0,
+      "agg4": 75.03
+    },
+    {
+      "i_item_id": "AAAAAAAAACMCAAAA",
+      "agg1": 1.0,
+      "agg2": 44.31,
+      "agg3": 4.53,
+      "agg4": 14.62
+    },
+    {
+      "i_item_id": "AAAAAAAAACNBAAAA",
+      "agg1": 59.0,
+      "agg2": 11.8,
+      "agg3": 294.84,
+      "agg4": 6.49
+    },
+    {
+      "i_item_id": "AAAAAAAAACNCAAAA",
+      "agg1": 100.0,
+      "agg2": 205.4,
+      "agg3": 0.0,
+      "agg4": 49.29
+    },
+    {
+      "i_item_id": "AAAAAAAAACOBAAAA",
+      "agg1": 6.0,
+      "agg2": 90.49,
+      "agg3": 0.0,
+      "agg4": 21.71
+    },
+    {
+      "i_item_id": "AAAAAAAAACODAAAA",
+      "agg1": 47.666666666666664,
+      "agg2": 125.21,
+      "agg3": 0.0,
+      "agg4": 33.946667
+    },
+    {
+      "i_item_id": "AAAAAAAAACPAAAAA",
+      "agg1": 42.0,
+      "agg2": 177.78,
+      "agg3": 0.0,
+      "agg4": 154.95
+    },
+    {
+      "i_item_id": "AAAAAAAAADABAAAA",
+      "agg1": 93.0,
+      "agg2": 17.02,
+      "agg3": 0.0,
+      "agg4": 3.4
+    },
+    {
+      "i_item_id": "AAAAAAAAADAEAAAA",
+      "agg1": 94.0,
+      "agg2": 194.77,
+      "agg3": 0.0,
+      "agg4": 72.06
+    },
+    {
+      "i_item_id": "AAAAAAAAADBAAAAA",
+      "agg1": 70.0,
+      "agg2": 242.8,
+      "agg3": 0.0,
+      "agg4": 201.52
+    },
+    {
+      "i_item_id": "AAAAAAAAADBDAAAA",
+      "agg1": 34.0,
+      "agg2": 53.67,
+      "agg3": 0.0,
+      "agg4": 17.71
+    },
+    {
+      "i_item_id": "AAAAAAAAADCAAAAA",
+      "agg1": 66.0,
+      "agg2": 146.82,
+      "agg3": 0.0,
+      "agg4": 101.3
+    },
+    {
+      "i_item_id": "AAAAAAAAADCDAAAA",
+      "agg1": 31.5,
+      "agg2": 159.1,
+      "agg3": 0.0,
+      "agg4": 15.675
+    },
+    {
+      "i_item_id": "AAAAAAAAADDCAAAA",
+      "agg1": 70.0,
+      "agg2": 232.4,
+      "agg3": 0.0,
+      "agg4": 27.88
+    },
+    {
+      "i_item_id": "AAAAAAAAADEAAAAA",
+      "agg1": 88.0,
+      "agg2": 73.63,
+      "agg3": 0.0,
+      "agg4": 35.34
+    },
+    {
+      "i_item_id": "AAAAAAAAADFDAAAA",
+      "agg1": 77.0,
+      "agg2": 134.31,
+      "agg3": 0.0,
+      "agg4": 67.15
+    },
+    {
+      "i_item_id": "AAAAAAAAADGEAAAA",
+      "agg1": 91.0,
+      "agg2": 10.63,
+      "agg3": 0.0,
+      "agg4": 10.31
+    },
+    {
+      "i_item_id": "AAAAAAAAADHAAAAA",
+      "agg1": 36.0,
+      "agg2": 43.56,
+      "agg3": 0.0,
+      "agg4": 18.29
+    },
+    {
+      "i_item_id": "AAAAAAAAADIAAAAA",
+      "agg1": 63.0,
+      "agg2": 45.32,
+      "agg3": 415.39,
+      "agg4": 12.68
+    },
+    {
+      "i_item_id": "AAAAAAAAADIDAAAA",
+      "agg1": 53.0,
+      "agg2": 47.3,
+      "agg3": 0.0,
+      "agg4": 37.84
+    },
+    {
+      "i_item_id": "AAAAAAAAADJBAAAA",
+      "agg1": 95.0,
+      "agg2": 87.39,
+      "agg3": 0.0,
+      "agg4": 34.08
+    },
+    {
+      "i_item_id": "AAAAAAAAADJCAAAA",
+      "agg1": 63.0,
+      "agg2": 163.76,
+      "agg3": 0.0,
+      "agg4": 34.38
+    },
+    {
+      "i_item_id": "AAAAAAAAADKAAAAA",
+      "agg1": 63.5,
+      "agg2": 110.335,
+      "agg3": 0.0,
+      "agg4": 12.36
+    },
+    {
+      "i_item_id": "AAAAAAAAADKBAAAA",
+      "agg1": 98.0,
+      "agg2": 13.68,
+      "agg3": 630.57,
+      "agg4": 7.66
+    },
+    {
+      "i_item_id": "AAAAAAAAADLAAAAA",
+      "agg1": 19.0,
+      "agg2": 20.49,
+      "agg3": 0.0,
+      "agg4": 14.54
+    },
+    {
+      "i_item_id": "AAAAAAAAADMBAAAA",
+      "agg1": 66.0,
+      "agg2": 209.55,
+      "agg3": 5476.58,
+      "agg4": 150.87
+    },
+    {
+      "i_item_id": "AAAAAAAAADNAAAAA",
+      "agg1": 89.0,
+      "agg2": 181.99,
+      "agg3": 0.0,
+      "agg4": 103.73
+    },
+    {
+      "i_item_id": "AAAAAAAAADNBAAAA",
+      "agg1": 73.0,
+      "agg2": 185.4,
+      "agg3": 0.0,
+      "agg4": 40.78
+    },
+    {
+      "i_item_id": "AAAAAAAAADOCAAAA",
+      "agg1": 49.0,
+      "agg2": 93.895,
+      "agg3": 7.355,
+      "agg4": 68.48
+    },
+    {
+      "i_item_id": "AAAAAAAAADODAAAA",
+      "agg1": 36.0,
+      "agg2": 54.3,
+      "agg3": 0.0,
+      "agg4": 31.49
+    },
+    {
+      "i_item_id": "AAAAAAAAAEADAAAA",
+      "agg1": 24.0,
+      "agg2": 47.08,
+      "agg3": 0.0,
+      "agg4": 11.29
+    },
+    {
+      "i_item_id": "AAAAAAAAAEAEAAAA",
+      "agg1": 26.0,
+      "agg2": 14.86,
+      "agg3": 238.45,
+      "agg4": 14.11
+    },
+    {
+      "i_item_id": "AAAAAAAAAEBAAAAA",
+      "agg1": 62.0,
+      "agg2": 163.1,
+      "agg3": 0.0,
+      "agg4": 1.63
+    },
+    {
+      "i_item_id": "AAAAAAAAAECBAAAA",
+      "agg1": 69.0,
+      "agg2": 115.08,
+      "agg3": 0.0,
+      "agg4": 46.03
+    },
+    {
+      "i_item_id": "AAAAAAAAAEDBAAAA",
+      "agg1": 20.0,
+      "agg2": 52.71,
+      "agg3": 0.0,
+      "agg4": 24.77
+    },
+    {
+      "i_item_id": "AAAAAAAAAEFBAAAA",
+      "agg1": 71.0,
+      "agg2": 77.64,
+      "agg3": 0.0,
+      "agg4": 43.825
+    },
+    {
+      "i_item_id": "AAAAAAAAAEFCAAAA",
+      "agg1": 15.0,
+      "agg2": 89.91,
+      "agg3": 0.0,
+      "agg4": 66.53
+    },
+    {
+      "i_item_id": "AAAAAAAAAEGBAAAA",
+      "agg1": 83.0,
+      "agg2": 35.76,
+      "agg3": 0.0,
+      "agg4": 23.24
+    },
+    {
+      "i_item_id": "AAAAAAAAAEGDAAAA",
+      "agg1": 3.5,
+      "agg2": 29.115,
+      "agg3": 1.18,
+      "agg4": 13.015
+    },
+    {
+      "i_item_id": "AAAAAAAAAEHCAAAA",
+      "agg1": 51.0,
+      "agg2": 71.9,
+      "agg3": 0.0,
+      "agg4": 61.83
+    },
+    {
+      "i_item_id": "AAAAAAAAAEHDAAAA",
+      "agg1": 39.0,
+      "agg2": 47.11,
+      "agg3": 0.0,
+      "agg4": 17.53
+    },
+    {
+      "i_item_id": "AAAAAAAAAEJBAAAA",
+      "agg1": 8.0,
+      "agg2": 52.21,
+      "agg3": 0.0,
+      "agg4": 33.93
+    },
+    {
+      "i_item_id": "AAAAAAAAAEKCAAAA",
+      "agg1": 19.0,
+      "agg2": 16.55,
+      "agg3": 0.0,
+      "agg4": 4.96
+    },
+    {
+      "i_item_id": "AAAAAAAAAEMDAAAA",
+      "agg1": 98.0,
+      "agg2": 29.83,
+      "agg3": 0.0,
+      "agg4": 0.29
+    },
+    {
+      "i_item_id": "AAAAAAAAAFAAAAAA",
+      "agg1": 36.0,
+      "agg2": 46.6,
+      "agg3": 0.0,
+      "agg4": 46.6
+    },
+    {
+      "i_item_id": "AAAAAAAAAFADAAAA",
+      "agg1": 15.0,
+      "agg2": 29.79,
+      "agg3": 0.0,
+      "agg4": 6.25
+    },
+    {
+      "i_item_id": "AAAAAAAAAFBEAAAA",
+      "agg1": 50.0,
+      "agg2": 133.48,
+      "agg3": 370.28,
+      "agg4": 18.975
+    },
+    {
+      "i_item_id": "AAAAAAAAAFCAAAAA",
+      "agg1": 48.0,
+      "agg2": 44.98,
+      "agg3": 0.0,
+      "agg4": 2.24
+    },
+    {
+      "i_item_id": "AAAAAAAAAFCDAAAA",
+      "agg1": 80.5,
+      "agg2": 58.235,
+      "agg3": 0.0,
+      "agg4": 41.125
+    },
+    {
+      "i_item_id": "AAAAAAAAAFDDAAAA",
+      "agg1": 30.0,
+      "agg2": 97.57,
+      "agg3": 0.0,
+      "agg4": 61.455
+    },
+    {
+      "i_item_id": "AAAAAAAAAFEEAAAA",
+      "agg1": 24.0,
+      "agg2": 198.03,
+      "agg3": 404.87,
+      "agg4": 23.76
+    },
+    {
+      "i_item_id": "AAAAAAAAAFFBAAAA",
+      "agg1": 38.5,
+      "agg2": 137.87,
+      "agg3": 0.0,
+      "agg4": 51.69
+    },
+    {
+      "i_item_id": "AAAAAAAAAFFDAAAA",
+      "agg1": 43.0,
+      "agg2": 100.39,
+      "agg3": 0.0,
+      "agg4": 93.36
+    },
+    {
+      "i_item_id": "AAAAAAAAAFGCAAAA",
+      "agg1": 7.0,
+      "agg2": 122.24,
+      "agg3": 383.015,
+      "agg4": 97.91
+    },
+    {
+      "i_item_id": "AAAAAAAAAFHBAAAA",
+      "agg1": 73.0,
+      "agg2": 86.68,
+      "agg3": 0.0,
+      "agg4": 56.34
+    },
+    {
+      "i_item_id": "AAAAAAAAAFIDAAAA",
+      "agg1": 50.0,
+      "agg2": 26.51,
+      "agg3": 0.0,
+      "agg4": 24.12
+    },
+    {
+      "i_item_id": "AAAAAAAAAFLBAAAA",
+      "agg1": 42.0,
+      "agg2": 77.49,
+      "agg3": 0.0,
+      "agg4": 60.925
+    },
+    {
+      "i_item_id": "AAAAAAAAAFMCAAAA",
+      "agg1": 89.0,
+      "agg2": 75.53,
+      "agg3": 0.0,
+      "agg4": 57.4
+    },
+    {
+      "i_item_id": "AAAAAAAAAFMDAAAA",
+      "agg1": 48.0,
+      "agg2": 3.98,
+      "agg3": 0.0,
+      "agg4": 2.78
+    },
+    {
+      "i_item_id": "AAAAAAAAAFNBAAAA",
+      "agg1": 100.0,
+      "agg2": 35.96,
+      "agg3": 0.0,
+      "agg4": 25.89
+    }
+  ]
+}

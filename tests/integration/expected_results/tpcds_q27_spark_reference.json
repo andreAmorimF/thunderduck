@@ -1,0 +1,915 @@
+{
+  "query_num": 27,
+  "row_count": 100,
+  "columns": [
+    "i_item_id",
+    "s_state",
+    "g_state",
+    "agg1",
+    "agg2",
+    "agg3",
+    "agg4"
+  ],
+  "rows": [
+    {
+      "i_item_id": null,
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 50.73730180059124,
+      "agg2": 75.669387,
+      "agg3": 208.91379,
+      "agg4": 38.230224
+    },
+    {
+      "i_item_id": "AAAAAAAAAAABAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 38.0,
+      "agg2": 144.34,
+      "agg3": 2034.74,
+      "agg4": 101.03
+    },
+    {
+      "i_item_id": "AAAAAAAAAAABAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 38.0,
+      "agg2": 144.34,
+      "agg3": 2034.74,
+      "agg4": 101.03
+    },
+    {
+      "i_item_id": "AAAAAAAAAAAEAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 64.0,
+      "agg2": 31.97,
+      "agg3": 0.0,
+      "agg4": 5.43
+    },
+    {
+      "i_item_id": "AAAAAAAAAAAEAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 64.0,
+      "agg2": 31.97,
+      "agg3": 0.0,
+      "agg4": 5.43
+    },
+    {
+      "i_item_id": "AAAAAAAAAABAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 98.0,
+      "agg2": 72.35,
+      "agg3": 0.0,
+      "agg4": 2.17
+    },
+    {
+      "i_item_id": "AAAAAAAAAABAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 98.0,
+      "agg2": 72.35,
+      "agg3": 0.0,
+      "agg4": 2.17
+    },
+    {
+      "i_item_id": "AAAAAAAAAACAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 51.666666666666664,
+      "agg2": 57.203333,
+      "agg3": 76.223333,
+      "agg4": 34.146667
+    },
+    {
+      "i_item_id": "AAAAAAAAAACAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 51.666666666666664,
+      "agg2": 57.203333,
+      "agg3": 76.223333,
+      "agg4": 34.146667
+    },
+    {
+      "i_item_id": "AAAAAAAAAACDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 70.5,
+      "agg2": 38.03,
+      "agg3": 0.0,
+      "agg4": 4.095
+    },
+    {
+      "i_item_id": "AAAAAAAAAACDAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 70.5,
+      "agg2": 38.03,
+      "agg3": 0.0,
+      "agg4": 4.095
+    },
+    {
+      "i_item_id": "AAAAAAAAAADBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 28.0,
+      "agg2": 80.17,
+      "agg3": 0.0,
+      "agg4": 23.24
+    },
+    {
+      "i_item_id": "AAAAAAAAAADBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 28.0,
+      "agg2": 80.17,
+      "agg3": 0.0,
+      "agg4": 23.24
+    },
+    {
+      "i_item_id": "AAAAAAAAAADCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 58.0,
+      "agg2": 35.48,
+      "agg3": 0.0,
+      "agg4": 22.35
+    },
+    {
+      "i_item_id": "AAAAAAAAAADCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 58.0,
+      "agg2": 35.48,
+      "agg3": 0.0,
+      "agg4": 22.35
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 2.0,
+      "agg2": 130.66,
+      "agg3": 0.0,
+      "agg4": 7.83
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 2.0,
+      "agg2": 130.66,
+      "agg3": 0.0,
+      "agg4": 7.83
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 71.5,
+      "agg2": 82.815,
+      "agg3": 486.835,
+      "agg4": 42.23
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEDAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 71.5,
+      "agg2": 82.815,
+      "agg3": 486.835,
+      "agg4": 42.23
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEEAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 66.0,
+      "agg2": 96.22,
+      "agg3": 0.0,
+      "agg4": 91.4
+    },
+    {
+      "i_item_id": "AAAAAAAAAAEEAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 66.0,
+      "agg2": 96.22,
+      "agg3": 0.0,
+      "agg4": 91.4
+    },
+    {
+      "i_item_id": "AAAAAAAAAAFCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 4.0,
+      "agg2": 140.5,
+      "agg3": 0.0,
+      "agg4": 56.2
+    },
+    {
+      "i_item_id": "AAAAAAAAAAFCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 4.0,
+      "agg2": 140.5,
+      "agg3": 0.0,
+      "agg4": 56.2
+    },
+    {
+      "i_item_id": "AAAAAAAAAAFDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 14.0,
+      "agg2": 1.9,
+      "agg3": 0.0,
+      "agg4": 0.26
+    },
+    {
+      "i_item_id": "AAAAAAAAAAFDAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 14.0,
+      "agg2": 1.9,
+      "agg3": 0.0,
+      "agg4": 0.26
+    },
+    {
+      "i_item_id": "AAAAAAAAAAGBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 37.0,
+      "agg2": 99.465,
+      "agg3": 0.0,
+      "agg4": 69.06
+    },
+    {
+      "i_item_id": "AAAAAAAAAAGBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 37.0,
+      "agg2": 99.465,
+      "agg3": 0.0,
+      "agg4": 69.06
+    },
+    {
+      "i_item_id": "AAAAAAAAAAGCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 23.0,
+      "agg2": 69.0,
+      "agg3": 1166.44,
+      "agg4": 51.75
+    },
+    {
+      "i_item_id": "AAAAAAAAAAGCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 23.0,
+      "agg2": 69.0,
+      "agg3": 1166.44,
+      "agg4": 51.75
+    },
+    {
+      "i_item_id": "AAAAAAAAAAGEAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 49.0,
+      "agg2": 53.58,
+      "agg3": 0.0,
+      "agg4": 35.335
+    },
+    {
+      "i_item_id": "AAAAAAAAAAGEAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 49.0,
+      "agg2": 53.58,
+      "agg3": 0.0,
+      "agg4": 35.335
+    },
+    {
+      "i_item_id": "AAAAAAAAAAHAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 7.0,
+      "agg2": 83.16,
+      "agg3": 0.0,
+      "agg4": 40.74
+    },
+    {
+      "i_item_id": "AAAAAAAAAAHAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 7.0,
+      "agg2": 83.16,
+      "agg3": 0.0,
+      "agg4": 40.74
+    },
+    {
+      "i_item_id": "AAAAAAAAAAHBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 37.0,
+      "agg2": 52.59,
+      "agg3": 0.0,
+      "agg4": 23.66
+    },
+    {
+      "i_item_id": "AAAAAAAAAAHBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 37.0,
+      "agg2": 52.59,
+      "agg3": 0.0,
+      "agg4": 23.66
+    },
+    {
+      "i_item_id": "AAAAAAAAAAHDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 21.0,
+      "agg2": 157.98,
+      "agg3": 0.0,
+      "agg4": 64.77
+    },
+    {
+      "i_item_id": "AAAAAAAAAAHDAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 21.0,
+      "agg2": 157.98,
+      "agg3": 0.0,
+      "agg4": 64.77
+    },
+    {
+      "i_item_id": "AAAAAAAAAAIAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 49.0,
+      "agg2": 2.9,
+      "agg3": 0.0,
+      "agg4": 0.52
+    },
+    {
+      "i_item_id": "AAAAAAAAAAIAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 49.0,
+      "agg2": 2.9,
+      "agg3": 0.0,
+      "agg4": 0.52
+    },
+    {
+      "i_item_id": "AAAAAAAAAAKBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 13.0,
+      "agg2": 105.965,
+      "agg3": 64.05,
+      "agg4": 27.51
+    },
+    {
+      "i_item_id": "AAAAAAAAAAKBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 13.0,
+      "agg2": 105.965,
+      "agg3": 64.05,
+      "agg4": 27.51
+    },
+    {
+      "i_item_id": "AAAAAAAAAALAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 36.0,
+      "agg2": 139.25,
+      "agg3": 2136.9,
+      "agg4": 121.14
+    },
+    {
+      "i_item_id": "AAAAAAAAAALAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 36.0,
+      "agg2": 139.25,
+      "agg3": 2136.9,
+      "agg4": 121.14
+    },
+    {
+      "i_item_id": "AAAAAAAAAALCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 28.0,
+      "agg2": 35.6,
+      "agg3": 0.0,
+      "agg4": 21.36
+    },
+    {
+      "i_item_id": "AAAAAAAAAALCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 28.0,
+      "agg2": 35.6,
+      "agg3": 0.0,
+      "agg4": 21.36
+    },
+    {
+      "i_item_id": "AAAAAAAAAALDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 50.0,
+      "agg2": null,
+      "agg3": null,
+      "agg4": null
+    },
+    {
+      "i_item_id": "AAAAAAAAAALDAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 50.0,
+      "agg2": null,
+      "agg3": null,
+      "agg4": null
+    },
+    {
+      "i_item_id": "AAAAAAAAAANAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 44.0,
+      "agg2": 55.855,
+      "agg3": 750.175,
+      "agg4": 46.485
+    },
+    {
+      "i_item_id": "AAAAAAAAAANAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 44.0,
+      "agg2": 55.855,
+      "agg3": 750.175,
+      "agg4": 46.485
+    },
+    {
+      "i_item_id": "AAAAAAAAAANBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 40.0,
+      "agg2": 92.23,
+      "agg3": 0.0,
+      "agg4": 36.89
+    },
+    {
+      "i_item_id": "AAAAAAAAAANBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 40.0,
+      "agg2": 92.23,
+      "agg3": 0.0,
+      "agg4": 36.89
+    },
+    {
+      "i_item_id": "AAAAAAAAAAOAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 16.0,
+      "agg2": 171.83,
+      "agg3": 0.0,
+      "agg4": 75.6
+    },
+    {
+      "i_item_id": "AAAAAAAAAAOAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 16.0,
+      "agg2": 171.83,
+      "agg3": 0.0,
+      "agg4": 75.6
+    },
+    {
+      "i_item_id": "AAAAAAAAAAOCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 17.0,
+      "agg2": 45.48,
+      "agg3": 0.0,
+      "agg4": 10.91
+    },
+    {
+      "i_item_id": "AAAAAAAAAAOCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 17.0,
+      "agg2": 45.48,
+      "agg3": 0.0,
+      "agg4": 10.91
+    },
+    {
+      "i_item_id": "AAAAAAAAAAODAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 42.0,
+      "agg2": 88.11,
+      "agg3": 310.81,
+      "agg4": 35.24
+    },
+    {
+      "i_item_id": "AAAAAAAAAAODAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 42.0,
+      "agg2": 88.11,
+      "agg3": 310.81,
+      "agg4": 35.24
+    },
+    {
+      "i_item_id": "AAAAAAAAAAPBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 54.0,
+      "agg2": 112.1,
+      "agg3": 0.0,
+      "agg4": 22.49
+    },
+    {
+      "i_item_id": "AAAAAAAAAAPBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 54.0,
+      "agg2": 112.1,
+      "agg3": 0.0,
+      "agg4": 22.49
+    },
+    {
+      "i_item_id": "AAAAAAAAABAAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 70.0,
+      "agg2": 41.97,
+      "agg3": 0.0,
+      "agg4": 26.02
+    },
+    {
+      "i_item_id": "AAAAAAAAABAAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 70.0,
+      "agg2": 41.97,
+      "agg3": 0.0,
+      "agg4": 26.02
+    },
+    {
+      "i_item_id": "AAAAAAAAABABAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 28.0,
+      "agg2": 70.21,
+      "agg3": 0.0,
+      "agg4": 30.89
+    },
+    {
+      "i_item_id": "AAAAAAAAABABAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 28.0,
+      "agg2": 70.21,
+      "agg3": 0.0,
+      "agg4": 30.89
+    },
+    {
+      "i_item_id": "AAAAAAAAABAEAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 11.0,
+      "agg2": 59.16,
+      "agg3": 0.0,
+      "agg4": 44.37
+    },
+    {
+      "i_item_id": "AAAAAAAAABAEAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 11.0,
+      "agg2": 59.16,
+      "agg3": 0.0,
+      "agg4": 44.37
+    },
+    {
+      "i_item_id": "AAAAAAAAABCBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 45.5,
+      "agg2": 74.21,
+      "agg3": 0.0,
+      "agg4": 11.47
+    },
+    {
+      "i_item_id": "AAAAAAAAABCBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 45.5,
+      "agg2": 74.21,
+      "agg3": 0.0,
+      "agg4": 11.47
+    },
+    {
+      "i_item_id": "AAAAAAAAABCCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 43.0,
+      "agg2": 133.75,
+      "agg3": 0.0,
+      "agg4": 44.13
+    },
+    {
+      "i_item_id": "AAAAAAAAABCCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 43.0,
+      "agg2": 133.75,
+      "agg3": 0.0,
+      "agg4": 44.13
+    },
+    {
+      "i_item_id": "AAAAAAAAABDAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 63.0,
+      "agg2": 46.735,
+      "agg3": 560.695,
+      "agg4": 21.655
+    },
+    {
+      "i_item_id": "AAAAAAAAABDAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 63.0,
+      "agg2": 46.735,
+      "agg3": 560.695,
+      "agg4": 21.655
+    },
+    {
+      "i_item_id": "AAAAAAAAABDBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 32.0,
+      "agg2": 107.95,
+      "agg3": 0.0,
+      "agg4": 61.53
+    },
+    {
+      "i_item_id": "AAAAAAAAABDBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 32.0,
+      "agg2": 107.95,
+      "agg3": 0.0,
+      "agg4": 61.53
+    },
+    {
+      "i_item_id": "AAAAAAAAABDDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 83.0,
+      "agg2": 50.775,
+      "agg3": 643.14,
+      "agg4": 36.99
+    },
+    {
+      "i_item_id": "AAAAAAAAABDDAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 83.0,
+      "agg2": 50.775,
+      "agg3": 643.14,
+      "agg4": 36.99
+    },
+    {
+      "i_item_id": "AAAAAAAAABDEAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 38.0,
+      "agg2": 33.425,
+      "agg3": 0.0,
+      "agg4": 9.725
+    },
+    {
+      "i_item_id": "AAAAAAAAABDEAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 38.0,
+      "agg2": 33.425,
+      "agg3": 0.0,
+      "agg4": 9.725
+    },
+    {
+      "i_item_id": "AAAAAAAAABEDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 79.0,
+      "agg2": 62.12,
+      "agg3": 0.0,
+      "agg4": 48.45
+    },
+    {
+      "i_item_id": "AAAAAAAAABEDAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 79.0,
+      "agg2": 62.12,
+      "agg3": 0.0,
+      "agg4": 48.45
+    },
+    {
+      "i_item_id": "AAAAAAAAABFBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 52.0,
+      "agg2": 49.66,
+      "agg3": 0.0,
+      "agg4": 32.27
+    },
+    {
+      "i_item_id": "AAAAAAAAABFBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 52.0,
+      "agg2": 49.66,
+      "agg3": 0.0,
+      "agg4": 32.27
+    },
+    {
+      "i_item_id": "AAAAAAAAABFCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 30.0,
+      "agg2": 59.09,
+      "agg3": 0.0,
+      "agg4": 49.63
+    },
+    {
+      "i_item_id": "AAAAAAAAABFCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 30.0,
+      "agg2": 59.09,
+      "agg3": 0.0,
+      "agg4": 49.63
+    },
+    {
+      "i_item_id": "AAAAAAAAABGAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 64.0,
+      "agg2": 84.08,
+      "agg3": 0.0,
+      "agg4": 51.28
+    },
+    {
+      "i_item_id": "AAAAAAAAABGAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 64.0,
+      "agg2": 84.08,
+      "agg3": 0.0,
+      "agg4": 51.28
+    },
+    {
+      "i_item_id": "AAAAAAAAABGBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 78.0,
+      "agg2": 118.07,
+      "agg3": 0.0,
+      "agg4": 70.84
+    },
+    {
+      "i_item_id": "AAAAAAAAABGBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 78.0,
+      "agg2": 118.07,
+      "agg3": 0.0,
+      "agg4": 70.84
+    },
+    {
+      "i_item_id": "AAAAAAAAABGEAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 37.5,
+      "agg2": 93.725,
+      "agg3": 480.275,
+      "agg4": 87.43
+    },
+    {
+      "i_item_id": "AAAAAAAAABGEAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 37.5,
+      "agg2": 93.725,
+      "agg3": 480.275,
+      "agg4": 87.43
+    },
+    {
+      "i_item_id": "AAAAAAAAABHAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 93.0,
+      "agg2": 63.79,
+      "agg3": 0.0,
+      "agg4": 43.37
+    },
+    {
+      "i_item_id": "AAAAAAAAABHAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 93.0,
+      "agg2": 63.79,
+      "agg3": 0.0,
+      "agg4": 43.37
+    },
+    {
+      "i_item_id": "AAAAAAAAABHCAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 60.5,
+      "agg2": 74.605,
+      "agg3": 0.0,
+      "agg4": 26.55
+    },
+    {
+      "i_item_id": "AAAAAAAAABHCAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 60.5,
+      "agg2": 74.605,
+      "agg3": 0.0,
+      "agg4": 26.55
+    },
+    {
+      "i_item_id": "AAAAAAAAABIBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 76.0,
+      "agg2": 86.7,
+      "agg3": 0.0,
+      "agg4": 83.23
+    },
+    {
+      "i_item_id": "AAAAAAAAABIBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 76.0,
+      "agg2": 86.7,
+      "agg3": 0.0,
+      "agg4": 83.23
+    },
+    {
+      "i_item_id": "AAAAAAAAABJAAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 31.5,
+      "agg2": 72.975,
+      "agg3": 0.0,
+      "agg4": 37.295
+    },
+    {
+      "i_item_id": "AAAAAAAAABJAAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 31.5,
+      "agg2": 72.975,
+      "agg3": 0.0,
+      "agg4": 37.295
+    },
+    {
+      "i_item_id": "AAAAAAAAABJBAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 43.0,
+      "agg2": 74.32,
+      "agg3": 0.0,
+      "agg4": 28.98
+    },
+    {
+      "i_item_id": "AAAAAAAAABJBAAAA",
+      "s_state": "TN",
+      "g_state": 0,
+      "agg1": 43.0,
+      "agg2": 74.32,
+      "agg3": 0.0,
+      "agg4": 28.98
+    },
+    {
+      "i_item_id": "AAAAAAAAABJDAAAA",
+      "s_state": null,
+      "g_state": 1,
+      "agg1": 64.0,
+      "agg2": 13.215,
+      "agg3": 270.545,
+      "agg4": 11.51
+    }
+  ]
+}
