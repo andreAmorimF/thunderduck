@@ -54,5 +54,54 @@ thunderduck/
 │   └── coder/                           # Build/CI documentation
 ```
 
-**Last Updated**: 2025-10-17
+**Last Updated**: 2025-10-27
 **Cleanup Report**: See `DOCUMENTATION_CLEANUP_PLAN.md` for the rationale behind this structure
+
+## Spark Parity Requirements
+
+**Critical Rule**: Thunderduck must match Spark EXACTLY, not just produce equivalent results.
+
+### Numeric Type Compatibility
+
+Thunderduck must match Spark's:
+- **Return types**: If Spark returns DOUBLE, Thunderduck must return DOUBLE (not BIGINT)
+- **Rounding conventions**: Must match Spark's rounding behavior
+- **Arithmetic properties**: Integer division, modulo, overflow behavior must match
+- **Type coercion**: Implicit casts must follow Spark's rules
+- **NULL handling**: Must match Spark's null propagation
+
+### Examples of WRONG Behavior
+
+❌ **Wrong**: Spark returns `64.0` (DOUBLE), Thunderduck returns `64` (BIGINT)
+- Even though 64.0 == 64 numerically, the TYPE mismatch breaks compatibility
+- Client code expecting DOUBLE will fail with BIGINT
+
+❌ **Wrong**: Spark returns `java.sql.Date`, Thunderduck returns `null`
+- Even if other columns are correct, missing a column value is wrong
+
+❌ **Wrong**: Spark rounds `3.5` to `4`, Thunderduck rounds to `3`
+- Numerical precision matters for reproducibility
+
+### What This Means
+
+When validating correctness:
+1. **Row-by-row value comparison** ✅ (what we do now)
+2. **Type-by-type comparison** ✅ (what we need to add)
+3. **Precision/rounding validation** ✅ (required)
+
+If Thunderduck produces "close enough" results, **that's not good enough**.
+If types don't match exactly, **that's a bug that must be fixed**.
+
+### Testing Standard
+
+Differential tests must validate:
+- ✓ Same number of rows
+- ✓ Same column names
+- ✓ **Same column TYPES** (not just convertible types)
+- ✓ Same values (with appropriate epsilon for floats)
+- ✓ Same null handling
+- ✓ Same sort order
+
+**Goal**: Drop-in replacement for Spark, not "Spark-like" behavior.
+
+**Last Updated**: 2025-10-27
