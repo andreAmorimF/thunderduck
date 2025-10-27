@@ -1,0 +1,138 @@
+{
+  "query_num": 13,
+  "row_count": 32,
+  "columns": [
+    "c_count",
+    "custdist"
+  ],
+  "rows": [
+    {
+      "c_count": 0.0,
+      "custdist": 500.0
+    },
+    {
+      "c_count": 10.0,
+      "custdist": 69.0
+    },
+    {
+      "c_count": 9.0,
+      "custdist": 66.0
+    },
+    {
+      "c_count": 11.0,
+      "custdist": 63.0
+    },
+    {
+      "c_count": 12.0,
+      "custdist": 60.0
+    },
+    {
+      "c_count": 8.0,
+      "custdist": 60.0
+    },
+    {
+      "c_count": 14.0,
+      "custdist": 56.0
+    },
+    {
+      "c_count": 13.0,
+      "custdist": 55.0
+    },
+    {
+      "c_count": 21.0,
+      "custdist": 48.0
+    },
+    {
+      "c_count": 20.0,
+      "custdist": 45.0
+    },
+    {
+      "c_count": 7.0,
+      "custdist": 45.0
+    },
+    {
+      "c_count": 18.0,
+      "custdist": 43.0
+    },
+    {
+      "c_count": 19.0,
+      "custdist": 42.0
+    },
+    {
+      "c_count": 17.0,
+      "custdist": 42.0
+    },
+    {
+      "c_count": 16.0,
+      "custdist": 42.0
+    },
+    {
+      "c_count": 15.0,
+      "custdist": 41.0
+    },
+    {
+      "c_count": 22.0,
+      "custdist": 37.0
+    },
+    {
+      "c_count": 24.0,
+      "custdist": 30.0
+    },
+    {
+      "c_count": 6.0,
+      "custdist": 30.0
+    },
+    {
+      "c_count": 23.0,
+      "custdist": 26.0
+    },
+    {
+      "c_count": 25.0,
+      "custdist": 20.0
+    },
+    {
+      "c_count": 5.0,
+      "custdist": 18.0
+    },
+    {
+      "c_count": 26.0,
+      "custdist": 17.0
+    },
+    {
+      "c_count": 27.0,
+      "custdist": 13.0
+    },
+    {
+      "c_count": 29.0,
+      "custdist": 7.0
+    },
+    {
+      "c_count": 28.0,
+      "custdist": 6.0
+    },
+    {
+      "c_count": 4.0,
+      "custdist": 6.0
+    },
+    {
+      "c_count": 31.0,
+      "custdist": 4.0
+    },
+    {
+      "c_count": 3.0,
+      "custdist": 3.0
+    },
+    {
+      "c_count": 32.0,
+      "custdist": 2.0
+    },
+    {
+      "c_count": 30.0,
+      "custdist": 2.0
+    },
+    {
+      "c_count": 2.0,
+      "custdist": 2.0
+    }
+  ]
+}

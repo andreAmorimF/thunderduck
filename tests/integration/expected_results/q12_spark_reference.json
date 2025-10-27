@@ -1,0 +1,21 @@
+{
+  "query_num": 12,
+  "row_count": 2,
+  "columns": [
+    "l_shipmode",
+    "high_line_count",
+    "low_line_count"
+  ],
+  "rows": [
+    {
+      "l_shipmode": "MAIL",
+      "high_line_count": 64.0,
+      "low_line_count": 86.0
+    },
+    {
+      "l_shipmode": "SHIP",
+      "high_line_count": 61.0,
+      "low_line_count": 96.0
+    }
+  ]
+}

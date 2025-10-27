@@ -1,0 +1,66 @@
+{
+  "query_num": 1,
+  "row_count": 4,
+  "columns": [
+    "l_returnflag",
+    "l_linestatus",
+    "sum_qty",
+    "sum_base_price",
+    "sum_disc_price",
+    "sum_charge",
+    "avg_qty",
+    "avg_price",
+    "avg_disc",
+    "count_order"
+  ],
+  "rows": [
+    {
+      "l_returnflag": "A",
+      "l_linestatus": "F",
+      "sum_qty": 380456.0,
+      "sum_base_price": 532348211.65,
+      "sum_disc_price": 505822441.4861,
+      "sum_charge": 526165934.000839,
+      "avg_qty": 25.575155,
+      "avg_price": 35785.709307,
+      "avg_disc": 0.050081,
+      "count_order": 14876.0
+    },
+    {
+      "l_returnflag": "N",
+      "l_linestatus": "F",
+      "sum_qty": 8971.0,
+      "sum_base_price": 12384801.37,
+      "sum_disc_price": 11798257.208,
+      "sum_charge": 12282485.056933,
+      "avg_qty": 25.778736,
+      "avg_price": 35588.509684,
+      "avg_disc": 0.047759,
+      "count_order": 348.0
+    },
+    {
+      "l_returnflag": "N",
+      "l_linestatus": "O",
+      "sum_qty": 765251.0,
+      "sum_base_price": 1072862302.1,
+      "sum_disc_price": 1019517788.9931,
+      "sum_charge": 1060424708.624603,
+      "avg_qty": 25.466771,
+      "avg_price": 35703.760594,
+      "avg_disc": 0.049931,
+      "count_order": 30049.0
+    },
+    {
+      "l_returnflag": "R",
+      "l_linestatus": "F",
+      "sum_qty": 381449.0,
+      "sum_base_price": 534594445.35,
+      "sum_disc_price": 507996454.4067,
+      "sum_charge": 528524219.358903,
+      "avg_qty": 25.597168,
+      "avg_price": 35874.006533,
+      "avg_disc": 0.049828,
+      "count_order": 14902.0
+    }
+  ]
+}

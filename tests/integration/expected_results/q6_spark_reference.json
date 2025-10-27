@@ -1,0 +1,12 @@
+{
+  "query_num": 6,
+  "row_count": 1,
+  "columns": [
+    "revenue"
+  ],
+  "rows": [
+    {
+      "revenue": 1193053.2253
+    }
+  ]
+}

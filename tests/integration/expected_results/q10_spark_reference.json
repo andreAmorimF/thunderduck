@@ -1,0 +1,216 @@
+{
+  "query_num": 10,
+  "row_count": 20,
+  "columns": [
+    "c_custkey",
+    "c_name",
+    "revenue",
+    "c_acctbal",
+    "n_name",
+    "c_address",
+    "c_phone",
+    "c_comment"
+  ],
+  "rows": [
+    {
+      "c_custkey": 679.0,
+      "c_name": "Customer#000000679",
+      "revenue": 378211.3252,
+      "c_acctbal": 1394.44,
+      "n_name": "IRAN",
+      "c_address": "jhLZlG1fRiSE0 wDLOCguVB96dH6a5",
+      "c_phone": "20-146-696-9508",
+      "c_comment": "oys. furiously silent pinto beans"
+    },
+    {
+      "c_custkey": 1201.0,
+      "c_name": "Customer#000001201",
+      "revenue": 374331.534,
+      "c_acctbal": 5165.39,
+      "n_name": "IRAN",
+      "c_address": "gLo85h4Cst5ckn40ZKR6403KjW26YCWAFZsq d",
+      "c_phone": "20-825-400-1187",
+      "c_comment": "r foxes boost blithely final accounts. furiously silent ideas unwind. blithely even dependencies wake slyly; sly"
+    },
+    {
+      "c_custkey": 422.0,
+      "c_name": "Customer#000000422",
+      "revenue": 366451.0126,
+      "c_acctbal": -272.14,
+      "n_name": "INDONESIA",
+      "c_address": "rtds1qwEinDWYhyIbRusRgXBDxGJraP,C,S zDwA",
+      "c_phone": "19-299-247-2444",
+      "c_comment": " are carefully. slyly regular requests hag"
+    },
+    {
+      "c_custkey": 334.0,
+      "c_name": "Customer#000000334",
+      "revenue": 360370.755,
+      "c_acctbal": -405.91,
+      "n_name": "EGYPT",
+      "c_address": "dbdZdUyWQaZX7DoCO",
+      "c_phone": "14-947-291-5002",
+      "c_comment": "r, bold pinto beans according to the blithely final theodolites can snooze slyly even packages. carefully ironic acc"
+    },
+    {
+      "c_custkey": 805.0,
+      "c_name": "Customer#000000805",
+      "revenue": 359448.9036,
+      "c_acctbal": 511.69,
+      "n_name": "IRAN",
+      "c_address": "woguVtOjwvC8LLtPRALISNwAOFRf70Pfqk",
+      "c_phone": "20-732-989-5653",
+      "c_comment": " quickly unusual accounts haggle carefully after the even accounts. deposits cajole carefully bravely spec"
+    },
+    {
+      "c_custkey": 932.0,
+      "c_name": "Customer#000000932",
+      "revenue": 341608.2753,
+      "c_acctbal": 6553.37,
+      "n_name": "JORDAN",
+      "c_address": "kdRqB0ezhkUePSc",
+      "c_phone": "23-300-708-7927",
+      "c_comment": "ound the regular accounts. quickly ironic requests try to "
+    },
+    {
+      "c_custkey": 853.0,
+      "c_name": "Customer#000000853",
+      "revenue": 341236.6246,
+      "c_acctbal": -444.73,
+      "n_name": "BRAZIL",
+      "c_address": "7,rRbAvqK4hSqm,ljEDolyjRp8Mu44xSTG",
+      "c_phone": "12-869-161-3468",
+      "c_comment": "l foxes affix. furiously regular foxes"
+    },
+    {
+      "c_custkey": 872.0,
+      "c_name": "Customer#000000872",
+      "revenue": 338328.7808,
+      "c_acctbal": -858.61,
+      "n_name": "PERU",
+      "c_address": "xfbTIe1pgWq0jqdm7gQP6iXqcs2RcSk",
+      "c_phone": "27-357-139-7164",
+      "c_comment": "unts believe across the ironic instructions. packages nag re"
+    },
+    {
+      "c_custkey": 737.0,
+      "c_name": "Customer#000000737",
+      "revenue": 338185.3365,
+      "c_acctbal": 2501.74,
+      "n_name": "CHINA",
+      "c_address": "eNHkZHYWXIpf8Ct,F2Aej BwxkZ6LTW",
+      "c_phone": "28-658-938-1102",
+      "c_comment": "ackages. blithely daring packages detect slyly around the carefully busy excuses. f"
+    },
+    {
+      "c_custkey": 1118.0,
+      "c_name": "Customer#000001118",
+      "revenue": 319875.728,
+      "c_acctbal": 4130.18,
+      "n_name": "IRAQ",
+      "c_address": "bjK0newm53R2CoNAtvQsIqh",
+      "c_phone": "21-583-715-8627",
+      "c_comment": "ecial sentiments. express deposits across the blithely express packages wake quickly across the attainments. platele"
+    },
+    {
+      "c_custkey": 223.0,
+      "c_name": "Customer#000000223",
+      "revenue": 319564.275,
+      "c_acctbal": 7476.2,
+      "n_name": "SAUDI ARABIA",
+      "c_address": "MyQxUcG0P QCetmG00GlF",
+      "c_phone": "30-193-643-1517",
+      "c_comment": "xcuses. silent theodolites across the carefully bold excuses sleep ironic, final courts. regular excuses"
+    },
+    {
+      "c_custkey": 808.0,
+      "c_name": "Customer#000000808",
+      "revenue": 314774.6167,
+      "c_acctbal": 5561.93,
+      "n_name": "ROMANIA",
+      "c_address": "9Y4G8hokyDQJOlcCUe4OypX smFlME6d Kr",
+      "c_phone": "29-531-319-7726",
+      "c_comment": "usual pinto beans use carefully. express ideas boost. ironic, ironic Tir"
+    },
+    {
+      "c_custkey": 478.0,
+      "c_name": "Customer#000000478",
+      "revenue": 299651.8026,
+      "c_acctbal": -210.4,
+      "n_name": "ARGENTINA",
+      "c_address": "PFtAWWSniG43yWAgtjFPN0DrhyMCDIm",
+      "c_phone": "11-655-291-2694",
+      "c_comment": "even asymptotes haggle carefully slyl"
+    },
+    {
+      "c_custkey": 1441.0,
+      "c_name": "Customer#000001441",
+      "revenue": 294705.3935,
+      "c_acctbal": 9465.15,
+      "n_name": "UNITED KINGDOM",
+      "c_address": "y,221QWUv0CvgCVkRwsrOUpRshWpcjKkrHu",
+      "c_phone": "33-681-334-4499",
+      "c_comment": "ccounts are furiously above the slyly even foxes. furiously even requests hagg"
+    },
+    {
+      "c_custkey": 1478.0,
+      "c_name": "Customer#000001478",
+      "revenue": 294431.9178,
+      "c_acctbal": 9701.54,
+      "n_name": "GERMANY",
+      "c_address": "vTjnwinnB9YeA1VxKYoQELaZJm,HW",
+      "c_phone": "17-420-484-5959",
+      "c_comment": "nal instructions. quickly regular excuses haggle after the sl"
+    },
+    {
+      "c_custkey": 211.0,
+      "c_name": "Customer#000000211",
+      "revenue": 287905.6368,
+      "c_acctbal": 4198.72,
+      "n_name": "JORDAN",
+      "c_address": "79JF5cssWlB3ME",
+      "c_phone": "23-965-335-9471",
+      "c_comment": "unusual requests haggle after the unusual, ironic ideas. ironic orbits hinder carefully quickly final p"
+    },
+    {
+      "c_custkey": 197.0,
+      "c_name": "Customer#000000197",
+      "revenue": 283190.4807,
+      "c_acctbal": 9860.22,
+      "n_name": "ARGENTINA",
+      "c_address": "7M5Az MBdx4Ey1XTn",
+      "c_phone": "11-107-312-6585",
+      "c_comment": "latelets doze fluffily blithely final dep"
+    },
+    {
+      "c_custkey": 1030.0,
+      "c_name": "Customer#000001030",
+      "revenue": 282557.3566,
+      "c_acctbal": 6359.27,
+      "n_name": "INDIA",
+      "c_address": "4ByZpJpVJRD",
+      "c_phone": "18-759-877-1870",
+      "c_comment": " the final accounts. quick platelets are carefully. instructions a"
+    },
+    {
+      "c_custkey": 1049.0,
+      "c_name": "Customer#000001049",
+      "revenue": 281134.1117,
+      "c_acctbal": 8747.99,
+      "n_name": "INDONESIA",
+      "c_address": "Q1ZcOmJjQi2VKeIk",
+      "c_phone": "19-499-258-2851",
+      "c_comment": "sleep carefully final deposits. furiously bold depo"
+    },
+    {
+      "c_custkey": 1094.0,
+      "c_name": "Customer#000001094",
+      "revenue": 274877.444,
+      "c_acctbal": 2544.49,
+      "n_name": "BRAZIL",
+      "c_address": "dls,MNN7EbF3GYrY3eRwSeOBZYd5o,cg",
+      "c_phone": "12-234-721-9871",
+      "c_comment": "structions among the furiously final pinto beans haggle fluffily "
+    }
+  ]
+}
