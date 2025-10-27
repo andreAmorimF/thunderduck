@@ -1,0 +1,12 @@
+{
+  "query_num": "38",
+  "row_count": 1,
+  "columns": [
+    "count(1)"
+  ],
+  "rows": [
+    {
+      "count(1)": 107
+    }
+  ]
+}

@@ -1,0 +1,612 @@
+{
+  "query_num": "40",
+  "row_count": 100,
+  "columns": [
+    "w_state",
+    "i_item_id",
+    "sales_before",
+    "sales_after"
+  ],
+  "rows": [
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAABDAAAA",
+      "sales_before": 0.0,
+      "sales_after": 128.73
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAACDAAAA",
+      "sales_before": -2262.23,
+      "sales_after": 4.7
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAAHDAAAA",
+      "sales_before": 160.2,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAALAAAAA",
+      "sales_before": 0.0,
+      "sales_after": 33.36
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAABBDAAAA",
+      "sales_before": 18.2,
+      "sales_after": -3557.41
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAABDAAAAA",
+      "sales_before": 0.0,
+      "sales_after": 134.01
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAACGCAAAA",
+      "sales_before": -2685.41,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAACHCAAAA",
+      "sales_before": 21.39,
+      "sales_after": 60.81
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAACKCAAAA",
+      "sales_before": 247.04,
+      "sales_after": 35.66
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAACLDAAAA",
+      "sales_before": 15.9,
+      "sales_after": 49.5
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAACOBAAAA",
+      "sales_before": -1005.88,
+      "sales_after": 39.47
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAACPDAAAA",
+      "sales_before": 87.94,
+      "sales_after": 65.98
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAADGBAAAA",
+      "sales_before": 11.4,
+      "sales_after": 361.49
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAADKBAAAA",
+      "sales_before": 0.0,
+      "sales_after": 135.37
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAEADAAAA",
+      "sales_before": 66.81,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAEOCAAAA",
+      "sales_before": 11.99,
+      "sales_after": 166.82
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAFACAAAA",
+      "sales_before": 303.25,
+      "sales_after": 59.09
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAFADAAAA",
+      "sales_before": 2.15,
+      "sales_after": 11.41
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAFDCAAAA",
+      "sales_before": 92.48,
+      "sales_after": 195.95
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAGIDAAAA",
+      "sales_before": 289.84,
+      "sales_after": 18.19
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAHDEAAAA",
+      "sales_before": 34.44,
+      "sales_after": 15.63
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAHHAAAAA",
+      "sales_before": 27.42,
+      "sales_after": 200.04
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAHJBAAAA",
+      "sales_before": -116.09,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAIECAAAA",
+      "sales_before": 148.41,
+      "sales_after": 170.33
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAIEEAAAA",
+      "sales_before": 105.08,
+      "sales_after": 86.76
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAIMCAAAA",
+      "sales_before": 62.19,
+      "sales_after": 7.5
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAJACAAAA",
+      "sales_before": 147.71,
+      "sales_after": 70.89
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAJCAAAAA",
+      "sales_before": 147.54,
+      "sales_after": 124.79
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAJKBAAAA",
+      "sales_before": 43.79,
+      "sales_after": 5.67
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAALBEAAAA",
+      "sales_before": 35.04,
+      "sales_after": 40.07
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAALCEAAAA",
+      "sales_before": 43.62,
+      "sales_after": 68.5
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAALECAAAA",
+      "sales_before": 34.22,
+      "sales_after": 0.46
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAALNBAAAA",
+      "sales_before": 95.3,
+      "sales_after": 137.31
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAMBEAAAA",
+      "sales_before": 82.35,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAMPBAAAA",
+      "sales_before": 0.0,
+      "sales_after": -1303.28
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAANFEAAAA",
+      "sales_before": 0.0,
+      "sales_after": 120.76
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAOBBAAAA",
+      "sales_before": 0.0,
+      "sales_after": 160.44
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAOIBAAAA",
+      "sales_before": 206.51,
+      "sales_after": -2484.09
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAPBAAAAA",
+      "sales_before": -1737.82,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAPJBAAAA",
+      "sales_before": 41.96,
+      "sales_after": 83.78
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAPLAAAAA",
+      "sales_before": -657.48,
+      "sales_after": 165.84
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAAAPLDAAAA",
+      "sales_before": 0.0,
+      "sales_after": 179.94
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABAPDAAAA",
+      "sales_before": 96.06,
+      "sales_after": 14.34
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABBIDAAAA",
+      "sales_before": 102.3,
+      "sales_after": 136.3
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABDCEAAAA",
+      "sales_before": 81.68,
+      "sales_after": 6.14
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABDDDAAAA",
+      "sales_before": 38.14,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABDJAAAAA",
+      "sales_before": 0.0,
+      "sales_after": -2563.69
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABEFDAAAA",
+      "sales_before": 0.0,
+      "sales_after": 9.81
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABEODAAAA",
+      "sales_before": 81.5,
+      "sales_after": 268.98
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABFMBAAAA",
+      "sales_before": 176.07,
+      "sales_after": 40.79
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABFNAAAAA",
+      "sales_before": 19.87,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABFOCAAAA",
+      "sales_before": 35.2,
+      "sales_after": 91.33
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABHPCAAAA",
+      "sales_before": 29.95,
+      "sales_after": -1441.05
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABIDBAAAA",
+      "sales_before": -173.7,
+      "sales_after": 5.81
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABIGBAAAA",
+      "sales_before": 112.59,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABIJBAAAA",
+      "sales_before": 150.81,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABJFEAAAA",
+      "sales_before": 31.25,
+      "sales_after": 72.85
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABKFAAAAA",
+      "sales_before": 0.0,
+      "sales_after": 29.45
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABKMCAAAA",
+      "sales_before": 20.08,
+      "sales_after": 145.09
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABLDEAAAA",
+      "sales_before": 10.64,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABNHBAAAA",
+      "sales_before": 132.31,
+      "sales_after": 397.48
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABNIDAAAA",
+      "sales_before": 63.93,
+      "sales_after": 24.24
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABNLAAAAA",
+      "sales_before": 0.0,
+      "sales_after": 141.6
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABNLDAAAA",
+      "sales_before": 0.0,
+      "sales_after": 102.46
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABNMCAAAA",
+      "sales_before": 90.99,
+      "sales_after": 56.31
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABOCCAAAA",
+      "sales_before": 23.79,
+      "sales_after": 51.23
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAABOMBAAAA",
+      "sales_before": 101.36,
+      "sales_after": 196.91
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACAAAAAAA",
+      "sales_before": 50.87,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACAADAAAA",
+      "sales_before": -230.62,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACAJCAAAA",
+      "sales_before": 180.5,
+      "sales_after": 355.92
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACBCDAAAA",
+      "sales_before": 97.7,
+      "sales_after": 75.64
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACBFAAAAA",
+      "sales_before": 0.0,
+      "sales_after": 122.07
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACBIAAAAA",
+      "sales_before": 60.43,
+      "sales_after": 6.63
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACBPBAAAA",
+      "sales_before": -4042.72,
+      "sales_after": 22.98
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACCABAAAA",
+      "sales_before": 118.12,
+      "sales_after": 2.66
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACCHDAAAA",
+      "sales_before": 0.0,
+      "sales_after": 25.42
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACCMDAAAA",
+      "sales_before": 160.55,
+      "sales_after": 122.83
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACDBCAAAA",
+      "sales_before": -0.48,
+      "sales_after": 116.93
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACDECAAAA",
+      "sales_before": 174.16,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACEEAAAAA",
+      "sales_before": 83.69,
+      "sales_after": 11.56
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACELAAAAA",
+      "sales_before": 38.28,
+      "sales_after": 19.7
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACELDAAAA",
+      "sales_before": 0.0,
+      "sales_after": 0.83
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACFEAAAAA",
+      "sales_before": 126.57,
+      "sales_after": -42.07
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACFHDAAAA",
+      "sales_before": 0.0,
+      "sales_after": 148.37
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACGFDAAAA",
+      "sales_before": 94.62,
+      "sales_after": 158.3
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACHHDAAAA",
+      "sales_before": 95.08,
+      "sales_after": 131.08
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACHPCAAAA",
+      "sales_before": 85.39,
+      "sales_after": 8.56
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACJCBAAAA",
+      "sales_before": 104.69,
+      "sales_after": 329.94
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACJDCAAAA",
+      "sales_before": 0.0,
+      "sales_after": 196.02
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACJLAAAAA",
+      "sales_before": 32.7,
+      "sales_after": 187.06
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACKFCAAAA",
+      "sales_before": 50.85,
+      "sales_after": -521.43
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACKHAAAAA",
+      "sales_before": 303.97,
+      "sales_after": 90.61
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACKIAAAAA",
+      "sales_before": 5.31,
+      "sales_after": -65.03
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACLAEAAAA",
+      "sales_before": -51.96,
+      "sales_after": 0.0
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACLGAAAAA",
+      "sales_before": 39.67,
+      "sales_after": -12.3
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACLKAAAAA",
+      "sales_before": 18.76,
+      "sales_after": -106.1
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACLLBAAAA",
+      "sales_before": 0.0,
+      "sales_after": 6.67
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACLOBAAAA",
+      "sales_before": 39.62,
+      "sales_after": 9.36
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACMADAAAA",
+      "sales_before": 147.83,
+      "sales_after": 287.97
+    },
+    {
+      "w_state": "TN",
+      "i_item_id": "AAAAAAAACMJAAAAA",
+      "sales_before": 41.68,
+      "sales_after": -150.57
+    }
+  ]
+}

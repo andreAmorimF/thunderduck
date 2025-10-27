@@ -1,0 +1,1719 @@
+{
+  "query_num": "39a",
+  "row_count": 243,
+  "columns": [
+    "w_warehouse_sk",
+    "i_item_sk",
+    "d_moy",
+    "mean",
+    "cov",
+    "w_warehouse_sk",
+    "i_item_sk",
+    "d_moy",
+    "mean",
+    "cov"
+  ],
+  "rows": [
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 265,
+      "d_moy": 2,
+      "mean": 329.0,
+      "cov": 1.0151581328149208
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 363,
+      "d_moy": 2,
+      "mean": 321.0,
+      "cov": 1.1411766752007977
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 679,
+      "d_moy": 2,
+      "mean": 417.5,
+      "cov": 1.042970994259454
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 695,
+      "d_moy": 2,
+      "mean": 368.75,
+      "cov": 1.1356494125569416
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 789,
+      "d_moy": 2,
+      "mean": 410.0,
+      "cov": 1.0284221852702604
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 815,
+      "d_moy": 2,
+      "mean": 150.5,
+      "cov": 1.3057281471249382
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 827,
+      "d_moy": 2,
+      "mean": 424.75,
+      "cov": 1.1653198631238286
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 1041,
+      "d_moy": 2,
+      "mean": 424.75,
+      "cov": 1.000577271456812
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 1569,
+      "d_moy": 2,
+      "mean": 239.25,
+      "cov": 1.2641513267800557
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 1623,
+      "d_moy": 2,
+      "mean": 261.3333333333333,
+      "cov": 1.2717809002195564
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 2581,
+      "d_moy": 2,
+      "mean": 476.25,
+      "cov": 1.0362984739390064
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 2705,
+      "d_moy": 2,
+      "mean": 294.6666666666667,
+      "cov": 1.0742134101583702
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 3131,
+      "d_moy": 2,
+      "mean": 480.5,
+      "cov": 1.0669144981482768
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 3291,
+      "d_moy": 2,
+      "mean": 265.25,
+      "cov": 1.572972106948466
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 3687,
+      "d_moy": 2,
+      "mean": 157.25,
+      "cov": 1.4534340882531784
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 4955,
+      "d_moy": 2,
+      "mean": 322.5,
+      "cov": 1.1693842343776149
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 5627,
+      "d_moy": 2,
+      "mean": 297.5,
+      "cov": 1.2084286841430678
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 7017,
+      "d_moy": 2,
+      "mean": 321.3333333333333,
+      "cov": 1.0183356932936254
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 7317,
+      "d_moy": 2,
+      "mean": 378.0,
+      "cov": 1.2172513189920555
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 7569,
+      "d_moy": 2,
+      "mean": 360.25,
+      "cov": 1.047005559314515
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 7999,
+      "d_moy": 2,
+      "mean": 375.3333333333333,
+      "cov": 1.008092263550718
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 8319,
+      "d_moy": 2,
+      "mean": 276.0,
+      "cov": 1.1420996385609428
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 8443,
+      "d_moy": 2,
+      "mean": 332.5,
+      "cov": 1.0044167259988928
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 8583,
+      "d_moy": 2,
+      "mean": 310.25,
+      "cov": 1.2358813775861328
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 8591,
+      "d_moy": 2,
+      "mean": 355.75,
+      "cov": 1.0024472149348966
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 8611,
+      "d_moy": 2,
+      "mean": 243.75,
+      "cov": 1.2342122780960432
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 9081,
+      "d_moy": 2,
+      "mean": 435.0,
+      "cov": 1.0330530776324107
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 9357,
+      "d_moy": 2,
+      "mean": 427.0,
+      "cov": 1.0438583026358363
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 9449,
+      "d_moy": 2,
+      "mean": 175.0,
+      "cov": 1.0544779796296408
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 9713,
+      "d_moy": 2,
+      "mean": 393.0,
+      "cov": 1.208474608738988
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 9809,
+      "d_moy": 2,
+      "mean": 317.5,
+      "cov": 1.0614142074924882
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 9993,
+      "d_moy": 2,
+      "mean": 204.5,
+      "cov": 1.552870745350107
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 10127,
+      "d_moy": 2,
+      "mean": 359.25,
+      "cov": 1.1857980403742183
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 11159,
+      "d_moy": 2,
+      "mean": 250.0,
+      "cov": 1.334757905639321
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 11277,
+      "d_moy": 2,
+      "mean": 330.75,
+      "cov": 1.0808767951625093
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 11937,
+      "d_moy": 2,
+      "mean": 200.33333333333334,
+      "cov": 1.0638527063883725
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 12373,
+      "d_moy": 2,
+      "mean": 306.0,
+      "cov": 1.0761744390394028
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 12471,
+      "d_moy": 2,
+      "mean": 327.25,
+      "cov": 1.0547560580567852
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 12625,
+      "d_moy": 2,
+      "mean": 443.25,
+      "cov": 1.0604958838068959
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 12751,
+      "d_moy": 2,
+      "mean": 369.3333333333333,
+      "cov": 1.3416504398884601
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 12779,
+      "d_moy": 2,
+      "mean": 359.0,
+      "cov": 1.028978056175258
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 13077,
+      "d_moy": 2,
+      "mean": 358.6666666666667,
+      "cov": 1.5132429058096555
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 13191,
+      "d_moy": 2,
+      "mean": 405.0,
+      "cov": 1.0197999172180061
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 13561,
+      "d_moy": 2,
+      "mean": 240.0,
+      "cov": 1.0513604502245155
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 13935,
+      "d_moy": 2,
+      "mean": 275.0,
+      "cov": 1.0367527180321774
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 14687,
+      "d_moy": 2,
+      "mean": 187.0,
+      "cov": 1.5493631531474956
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 14719,
+      "d_moy": 2,
+      "mean": 489.0,
+      "cov": 1.376616882800804
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 15345,
+      "d_moy": 2,
+      "mean": 246.5,
+      "cov": 1.5087987747231526
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 15427,
+      "d_moy": 2,
+      "mean": 333.25,
+      "cov": 1.2724770126308678
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 15647,
+      "d_moy": 2,
+      "mean": 249.25,
+      "cov": 1.3648172990142162
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 16079,
+      "d_moy": 2,
+      "mean": 361.25,
+      "cov": 1.0737805704078724
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 16223,
+      "d_moy": 2,
+      "mean": 412.6666666666667,
+      "cov": 1.0671231071323724
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 16289,
+      "d_moy": 2,
+      "mean": 316.5,
+      "cov": 1.3695306694071203
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 16451,
+      "d_moy": 2,
+      "mean": 467.5,
+      "cov": 1.2962363881858208
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 17051,
+      "d_moy": 2,
+      "mean": 319.75,
+      "cov": 1.0379354897438076
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 71,
+      "d_moy": 2,
+      "mean": 309.0,
+      "cov": 1.4917057895885681
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 833,
+      "d_moy": 2,
+      "mean": 158.75,
+      "cov": 1.2130891736268552
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 969,
+      "d_moy": 2,
+      "mean": 386.0,
+      "cov": 1.1371001187232186
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 1401,
+      "d_moy": 2,
+      "mean": 296.6666666666667,
+      "cov": 1.2868121931744592
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 1681,
+      "d_moy": 2,
+      "mean": 252.75,
+      "cov": 1.03179106854817
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 1991,
+      "d_moy": 2,
+      "mean": 273.25,
+      "cov": 1.3324196418089087
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 2031,
+      "d_moy": 2,
+      "mean": 418.75,
+      "cov": 1.0053388632912839
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 2481,
+      "d_moy": 2,
+      "mean": 378.3333333333333,
+      "cov": 1.0597185274084644
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 2725,
+      "d_moy": 2,
+      "mean": 265.6666666666667,
+      "cov": 1.5462972148471539
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 3073,
+      "d_moy": 2,
+      "mean": 231.75,
+      "cov": 1.0884989063827268
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 3769,
+      "d_moy": 2,
+      "mean": 335.0,
+      "cov": 1.049464958250903
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 4085,
+      "d_moy": 2,
+      "mean": 281.75,
+      "cov": 1.0187608064801108
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 4995,
+      "d_moy": 2,
+      "mean": 248.0,
+      "cov": 1.2548229018823531
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 5099,
+      "d_moy": 2,
+      "mean": 428.6666666666667,
+      "cov": 1.035237277800474
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 5211,
+      "d_moy": 2,
+      "mean": 270.25,
+      "cov": 1.1940200809618973
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 5769,
+      "d_moy": 2,
+      "mean": 267.0,
+      "cov": 1.1815791848719037
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 6103,
+      "d_moy": 2,
+      "mean": 158.5,
+      "cov": 1.2743698636165062
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 6243,
+      "d_moy": 2,
+      "mean": 386.75,
+      "cov": 1.083290260548026
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 6489,
+      "d_moy": 2,
+      "mean": 389.0,
+      "cov": 1.4105780519299767
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 6585,
+      "d_moy": 2,
+      "mean": 353.75,
+      "cov": 1.09397071467533
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 6767,
+      "d_moy": 2,
+      "mean": 235.0,
+      "cov": 1.1399543855818017
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 7411,
+      "d_moy": 2,
+      "mean": 297.5,
+      "cov": 1.000576535072398
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 8489,
+      "d_moy": 2,
+      "mean": 398.25,
+      "cov": 1.0041124840252154
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 8633,
+      "d_moy": 2,
+      "mean": 230.25,
+      "cov": 1.3116963014576621
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 8807,
+      "d_moy": 2,
+      "mean": 356.25,
+      "cov": 1.1079730633089233
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 8883,
+      "d_moy": 2,
+      "mean": 189.25,
+      "cov": 1.010075485139798
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 9253,
+      "d_moy": 2,
+      "mean": 465.0,
+      "cov": 1.0242445824028785
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 9467,
+      "d_moy": 2,
+      "mean": 107.0,
+      "cov": 1.0309220361224432
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 9561,
+      "d_moy": 2,
+      "mean": 271.0,
+      "cov": 1.2058349535542998
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 9575,
+      "d_moy": 2,
+      "mean": 155.75,
+      "cov": 1.1534056685643725
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 9903,
+      "d_moy": 2,
+      "mean": 387.3333333333333,
+      "cov": 1.2612406773451965
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 10535,
+      "d_moy": 2,
+      "mean": 310.25,
+      "cov": 1.0040634995190338
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 10955,
+      "d_moy": 2,
+      "mean": 339.0,
+      "cov": 1.070253213625449
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 12089,
+      "d_moy": 2,
+      "mean": 173.33333333333334,
+      "cov": 1.0739812153327328
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 12633,
+      "d_moy": 2,
+      "mean": 367.0,
+      "cov": 1.1270535638607155
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 12765,
+      "d_moy": 2,
+      "mean": 347.0,
+      "cov": 1.1571744590236304
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 13077,
+      "d_moy": 2,
+      "mean": 223.5,
+      "cov": 1.139400344912951
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 13687,
+      "d_moy": 2,
+      "mean": 468.25,
+      "cov": 1.00984291842181
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 14025,
+      "d_moy": 2,
+      "mean": 141.0,
+      "cov": 1.2543170259746204
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 14117,
+      "d_moy": 2,
+      "mean": 220.25,
+      "cov": 1.4152684465941172
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 14347,
+      "d_moy": 2,
+      "mean": 369.75,
+      "cov": 1.0185739900192863
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 14697,
+      "d_moy": 2,
+      "mean": 328.75,
+      "cov": 1.160849558029165
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 14987,
+      "d_moy": 2,
+      "mean": 436.5,
+      "cov": 1.0447681541795646
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 15321,
+      "d_moy": 2,
+      "mean": 298.75,
+      "cov": 1.1309098406792113
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 15347,
+      "d_moy": 2,
+      "mean": 310.75,
+      "cov": 1.2036584852655927
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 15533,
+      "d_moy": 2,
+      "mean": 330.0,
+      "cov": 1.4967488488790472
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 15839,
+      "d_moy": 2,
+      "mean": 255.5,
+      "cov": 1.2362393182894105
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 16107,
+      "d_moy": 2,
+      "mean": 364.75,
+      "cov": 1.0688677983776653
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 16749,
+      "d_moy": 2,
+      "mean": 438.25,
+      "cov": 1.0360646618074532
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 17329,
+      "d_moy": 2,
+      "mean": 490.25,
+      "cov": 1.0756580649722338
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 17417,
+      "d_moy": 2,
+      "mean": 534.0,
+      "cov": 1.0010725216798313
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 1049,
+      "d_moy": 2,
+      "mean": 457.25,
+      "cov": 1.023984124924537
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 1415,
+      "d_moy": 2,
+      "mean": 369.75,
+      "cov": 1.095467956288316
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 2199,
+      "d_moy": 2,
+      "mean": 300.75,
+      "cov": 1.0767845064923047
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 2403,
+      "d_moy": 2,
+      "mean": 384.0,
+      "cov": 1.0903987183011015
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 2541,
+      "d_moy": 2,
+      "mean": 550.5,
+      "cov": 1.0545588871101828
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 2727,
+      "d_moy": 2,
+      "mean": 219.25,
+      "cov": 1.3822091831959378
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 3207,
+      "d_moy": 2,
+      "mean": 258.25,
+      "cov": 1.2113392480929654
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 3373,
+      "d_moy": 2,
+      "mean": 171.25,
+      "cov": 1.2856653974632997
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 3969,
+      "d_moy": 2,
+      "mean": 217.25,
+      "cov": 1.4215490653321186
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 4407,
+      "d_moy": 2,
+      "mean": 330.75,
+      "cov": 1.0244403968428872
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 6051,
+      "d_moy": 2,
+      "mean": 439.0,
+      "cov": 1.1045769245192738
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 6521,
+      "d_moy": 2,
+      "mean": 437.75,
+      "cov": 1.0365149332658257
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 6691,
+      "d_moy": 2,
+      "mean": 380.5,
+      "cov": 1.0581301250281556
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 6757,
+      "d_moy": 2,
+      "mean": 345.25,
+      "cov": 1.2263828747838474
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 6915,
+      "d_moy": 2,
+      "mean": 292.5,
+      "cov": 1.2506171072716117
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 7207,
+      "d_moy": 2,
+      "mean": 414.5,
+      "cov": 1.017919707908937
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 7889,
+      "d_moy": 2,
+      "mean": 291.3333333333333,
+      "cov": 1.0042925323922787
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 8559,
+      "d_moy": 2,
+      "mean": 393.5,
+      "cov": 1.0128831652141206
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 8829,
+      "d_moy": 2,
+      "mean": 350.25,
+      "cov": 1.1133912240741104
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 9555,
+      "d_moy": 2,
+      "mean": 444.75,
+      "cov": 1.0171588175042319
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 9623,
+      "d_moy": 2,
+      "mean": 284.6666666666667,
+      "cov": 1.030372442625732
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 9813,
+      "d_moy": 2,
+      "mean": 384.6666666666667,
+      "cov": 1.0815005906604849
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 9881,
+      "d_moy": 2,
+      "mean": 287.75,
+      "cov": 1.0909386089510784
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 10035,
+      "d_moy": 2,
+      "mean": 364.25,
+      "cov": 1.1567922653398062
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 10509,
+      "d_moy": 2,
+      "mean": 368.25,
+      "cov": 1.1820633359473098
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 10547,
+      "d_moy": 2,
+      "mean": 320.25,
+      "cov": 1.302441844373152
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 10743,
+      "d_moy": 2,
+      "mean": 110.25,
+      "cov": 1.107204634127507
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 11477,
+      "d_moy": 2,
+      "mean": 278.5,
+      "cov": 1.03279098170704
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 11959,
+      "d_moy": 2,
+      "mean": 268.5,
+      "cov": 1.0089856798911991
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 12043,
+      "d_moy": 2,
+      "mean": 377.25,
+      "cov": 1.0161962499718764
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 12157,
+      "d_moy": 2,
+      "mean": 396.3333333333333,
+      "cov": 1.0287818050404882
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 12433,
+      "d_moy": 2,
+      "mean": 478.5,
+      "cov": 1.0164742071947392
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 12867,
+      "d_moy": 2,
+      "mean": 350.75,
+      "cov": 1.2006933321742796
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 13499,
+      "d_moy": 2,
+      "mean": 446.75,
+      "cov": 1.0331520262675382
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 14589,
+      "d_moy": 2,
+      "mean": 334.3333333333333,
+      "cov": 1.1453146816350117
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 15207,
+      "d_moy": 2,
+      "mean": 564.0,
+      "cov": 1.0004808712533066
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 15395,
+      "d_moy": 2,
+      "mean": 307.5,
+      "cov": 1.138225319310722
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 15973,
+      "d_moy": 2,
+      "mean": 286.0,
+      "cov": 1.2872294241999072
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 16233,
+      "d_moy": 2,
+      "mean": 210.5,
+      "cov": 1.1788143336685517
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 16267,
+      "d_moy": 2,
+      "mean": 364.3333333333333,
+      "cov": 1.4818855428309732
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 16605,
+      "d_moy": 2,
+      "mean": 296.25,
+      "cov": 1.2885892655671596
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 16949,
+      "d_moy": 2,
+      "mean": 229.5,
+      "cov": 1.0289469196724543
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 17319,
+      "d_moy": 2,
+      "mean": 359.25,
+      "cov": 1.1578751434862422
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 947,
+      "d_moy": 2,
+      "mean": 203.33333333333334,
+      "cov": 1.205433145161931
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 1895,
+      "d_moy": 2,
+      "mean": 383.75,
+      "cov": 1.0893076992144062
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 3429,
+      "d_moy": 2,
+      "mean": 346.0,
+      "cov": 1.251948930065546
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 4559,
+      "d_moy": 2,
+      "mean": 360.75,
+      "cov": 1.0333545857247315
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 4773,
+      "d_moy": 2,
+      "mean": 330.5,
+      "cov": 1.0062580596877206
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 4885,
+      "d_moy": 2,
+      "mean": 377.25,
+      "cov": 1.0489035237886835
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 4915,
+      "d_moy": 2,
+      "mean": 368.0,
+      "cov": 1.069658554605372
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 5043,
+      "d_moy": 2,
+      "mean": 244.25,
+      "cov": 1.356289369084929
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 5095,
+      "d_moy": 2,
+      "mean": 390.25,
+      "cov": 1.0621788063332436
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 5193,
+      "d_moy": 2,
+      "mean": 323.0,
+      "cov": 1.0979616195802828
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 5975,
+      "d_moy": 2,
+      "mean": 359.75,
+      "cov": 1.1979356900084084
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 6251,
+      "d_moy": 2,
+      "mean": 335.5,
+      "cov": 1.1602192523957113
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 6389,
+      "d_moy": 2,
+      "mean": 259.3333333333333,
+      "cov": 1.4816550575659286
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 6487,
+      "d_moy": 2,
+      "mean": 350.5,
+      "cov": 1.17164756896522
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 6619,
+      "d_moy": 2,
+      "mean": 226.25,
+      "cov": 1.548557450713079
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 7191,
+      "d_moy": 2,
+      "mean": 195.25,
+      "cov": 1.5372675520067365
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 7427,
+      "d_moy": 2,
+      "mean": 373.25,
+      "cov": 1.0429791976763843
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 8453,
+      "d_moy": 2,
+      "mean": 376.75,
+      "cov": 1.0099023931660849
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 8781,
+      "d_moy": 2,
+      "mean": 521.0,
+      "cov": 1.123770469908755
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 9571,
+      "d_moy": 2,
+      "mean": 309.0,
+      "cov": 1.089216738940079
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 9587,
+      "d_moy": 2,
+      "mean": 248.0,
+      "cov": 1.0064987840475923
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 10333,
+      "d_moy": 2,
+      "mean": 317.0,
+      "cov": 1.0469226317412668
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 10969,
+      "d_moy": 2,
+      "mean": 307.0,
+      "cov": 1.1094764105733856
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 10993,
+      "d_moy": 2,
+      "mean": 206.66666666666666,
+      "cov": 1.2355333519949105
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 11571,
+      "d_moy": 2,
+      "mean": 304.6666666666667,
+      "cov": 1.0319943224652848
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 11979,
+      "d_moy": 2,
+      "mean": 438.25,
+      "cov": 1.1389926990347663
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 13409,
+      "d_moy": 2,
+      "mean": 336.25,
+      "cov": 1.1081978302033695
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 13443,
+      "d_moy": 2,
+      "mean": 334.0,
+      "cov": 1.3076430852966527
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 13567,
+      "d_moy": 2,
+      "mean": 370.0,
+      "cov": 1.4557686063410562
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 13683,
+      "d_moy": 2,
+      "mean": 363.5,
+      "cov": 1.0781154578332095
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 14143,
+      "d_moy": 2,
+      "mean": 290.0,
+      "cov": 1.1933060754121454
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 14401,
+      "d_moy": 2,
+      "mean": 344.25,
+      "cov": 1.2067083116272619
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 14693,
+      "d_moy": 2,
+      "mean": 498.0,
+      "cov": 1.3517382644369342
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 14877,
+      "d_moy": 2,
+      "mean": 282.5,
+      "cov": 1.5830582944346865
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 15063,
+      "d_moy": 2,
+      "mean": 444.0,
+      "cov": 1.0632777688204158
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 15275,
+      "d_moy": 2,
+      "mean": 292.6666666666667,
+      "cov": 1.2978313681037048
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 15509,
+      "d_moy": 2,
+      "mean": 317.6666666666667,
+      "cov": 1.4470364565078238
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 15969,
+      "d_moy": 2,
+      "mean": 342.5,
+      "cov": 1.2511769371808568
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 16627,
+      "d_moy": 2,
+      "mean": 161.25,
+      "cov": 1.353325272620004
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 16641,
+      "d_moy": 2,
+      "mean": 221.5,
+      "cov": 1.0308590510025117
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 16751,
+      "d_moy": 2,
+      "mean": 223.33333333333334,
+      "cov": 1.3377897605859543
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 75,
+      "d_moy": 2,
+      "mean": 226.0,
+      "cov": 1.0358078507992579
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 125,
+      "d_moy": 2,
+      "mean": 331.5,
+      "cov": 1.0081148286008836
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 431,
+      "d_moy": 2,
+      "mean": 304.0,
+      "cov": 1.1224225373103636
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 671,
+      "d_moy": 2,
+      "mean": 281.3333333333333,
+      "cov": 1.3366835222521476
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 745,
+      "d_moy": 2,
+      "mean": 351.0,
+      "cov": 1.1147212881684183
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 1701,
+      "d_moy": 2,
+      "mean": 385.0,
+      "cov": 1.3306308700750535
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 2521,
+      "d_moy": 2,
+      "mean": 265.5,
+      "cov": 1.1724077694006725
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 2855,
+      "d_moy": 2,
+      "mean": 183.25,
+      "cov": 1.0662249910239627
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 3137,
+      "d_moy": 2,
+      "mean": 380.0,
+      "cov": 1.0834203388600319
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 3279,
+      "d_moy": 2,
+      "mean": 276.75,
+      "cov": 1.4458878093841827
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 3467,
+      "d_moy": 2,
+      "mean": 349.6666666666667,
+      "cov": 1.1674223692818808
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 4463,
+      "d_moy": 2,
+      "mean": 273.5,
+      "cov": 1.2369797321835678
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 4719,
+      "d_moy": 2,
+      "mean": 423.6666666666667,
+      "cov": 1.0255000206713487
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 4739,
+      "d_moy": 2,
+      "mean": 383.5,
+      "cov": 1.0334337390189823
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 4839,
+      "d_moy": 2,
+      "mean": 232.0,
+      "cov": 1.2954193820330193
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 4979,
+      "d_moy": 2,
+      "mean": 323.75,
+      "cov": 1.1704250950730493
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 5401,
+      "d_moy": 2,
+      "mean": 203.0,
+      "cov": 1.0915675205208268
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 5635,
+      "d_moy": 2,
+      "mean": 351.6666666666667,
+      "cov": 1.3777664464428738
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 5797,
+      "d_moy": 2,
+      "mean": 457.5,
+      "cov": 1.003704010389515
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 5901,
+      "d_moy": 2,
+      "mean": 376.0,
+      "cov": 1.0095038425625151
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 6129,
+      "d_moy": 2,
+      "mean": 359.5,
+      "cov": 1.0478889386811094
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 6213,
+      "d_moy": 2,
+      "mean": 361.5,
+      "cov": 1.116840805855076
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 6479,
+      "d_moy": 2,
+      "mean": 395.75,
+      "cov": 1.1779743547973778
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 7333,
+      "d_moy": 2,
+      "mean": 243.75,
+      "cov": 1.1789162497808614
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 7923,
+      "d_moy": 2,
+      "mean": 342.3333333333333,
+      "cov": 1.1607781125264065
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 8737,
+      "d_moy": 2,
+      "mean": 403.5,
+      "cov": 1.044208050277477
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 8945,
+      "d_moy": 2,
+      "mean": 298.0,
+      "cov": 1.0008366993492595
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 8993,
+      "d_moy": 2,
+      "mean": 371.75,
+      "cov": 1.131635380135078
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 10667,
+      "d_moy": 2,
+      "mean": 289.5,
+      "cov": 1.0952238011728228
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 10771,
+      "d_moy": 2,
+      "mean": 323.25,
+      "cov": 1.2377348818060852
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 10949,
+      "d_moy": 2,
+      "mean": 378.25,
+      "cov": 1.125540609959554
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 11107,
+      "d_moy": 2,
+      "mean": 258.5,
+      "cov": 1.553612564193816
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 11795,
+      "d_moy": 2,
+      "mean": 430.75,
+      "cov": 1.131062588545398
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 12017,
+      "d_moy": 2,
+      "mean": 308.0,
+      "cov": 1.1593227968413717
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 12027,
+      "d_moy": 2,
+      "mean": 390.3333333333333,
+      "cov": 1.1142770095355214
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 13583,
+      "d_moy": 2,
+      "mean": 256.25,
+      "cov": 1.541034827728967
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 13651,
+      "d_moy": 2,
+      "mean": 330.5,
+      "cov": 1.1901873530915061
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 13783,
+      "d_moy": 2,
+      "mean": 339.5,
+      "cov": 1.0680909505443135
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 13859,
+      "d_moy": 2,
+      "mean": 380.25,
+      "cov": 1.0564496237557859
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 14537,
+      "d_moy": 2,
+      "mean": 357.75,
+      "cov": 1.0387982680964687
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 15309,
+      "d_moy": 2,
+      "mean": 409.0,
+      "cov": 1.0102406245856923
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 15883,
+      "d_moy": 2,
+      "mean": 173.25,
+      "cov": 1.3562238248195932
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 15935,
+      "d_moy": 2,
+      "mean": 271.25,
+      "cov": 1.4000947515083553
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 15949,
+      "d_moy": 2,
+      "mean": 235.0,
+      "cov": 1.4072887931753781
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 16037,
+      "d_moy": 2,
+      "mean": 412.6666666666667,
+      "cov": 1.1830200153757018
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 16291,
+      "d_moy": 2,
+      "mean": 411.6666666666667,
+      "cov": 1.034921399084621
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 16459,
+      "d_moy": 2,
+      "mean": 265.75,
+      "cov": 1.2988191692443933
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 16901,
+      "d_moy": 2,
+      "mean": 186.5,
+      "cov": 1.0231269284283626
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 17199,
+      "d_moy": 2,
+      "mean": 374.0,
+      "cov": 1.0873031171988548
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 17387,
+      "d_moy": 2,
+      "mean": 327.6666666666667,
+      "cov": 1.3670875783476784
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 17717,
+      "d_moy": 2,
+      "mean": 235.25,
+      "cov": 1.1416239351288795
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 17927,
+      "d_moy": 2,
+      "mean": 250.75,
+      "cov": 1.070921305926391
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 17943,
+      "d_moy": 2,
+      "mean": 428.0,
+      "cov": 1.1090799349168265
+    }
+  ]
+}

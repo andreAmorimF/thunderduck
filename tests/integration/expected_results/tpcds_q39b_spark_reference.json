@@ -1,0 +1,116 @@
+{
+  "query_num": "39b",
+  "row_count": 14,
+  "columns": [
+    "w_warehouse_sk",
+    "i_item_sk",
+    "d_moy",
+    "mean",
+    "cov",
+    "w_warehouse_sk",
+    "i_item_sk",
+    "d_moy",
+    "mean",
+    "cov"
+  ],
+  "rows": [
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 1569,
+      "d_moy": 2,
+      "mean": 239.25,
+      "cov": 1.2641513267800557
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 5627,
+      "d_moy": 2,
+      "mean": 297.5,
+      "cov": 1.2084286841430678
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 7999,
+      "d_moy": 2,
+      "mean": 375.3333333333333,
+      "cov": 1.008092263550718
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 8611,
+      "d_moy": 2,
+      "mean": 243.75,
+      "cov": 1.2342122780960432
+    },
+    {
+      "w_warehouse_sk": 1,
+      "i_item_sk": 15345,
+      "d_moy": 2,
+      "mean": 246.5,
+      "cov": 1.5087987747231526
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 71,
+      "d_moy": 2,
+      "mean": 309.0,
+      "cov": 1.4917057895885681
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 6103,
+      "d_moy": 2,
+      "mean": 158.5,
+      "cov": 1.2743698636165062
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 6489,
+      "d_moy": 2,
+      "mean": 389.0,
+      "cov": 1.4105780519299767
+    },
+    {
+      "w_warehouse_sk": 2,
+      "i_item_sk": 15839,
+      "d_moy": 2,
+      "mean": 255.5,
+      "cov": 1.2362393182894105
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 7207,
+      "d_moy": 2,
+      "mean": 414.5,
+      "cov": 1.017919707908937
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 10547,
+      "d_moy": 2,
+      "mean": 320.25,
+      "cov": 1.302441844373152
+    },
+    {
+      "w_warehouse_sk": 3,
+      "i_item_sk": 12867,
+      "d_moy": 2,
+      "mean": 350.75,
+      "cov": 1.2006933321742796
+    },
+    {
+      "w_warehouse_sk": 4,
+      "i_item_sk": 947,
+      "d_moy": 2,
+      "mean": 203.33333333333334,
+      "cov": 1.205433145161931
+    },
+    {
+      "w_warehouse_sk": 5,
+      "i_item_sk": 3137,
+      "d_moy": 2,
+      "mean": 380.0,
+      "cov": 1.0834203388600319
+    }
+  ]
+}

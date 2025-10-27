@@ -1,0 +1,713 @@
+{
+  "query_num": "36",
+  "row_count": 100,
+  "columns": [
+    "gross_margin",
+    "i_category",
+    "i_class",
+    "lochierarchy",
+    "rank_within_parent"
+  ],
+  "rows": [
+    {
+      "gross_margin": -0.4331652033071642,
+      "i_category": null,
+      "i_class": null,
+      "lochierarchy": 2,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.44228213872837535,
+      "i_category": "Jewelry",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.44077227935497737,
+      "i_category": "Men",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.4378703075728192,
+      "i_category": "Books",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.435732438424966,
+      "i_category": "Music",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 4
+    },
+    {
+      "gross_margin": -0.43269195360216295,
+      "i_category": "Shoes",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 5
+    },
+    {
+      "gross_margin": -0.43231623283547826,
+      "i_category": "Sports",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 6
+    },
+    {
+      "gross_margin": -0.4315232388757392,
+      "i_category": "Children",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 7
+    },
+    {
+      "gross_margin": -0.43092162936480594,
+      "i_category": "Women",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 8
+    },
+    {
+      "gross_margin": -0.4262660872665319,
+      "i_category": "Electronics",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 9
+    },
+    {
+      "gross_margin": -0.42240550260653614,
+      "i_category": "Home",
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 10
+    },
+    {
+      "gross_margin": -0.41838370121324214,
+      "i_category": null,
+      "i_class": null,
+      "lochierarchy": 1,
+      "rank_within_parent": 11
+    },
+    {
+      "gross_margin": -0.6088293457170393,
+      "i_category": null,
+      "i_class": "glassware",
+      "lochierarchy": 0,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.5396838586666217,
+      "i_category": null,
+      "i_class": "womens",
+      "lochierarchy": 0,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.5267473495747181,
+      "i_category": null,
+      "i_class": "swimwear",
+      "lochierarchy": 0,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.4847310723192606,
+      "i_category": null,
+      "i_class": "dresses",
+      "lochierarchy": 0,
+      "rank_within_parent": 4
+    },
+    {
+      "gross_margin": -0.45687592997543136,
+      "i_category": null,
+      "i_class": "flatware",
+      "lochierarchy": 0,
+      "rank_within_parent": 5
+    },
+    {
+      "gross_margin": -0.4481027027433751,
+      "i_category": null,
+      "i_class": "pants",
+      "lochierarchy": 0,
+      "rank_within_parent": 6
+    },
+    {
+      "gross_margin": -0.4115350021413694,
+      "i_category": null,
+      "i_class": "scanners",
+      "lochierarchy": 0,
+      "rank_within_parent": 7
+    },
+    {
+      "gross_margin": -0.3897533016412477,
+      "i_category": null,
+      "i_class": null,
+      "lochierarchy": 0,
+      "rank_within_parent": 8
+    },
+    {
+      "gross_margin": -0.3890378928610988,
+      "i_category": null,
+      "i_class": "semi-precious",
+      "lochierarchy": 0,
+      "rank_within_parent": 9
+    },
+    {
+      "gross_margin": -0.38358630354387047,
+      "i_category": null,
+      "i_class": "camcorders",
+      "lochierarchy": 0,
+      "rank_within_parent": 10
+    },
+    {
+      "gross_margin": -0.3788638413103031,
+      "i_category": null,
+      "i_class": "archery",
+      "lochierarchy": 0,
+      "rank_within_parent": 11
+    },
+    {
+      "gross_margin": -0.2786839322982345,
+      "i_category": null,
+      "i_class": "sports-apparel",
+      "lochierarchy": 0,
+      "rank_within_parent": 12
+    },
+    {
+      "gross_margin": -0.6953226046483749,
+      "i_category": "Books",
+      "i_class": null,
+      "lochierarchy": 0,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.46376310574728974,
+      "i_category": "Books",
+      "i_class": "reference",
+      "lochierarchy": 0,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.45487825541450727,
+      "i_category": "Books",
+      "i_class": "sports",
+      "lochierarchy": 0,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.45071158587533267,
+      "i_category": "Books",
+      "i_class": "history",
+      "lochierarchy": 0,
+      "rank_within_parent": 4
+    },
+    {
+      "gross_margin": -0.44441896026888106,
+      "i_category": "Books",
+      "i_class": "home repair",
+      "lochierarchy": 0,
+      "rank_within_parent": 5
+    },
+    {
+      "gross_margin": -0.4438926886159393,
+      "i_category": "Books",
+      "i_class": "entertainments",
+      "lochierarchy": 0,
+      "rank_within_parent": 6
+    },
+    {
+      "gross_margin": -0.4433401532594794,
+      "i_category": "Books",
+      "i_class": "cooking",
+      "lochierarchy": 0,
+      "rank_within_parent": 7
+    },
+    {
+      "gross_margin": -0.4413827094768979,
+      "i_category": "Books",
+      "i_class": "science",
+      "lochierarchy": 0,
+      "rank_within_parent": 8
+    },
+    {
+      "gross_margin": -0.4403740867357157,
+      "i_category": "Books",
+      "i_class": "romance",
+      "lochierarchy": 0,
+      "rank_within_parent": 9
+    },
+    {
+      "gross_margin": -0.4377335519661857,
+      "i_category": "Books",
+      "i_class": "mystery",
+      "lochierarchy": 0,
+      "rank_within_parent": 10
+    },
+    {
+      "gross_margin": -0.4365343260325311,
+      "i_category": "Books",
+      "i_class": "parenting",
+      "lochierarchy": 0,
+      "rank_within_parent": 11
+    },
+    {
+      "gross_margin": -0.4295418594117323,
+      "i_category": "Books",
+      "i_class": "travel",
+      "lochierarchy": 0,
+      "rank_within_parent": 12
+    },
+    {
+      "gross_margin": -0.4293793020148163,
+      "i_category": "Books",
+      "i_class": "business",
+      "lochierarchy": 0,
+      "rank_within_parent": 13
+    },
+    {
+      "gross_margin": -0.4264259153289788,
+      "i_category": "Books",
+      "i_class": "fiction",
+      "lochierarchy": 0,
+      "rank_within_parent": 14
+    },
+    {
+      "gross_margin": -0.4201689529121943,
+      "i_category": "Books",
+      "i_class": "arts",
+      "lochierarchy": 0,
+      "rank_within_parent": 15
+    },
+    {
+      "gross_margin": -0.41930974689955447,
+      "i_category": "Books",
+      "i_class": "self-help",
+      "lochierarchy": 0,
+      "rank_within_parent": 16
+    },
+    {
+      "gross_margin": -0.41603641690924537,
+      "i_category": "Books",
+      "i_class": "computers",
+      "lochierarchy": 0,
+      "rank_within_parent": 17
+    },
+    {
+      "gross_margin": -0.4529132849454063,
+      "i_category": "Children",
+      "i_class": null,
+      "lochierarchy": 0,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.44057941536615647,
+      "i_category": "Children",
+      "i_class": "toddlers",
+      "lochierarchy": 0,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.43294127954549466,
+      "i_category": "Children",
+      "i_class": "newborn",
+      "lochierarchy": 0,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.42695233317387765,
+      "i_category": "Children",
+      "i_class": "school-uniforms",
+      "lochierarchy": 0,
+      "rank_within_parent": 4
+    },
+    {
+      "gross_margin": -0.42579054228939955,
+      "i_category": "Children",
+      "i_class": "infants",
+      "lochierarchy": 0,
+      "rank_within_parent": 5
+    },
+    {
+      "gross_margin": -0.4855235752296027,
+      "i_category": "Electronics",
+      "i_class": "memory",
+      "lochierarchy": 0,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.46048420071929347,
+      "i_category": "Electronics",
+      "i_class": "monitors",
+      "lochierarchy": 0,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.446190463216308,
+      "i_category": "Electronics",
+      "i_class": "automotive",
+      "lochierarchy": 0,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.44296224946670043,
+      "i_category": "Electronics",
+      "i_class": "dvd/vcr players",
+      "lochierarchy": 0,
+      "rank_within_parent": 4
+    },
+    {
+      "gross_margin": -0.4327073466199892,
+      "i_category": "Electronics",
+      "i_class": "musical",
+      "lochierarchy": 0,
+      "rank_within_parent": 5
+    },
+    {
+      "gross_margin": -0.42600106936914417,
+      "i_category": "Electronics",
+      "i_class": "cameras",
+      "lochierarchy": 0,
+      "rank_within_parent": 6
+    },
+    {
+      "gross_margin": -0.4254200341307296,
+      "i_category": "Electronics",
+      "i_class": "wireless",
+      "lochierarchy": 0,
+      "rank_within_parent": 7
+    },
+    {
+      "gross_margin": -0.4223575188396973,
+      "i_category": "Electronics",
+      "i_class": "karoke",
+      "lochierarchy": 0,
+      "rank_within_parent": 8
+    },
+    {
+      "gross_margin": -0.41889404147213755,
+      "i_category": "Electronics",
+      "i_class": "camcorders",
+      "lochierarchy": 0,
+      "rank_within_parent": 9
+    },
+    {
+      "gross_margin": -0.4186878394167323,
+      "i_category": "Electronics",
+      "i_class": "audio",
+      "lochierarchy": 0,
+      "rank_within_parent": 10
+    },
+    {
+      "gross_margin": -0.4125603119117821,
+      "i_category": "Electronics",
+      "i_class": "televisions",
+      "lochierarchy": 0,
+      "rank_within_parent": 11
+    },
+    {
+      "gross_margin": -0.41010904111982394,
+      "i_category": "Electronics",
+      "i_class": "personal",
+      "lochierarchy": 0,
+      "rank_within_parent": 12
+    },
+    {
+      "gross_margin": -0.40988689526842265,
+      "i_category": "Electronics",
+      "i_class": "stereo",
+      "lochierarchy": 0,
+      "rank_within_parent": 13
+    },
+    {
+      "gross_margin": -0.4094500637435289,
+      "i_category": "Electronics",
+      "i_class": "scanners",
+      "lochierarchy": 0,
+      "rank_within_parent": 14
+    },
+    {
+      "gross_margin": -0.40823434275777976,
+      "i_category": "Electronics",
+      "i_class": "disk drives",
+      "lochierarchy": 0,
+      "rank_within_parent": 15
+    },
+    {
+      "gross_margin": -0.3752193774403398,
+      "i_category": "Electronics",
+      "i_class": "portable",
+      "lochierarchy": 0,
+      "rank_within_parent": 16
+    },
+    {
+      "gross_margin": -0.4436233135172459,
+      "i_category": "Home",
+      "i_class": "wallpaper",
+      "lochierarchy": 0,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.44025527046920765,
+      "i_category": "Home",
+      "i_class": "furniture",
+      "lochierarchy": 0,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.4385891832625786,
+      "i_category": "Home",
+      "i_class": "flatware",
+      "lochierarchy": 0,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.4348401348206341,
+      "i_category": "Home",
+      "i_class": "decor",
+      "lochierarchy": 0,
+      "rank_within_parent": 4
+    },
+    {
+      "gross_margin": -0.43192330482606606,
+      "i_category": "Home",
+      "i_class": "rugs",
+      "lochierarchy": 0,
+      "rank_within_parent": 5
+    },
+    {
+      "gross_margin": -0.4303923132290774,
+      "i_category": "Home",
+      "i_class": "mattresses",
+      "lochierarchy": 0,
+      "rank_within_parent": 6
+    },
+    {
+      "gross_margin": -0.42845289084114363,
+      "i_category": "Home",
+      "i_class": "paint",
+      "lochierarchy": 0,
+      "rank_within_parent": 7
+    },
+    {
+      "gross_margin": -0.42565718563742566,
+      "i_category": "Home",
+      "i_class": "bedding",
+      "lochierarchy": 0,
+      "rank_within_parent": 8
+    },
+    {
+      "gross_margin": -0.4250486264574056,
+      "i_category": "Home",
+      "i_class": "accent",
+      "lochierarchy": 0,
+      "rank_within_parent": 9
+    },
+    {
+      "gross_margin": -0.42295269883335085,
+      "i_category": "Home",
+      "i_class": "tables",
+      "lochierarchy": 0,
+      "rank_within_parent": 10
+    },
+    {
+      "gross_margin": -0.4194554447557112,
+      "i_category": "Home",
+      "i_class": "bathroom",
+      "lochierarchy": 0,
+      "rank_within_parent": 11
+    },
+    {
+      "gross_margin": -0.418254601207646,
+      "i_category": "Home",
+      "i_class": "curtains/drapes",
+      "lochierarchy": 0,
+      "rank_within_parent": 12
+    },
+    {
+      "gross_margin": -0.4152368022674857,
+      "i_category": "Home",
+      "i_class": "blinds/shades",
+      "lochierarchy": 0,
+      "rank_within_parent": 13
+    },
+    {
+      "gross_margin": -0.41293300832599655,
+      "i_category": "Home",
+      "i_class": "glassware",
+      "lochierarchy": 0,
+      "rank_within_parent": 14
+    },
+    {
+      "gross_margin": -0.3997879732713479,
+      "i_category": "Home",
+      "i_class": "lighting",
+      "lochierarchy": 0,
+      "rank_within_parent": 15
+    },
+    {
+      "gross_margin": -0.37758158356862603,
+      "i_category": "Home",
+      "i_class": "kids",
+      "lochierarchy": 0,
+      "rank_within_parent": 16
+    },
+    {
+      "gross_margin": -0.36049155867788074,
+      "i_category": "Home",
+      "i_class": null,
+      "lochierarchy": 0,
+      "rank_within_parent": 17
+    },
+    {
+      "gross_margin": -0.5594059125862809,
+      "i_category": "Jewelry",
+      "i_class": null,
+      "lochierarchy": 0,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.47298200181372757,
+      "i_category": "Jewelry",
+      "i_class": "birdal",
+      "lochierarchy": 0,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.46558993627687606,
+      "i_category": "Jewelry",
+      "i_class": "consignment",
+      "lochierarchy": 0,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.4595075839162246,
+      "i_category": "Jewelry",
+      "i_class": "custom",
+      "lochierarchy": 0,
+      "rank_within_parent": 4
+    },
+    {
+      "gross_margin": -0.45845659693166024,
+      "i_category": "Jewelry",
+      "i_class": "semi-precious",
+      "lochierarchy": 0,
+      "rank_within_parent": 5
+    },
+    {
+      "gross_margin": -0.45468767601478577,
+      "i_category": "Jewelry",
+      "i_class": "loose stones",
+      "lochierarchy": 0,
+      "rank_within_parent": 6
+    },
+    {
+      "gross_margin": -0.45355295639414844,
+      "i_category": "Jewelry",
+      "i_class": "jewelry boxes",
+      "lochierarchy": 0,
+      "rank_within_parent": 7
+    },
+    {
+      "gross_margin": -0.44939628894691797,
+      "i_category": "Jewelry",
+      "i_class": "costume",
+      "lochierarchy": 0,
+      "rank_within_parent": 8
+    },
+    {
+      "gross_margin": -0.4453388937948592,
+      "i_category": "Jewelry",
+      "i_class": "bracelets",
+      "lochierarchy": 0,
+      "rank_within_parent": 9
+    },
+    {
+      "gross_margin": -0.4428235314217311,
+      "i_category": "Jewelry",
+      "i_class": "diamonds",
+      "lochierarchy": 0,
+      "rank_within_parent": 10
+    },
+    {
+      "gross_margin": -0.44274986763418045,
+      "i_category": "Jewelry",
+      "i_class": "earings",
+      "lochierarchy": 0,
+      "rank_within_parent": 11
+    },
+    {
+      "gross_margin": -0.43730669418489815,
+      "i_category": "Jewelry",
+      "i_class": "rings",
+      "lochierarchy": 0,
+      "rank_within_parent": 12
+    },
+    {
+      "gross_margin": -0.4366233457841059,
+      "i_category": "Jewelry",
+      "i_class": "gold",
+      "lochierarchy": 0,
+      "rank_within_parent": 13
+    },
+    {
+      "gross_margin": -0.43226024580265365,
+      "i_category": "Jewelry",
+      "i_class": "pendants",
+      "lochierarchy": 0,
+      "rank_within_parent": 14
+    },
+    {
+      "gross_margin": -0.4266880058665212,
+      "i_category": "Jewelry",
+      "i_class": "estate",
+      "lochierarchy": 0,
+      "rank_within_parent": 15
+    },
+    {
+      "gross_margin": -0.4028304266421494,
+      "i_category": "Jewelry",
+      "i_class": "mens watch",
+      "lochierarchy": 0,
+      "rank_within_parent": 16
+    },
+    {
+      "gross_margin": -0.4020098008176535,
+      "i_category": "Jewelry",
+      "i_class": "womens watch",
+      "lochierarchy": 0,
+      "rank_within_parent": 17
+    },
+    {
+      "gross_margin": -0.6175503240654167,
+      "i_category": "Men",
+      "i_class": null,
+      "lochierarchy": 0,
+      "rank_within_parent": 1
+    },
+    {
+      "gross_margin": -0.44487471400776446,
+      "i_category": "Men",
+      "i_class": "pants",
+      "lochierarchy": 0,
+      "rank_within_parent": 2
+    },
+    {
+      "gross_margin": -0.44453409380559505,
+      "i_category": "Men",
+      "i_class": "sports-apparel",
+      "lochierarchy": 0,
+      "rank_within_parent": 3
+    },
+    {
+      "gross_margin": -0.4431152990438137,
+      "i_category": "Men",
+      "i_class": "shirts",
+      "lochierarchy": 0,
+      "rank_within_parent": 4
+    }
+  ]
+}
