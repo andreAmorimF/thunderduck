@@ -143,6 +143,11 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                 // DuckDB:    SELECT col AS "my column"
                 sql = sql.replace('`', '"');
 
+                // Fix count(*) column naming to match Spark
+                // Spark names count(*) as "count(1)", DuckDB names it "count_star()"
+                // Add explicit alias to ensure compatibility
+                sql = sql.replaceAll("(?i)count\\s*\\(\\s*\\*\\s*\\)", "count(*) AS \"count(1)\"");
+
                 logger.info("Executing SQL: {}", sql);
 
                 if (isShowString) {
