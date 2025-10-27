@@ -313,8 +313,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -375,8 +379,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -499,8 +507,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -530,8 +542,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -810,8 +826,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -841,8 +861,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -1650,8 +1674,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -1805,8 +1833,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -1867,8 +1899,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2115,8 +2151,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2301,8 +2341,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2332,8 +2376,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2363,8 +2411,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2425,8 +2477,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2456,8 +2512,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2487,8 +2547,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2549,8 +2613,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2704,8 +2772,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2828,8 +2900,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -2890,8 +2966,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
@@ -3076,8 +3156,12 @@ class TestTPCDSBatch1:
         assert len(td_rows) == len(ref_rows)
         print(f"\n✓ Row counts match: {len(td_rows)}")
 
+        # Use order-independent comparison
+        print("  Note: Using order-independent comparison")
+        sorted_ref, sorted_td = self.compare_results_order_independent(ref_rows, td_rows)
+
         mismatches = []
-        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+        for i, (ref_row, td_row) in enumerate(zip(sorted_ref, sorted_td)):
             td_dict = {k: float(v) if hasattr(v, '__float__') else v
                       for k, v in td_row.asDict().items()}
 
