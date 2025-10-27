@@ -699,3 +699,220 @@ class TestTPCDSBatch1:
         assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
         print(f"✓ All values match!")
         print(f"\n✅ TPC-DS Q20 CORRECTNESS VALIDATED")
+
+    def test_tpcds_q21_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q21: Warehouse inventory validation"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q21 CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference(21)
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query(21)
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows)
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q21 CORRECTNESS VALIDATED")
+
+    def test_tpcds_q22_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q22: Inventory before/after validation"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q22 CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference(22)
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query(22)
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows)
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q22 CORRECTNESS VALIDATED")
+
+    def test_tpcds_q23a_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q23a: Frequent customer analysis validation (part 1)"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q23a CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference('23a')
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query('23a')
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows)
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q23a CORRECTNESS VALIDATED")
+
+    def test_tpcds_q23b_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q23b: Frequent customer analysis validation (part 2)"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q23b CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference('23b')
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query('23b')
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows)
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q23b CORRECTNESS VALIDATED")
+
+    def test_tpcds_q24a_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q24a: Multi-channel customer analysis validation (part 1)"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q24a CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference('24a')
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query('24a')
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows)
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q24a CORRECTNESS VALIDATED")
+
+    def test_tpcds_q24b_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q24b: Multi-channel customer analysis validation (part 2)"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q24b CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference('24b')
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query('24b')
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows)
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q24b CORRECTNESS VALIDATED")
+
+    def test_tpcds_q25_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q25: Store sales by category validation"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q25 CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference(25)
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query(25)
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows)
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q25 CORRECTNESS VALIDATED")

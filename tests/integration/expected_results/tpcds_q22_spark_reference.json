@@ -1,0 +1,713 @@
+{
+  "query_num": "22",
+  "row_count": 100,
+  "columns": [
+    "i_product_name",
+    "i_brand",
+    "i_class",
+    "i_category",
+    "qoh"
+  ],
+  "rows": [
+    {
+      "i_product_name": "ationbarn station",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 430.3577235772358
+    },
+    {
+      "i_product_name": "ationbarn station",
+      "i_brand": "amalgbrand #8",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 430.3577235772358
+    },
+    {
+      "i_product_name": "ationbarn station",
+      "i_brand": "amalgbrand #8",
+      "i_class": "bathroom",
+      "i_category": null,
+      "qoh": 430.3577235772358
+    },
+    {
+      "i_product_name": "ationbarn station",
+      "i_brand": "amalgbrand #8",
+      "i_class": "bathroom",
+      "i_category": "Home",
+      "qoh": 430.3577235772358
+    },
+    {
+      "i_product_name": "ationoughtn stn st",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 435.26506024096386
+    },
+    {
+      "i_product_name": "ationoughtn stn st",
+      "i_brand": "edu packimporto #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 435.26506024096386
+    },
+    {
+      "i_product_name": "ationoughtn stn st",
+      "i_brand": "edu packimporto #2",
+      "i_class": "sports-apparel",
+      "i_category": null,
+      "qoh": 435.26506024096386
+    },
+    {
+      "i_product_name": "ationoughtn stn st",
+      "i_brand": "edu packimporto #2",
+      "i_class": "sports-apparel",
+      "i_category": "Men",
+      "qoh": 435.26506024096386
+    },
+    {
+      "i_product_name": "ationationprin st",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 435.5102880658436
+    },
+    {
+      "i_product_name": "ationationprin st",
+      "i_brand": "amalgexporti #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 435.5102880658436
+    },
+    {
+      "i_product_name": "ationationprin st",
+      "i_brand": "amalgexporti #2",
+      "i_class": "newborn",
+      "i_category": null,
+      "qoh": 435.5102880658436
+    },
+    {
+      "i_product_name": "ationationprin st",
+      "i_brand": "amalgexporti #2",
+      "i_class": "newborn",
+      "i_category": "Children",
+      "qoh": 435.5102880658436
+    },
+    {
+      "i_product_name": "oughtcallyn stantiought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 436.49402390438246
+    },
+    {
+      "i_product_name": "oughtcallyn stantiought",
+      "i_brand": "corpcorp #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 436.49402390438246
+    },
+    {
+      "i_product_name": "oughtcallyn stantiought",
+      "i_brand": "corpcorp #2",
+      "i_class": "rings",
+      "i_category": null,
+      "qoh": 436.49402390438246
+    },
+    {
+      "i_product_name": "oughtcallyn stantiought",
+      "i_brand": "corpcorp #2",
+      "i_class": "rings",
+      "i_category": "Jewelry",
+      "qoh": 436.49402390438246
+    },
+    {
+      "i_product_name": "callyesebaration",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 437.3943089430894
+    },
+    {
+      "i_product_name": "callyesebaration",
+      "i_brand": "namelesscorp #7",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 437.3943089430894
+    },
+    {
+      "i_product_name": "callyesebaration",
+      "i_brand": "namelesscorp #7",
+      "i_class": "mens watch",
+      "i_category": null,
+      "qoh": 437.3943089430894
+    },
+    {
+      "i_product_name": "callyesebaration",
+      "i_brand": "namelesscorp #7",
+      "i_class": "mens watch",
+      "i_category": "Jewelry",
+      "qoh": 437.3943089430894
+    },
+    {
+      "i_product_name": "n stprieingationought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 439.06477732793525
+    },
+    {
+      "i_product_name": "n stprieingationought",
+      "i_brand": "namelesscorp #8",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 439.06477732793525
+    },
+    {
+      "i_product_name": "n stprieingationought",
+      "i_brand": "namelesscorp #8",
+      "i_class": "mens watch",
+      "i_category": null,
+      "qoh": 439.06477732793525
+    },
+    {
+      "i_product_name": "n stprieingationought",
+      "i_brand": "namelesscorp #8",
+      "i_class": "mens watch",
+      "i_category": "Jewelry",
+      "qoh": 439.06477732793525
+    },
+    {
+      "i_product_name": "priationn stn st",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 439.096
+    },
+    {
+      "i_product_name": "priationn stn st",
+      "i_brand": "importoscholar #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 439.096
+    },
+    {
+      "i_product_name": "priationn stn st",
+      "i_brand": "importoscholar #2",
+      "i_class": "country",
+      "i_category": null,
+      "qoh": 439.096
+    },
+    {
+      "i_product_name": "priationn stn st",
+      "i_brand": "importoscholar #2",
+      "i_class": "country",
+      "i_category": "Music",
+      "qoh": 439.096
+    },
+    {
+      "i_product_name": "n stcallyableoughtought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 439.71836734693875
+    },
+    {
+      "i_product_name": "n stcallyableoughtought",
+      "i_brand": "amalgimporto #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 439.71836734693875
+    },
+    {
+      "i_product_name": "n stcallyableoughtought",
+      "i_brand": "amalgimporto #2",
+      "i_class": "accessories",
+      "i_category": null,
+      "qoh": 439.71836734693875
+    },
+    {
+      "i_product_name": "n stcallyableoughtought",
+      "i_brand": "amalgimporto #2",
+      "i_class": "accessories",
+      "i_category": "Men",
+      "qoh": 439.71836734693875
+    },
+    {
+      "i_product_name": "n stbarought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 440.31474103585657
+    },
+    {
+      "i_product_name": "n stbarought",
+      "i_brand": "corpbrand #10",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 440.31474103585657
+    },
+    {
+      "i_product_name": "n stbarought",
+      "i_brand": "corpbrand #10",
+      "i_class": "rugs",
+      "i_category": null,
+      "qoh": 440.31474103585657
+    },
+    {
+      "i_product_name": "n stbarought",
+      "i_brand": "corpbrand #10",
+      "i_class": "rugs",
+      "i_category": "Home",
+      "qoh": 440.31474103585657
+    },
+    {
+      "i_product_name": "n stn stantioughtought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 440.92857142857144
+    },
+    {
+      "i_product_name": "n stn stantioughtought",
+      "i_brand": "exportimaxi #8",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 440.92857142857144
+    },
+    {
+      "i_product_name": "n stn stantioughtought",
+      "i_brand": "exportimaxi #8",
+      "i_class": "computers",
+      "i_category": null,
+      "qoh": 440.92857142857144
+    },
+    {
+      "i_product_name": "n stn stantioughtought",
+      "i_brand": "exportimaxi #8",
+      "i_class": "computers",
+      "i_category": "Books",
+      "qoh": 440.92857142857144
+    },
+    {
+      "i_product_name": "n stcallyesepriought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 441.54183266932273
+    },
+    {
+      "i_product_name": "n stcallyesepriought",
+      "i_brand": "edu packscholar #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 441.54183266932273
+    },
+    {
+      "i_product_name": "n stcallyesepriought",
+      "i_brand": "edu packscholar #2",
+      "i_class": "classical",
+      "i_category": null,
+      "qoh": 441.54183266932273
+    },
+    {
+      "i_product_name": "n stcallyesepriought",
+      "i_brand": "edu packscholar #2",
+      "i_class": "classical",
+      "i_category": "Music",
+      "qoh": 441.54183266932273
+    },
+    {
+      "i_product_name": "priantiationation",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 441.6707317073171
+    },
+    {
+      "i_product_name": "priantiationation",
+      "i_brand": "importoimporto #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 441.6707317073171
+    },
+    {
+      "i_product_name": "priantiationation",
+      "i_brand": "importoimporto #2",
+      "i_class": "shirts",
+      "i_category": null,
+      "qoh": 441.6707317073171
+    },
+    {
+      "i_product_name": "priantiationation",
+      "i_brand": "importoimporto #2",
+      "i_class": "shirts",
+      "i_category": "Men",
+      "qoh": 441.6707317073171
+    },
+    {
+      "i_product_name": "oughtbarantiese",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 441.7459677419355
+    },
+    {
+      "i_product_name": "oughtbarantiese",
+      "i_brand": "exportiedu pack #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 441.7459677419355
+    },
+    {
+      "i_product_name": "oughtbarantiese",
+      "i_brand": "exportiedu pack #2",
+      "i_class": "kids",
+      "i_category": null,
+      "qoh": 441.7459677419355
+    },
+    {
+      "i_product_name": "oughtbarantiese",
+      "i_brand": "exportiedu pack #2",
+      "i_class": "kids",
+      "i_category": "Shoes",
+      "qoh": 441.7459677419355
+    },
+    {
+      "i_product_name": "oughtbarprin st",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 442.0734693877551
+    },
+    {
+      "i_product_name": "oughtbarprin st",
+      "i_brand": "edu packscholar #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 442.0734693877551
+    },
+    {
+      "i_product_name": "oughtbarprin st",
+      "i_brand": "edu packscholar #2",
+      "i_class": "classical",
+      "i_category": null,
+      "qoh": 442.0734693877551
+    },
+    {
+      "i_product_name": "oughtbarprin st",
+      "i_brand": "edu packscholar #2",
+      "i_class": "classical",
+      "i_category": "Music",
+      "qoh": 442.0734693877551
+    },
+    {
+      "i_product_name": "ationeingation",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 443.78225806451616
+    },
+    {
+      "i_product_name": "ationeingation",
+      "i_brand": "amalgexporti #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 443.78225806451616
+    },
+    {
+      "i_product_name": "ationeingation",
+      "i_brand": "amalgexporti #2",
+      "i_class": "newborn",
+      "i_category": null,
+      "qoh": 443.78225806451616
+    },
+    {
+      "i_product_name": "ationeingation",
+      "i_brand": "amalgexporti #2",
+      "i_class": "newborn",
+      "i_category": "Children",
+      "qoh": 443.78225806451616
+    },
+    {
+      "i_product_name": "ationbarn stableought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 444.09274193548384
+    },
+    {
+      "i_product_name": "ationbarn stableought",
+      "i_brand": "corpbrand #8",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 444.09274193548384
+    },
+    {
+      "i_product_name": "ationbarn stableought",
+      "i_brand": "corpbrand #8",
+      "i_class": "rugs",
+      "i_category": null,
+      "qoh": 444.09274193548384
+    },
+    {
+      "i_product_name": "ationbarn stableought",
+      "i_brand": "corpbrand #8",
+      "i_class": "rugs",
+      "i_category": "Home",
+      "qoh": 444.09274193548384
+    },
+    {
+      "i_product_name": "eseationcallyableought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 444.5443548387097
+    },
+    {
+      "i_product_name": "eseationcallyableought",
+      "i_brand": "importoexporti #1",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 444.5443548387097
+    },
+    {
+      "i_product_name": "eseationcallyableought",
+      "i_brand": "importoexporti #1",
+      "i_class": "infants",
+      "i_category": null,
+      "qoh": 444.5443548387097
+    },
+    {
+      "i_product_name": "eseationcallyableought",
+      "i_brand": "importoexporti #1",
+      "i_class": "infants",
+      "i_category": "Children",
+      "qoh": 444.5443548387097
+    },
+    {
+      "i_product_name": "eingableableationought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 444.7142857142857
+    },
+    {
+      "i_product_name": "eingableableationought",
+      "i_brand": "amalgimporto #1",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 444.7142857142857
+    },
+    {
+      "i_product_name": "eingableableationought",
+      "i_brand": "amalgimporto #1",
+      "i_class": "accessories",
+      "i_category": null,
+      "qoh": 444.7142857142857
+    },
+    {
+      "i_product_name": "eingableableationought",
+      "i_brand": "amalgimporto #1",
+      "i_class": "accessories",
+      "i_category": "Men",
+      "qoh": 444.7142857142857
+    },
+    {
+      "i_product_name": "n steseantiation",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.33196721311475
+    },
+    {
+      "i_product_name": "n steseantiation",
+      "i_brand": "univmaxi #10",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.33196721311475
+    },
+    {
+      "i_product_name": "n steseantiation",
+      "i_brand": "univmaxi #10",
+      "i_class": "pools",
+      "i_category": null,
+      "qoh": 445.33196721311475
+    },
+    {
+      "i_product_name": "n steseantiation",
+      "i_brand": "univmaxi #10",
+      "i_class": "pools",
+      "i_category": "Sports",
+      "qoh": 445.33196721311475
+    },
+    {
+      "i_product_name": "antibareingantiought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.4065040650407
+    },
+    {
+      "i_product_name": "antibareingantiought",
+      "i_brand": "importoimporto #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.4065040650407
+    },
+    {
+      "i_product_name": "antibareingantiought",
+      "i_brand": "importoimporto #2",
+      "i_class": "shirts",
+      "i_category": null,
+      "qoh": 445.4065040650407
+    },
+    {
+      "i_product_name": "antibareingantiought",
+      "i_brand": "importoimporto #2",
+      "i_class": "shirts",
+      "i_category": "Men",
+      "qoh": 445.4065040650407
+    },
+    {
+      "i_product_name": "ationantibarationought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.4190871369295
+    },
+    {
+      "i_product_name": "ationantibarationought",
+      "i_brand": "univmaxi #8",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.4190871369295
+    },
+    {
+      "i_product_name": "ationantibarationought",
+      "i_brand": "univmaxi #8",
+      "i_class": "pools",
+      "i_category": null,
+      "qoh": 445.4190871369295
+    },
+    {
+      "i_product_name": "ationantibarationought",
+      "i_brand": "univmaxi #8",
+      "i_class": "pools",
+      "i_category": "Sports",
+      "qoh": 445.4190871369295
+    },
+    {
+      "i_product_name": "oughtpricallybarought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.4859437751004
+    },
+    {
+      "i_product_name": "oughtpricallybarought",
+      "i_brand": "edu packexporti #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.4859437751004
+    },
+    {
+      "i_product_name": "oughtpricallybarought",
+      "i_brand": "edu packexporti #2",
+      "i_class": "school-uniforms",
+      "i_category": null,
+      "qoh": 445.4859437751004
+    },
+    {
+      "i_product_name": "oughtpricallybarought",
+      "i_brand": "edu packexporti #2",
+      "i_class": "school-uniforms",
+      "i_category": "Children",
+      "qoh": 445.4859437751004
+    },
+    {
+      "i_product_name": "ableationprieing",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.99583333333334
+    },
+    {
+      "i_product_name": "ableationprieing",
+      "i_brand": "amalgamalg #1",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 445.99583333333334
+    },
+    {
+      "i_product_name": "ableationprieing",
+      "i_brand": "amalgamalg #1",
+      "i_class": "dresses",
+      "i_category": null,
+      "qoh": 445.99583333333334
+    },
+    {
+      "i_product_name": "ableationprieing",
+      "i_brand": "amalgamalg #1",
+      "i_class": "dresses",
+      "i_category": "Women",
+      "qoh": 445.99583333333334
+    },
+    {
+      "i_product_name": "pribarpribarought",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 446.0408163265306
+    },
+    {
+      "i_product_name": "pribarpribarought",
+      "i_brand": "edu packimporto #2",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 446.0408163265306
+    },
+    {
+      "i_product_name": "pribarpribarought",
+      "i_brand": "edu packimporto #2",
+      "i_class": "sports-apparel",
+      "i_category": null,
+      "qoh": 446.0408163265306
+    },
+    {
+      "i_product_name": "pribarpribarought",
+      "i_brand": "edu packimporto #2",
+      "i_class": "sports-apparel",
+      "i_category": "Men",
+      "qoh": 446.0408163265306
+    },
+    {
+      "i_product_name": "oughtn stprin st",
+      "i_brand": null,
+      "i_class": null,
+      "i_category": null,
+      "qoh": 447.26666666666665
+    },
+    {
+      "i_product_name": "oughtn stprin st",
+      "i_brand": "exportiamalgamalg #8",
+      "i_class": null,
+      "i_category": null,
+      "qoh": 447.26666666666665
+    },
+    {
+      "i_product_name": "oughtn stprin st",
+      "i_brand": "exportiamalgamalg #8",
+      "i_class": "stereo",
+      "i_category": null,
+      "qoh": 447.26666666666665
+    },
+    {
+      "i_product_name": "oughtn stprin st",
+      "i_brand": "exportiamalgamalg #8",
+      "i_class": "stereo",
+      "i_category": "Electronics",
+      "qoh": 447.26666666666665
+    }
+  ]
+}
