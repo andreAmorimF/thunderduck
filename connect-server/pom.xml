@@ -48,12 +48,14 @@
             <version>${protobuf.version}</version>
         </dependency>
 
-        <!-- Spark Connect (provided scope - for .proto files and protocol definitions) -->
+        <!-- Spark Connect (compile scope - includes protocol buffer classes in shaded JAR) -->
+        <!-- NOTE: Using compile scope instead of provided to include proto classes (DataType, etc.) -->
+        <!-- The protobuf-maven-plugin generates some classes but not all - we need the full set from Spark -->
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-connect_2.13</artifactId>
             <version>${spark.version}</version>
-            <scope>provided</scope>
+            <scope>compile</scope>
         </dependency>
 
         <!-- Apache Arrow (versions inherited from parent) -->

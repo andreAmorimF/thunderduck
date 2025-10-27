@@ -811,6 +811,9 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     java.nio.channels.Channels.newChannel(dataOut)
                 );
 
+            // CRITICAL: Must call start() to write schema header before data!
+            // Without this, PySpark cannot properly read DATE columns and other types
+            writer.start();
             writer.writeBatch();
             writer.end();
             writer.close();
