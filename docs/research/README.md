@@ -10,34 +10,44 @@ These documents capture critical discoveries and insights gained while implement
 
 ### TPC-DS Query Analysis
 
-1. **[TPCDS_ROOT_CAUSE_ANALYSIS.md](TPCDS_ROOT_CAUSE_ANALYSIS.md)**
+1. **[MISSING_TPCDS_QUERIES_ANALYSIS.md](MISSING_TPCDS_QUERIES_ANALYSIS.md)**
+   - Analysis of why 8 TPC-DS queries are not in the test suite
+   - Documents Q30, Q35, Q69 exclusion reasons
+   - Recommendations for potential additions
+
+2. **[TPCDS_ROOT_CAUSE_ANALYSIS.md](TPCDS_ROOT_CAUSE_ANALYSIS.md)**
    - Comprehensive root cause analysis of Q36 and Q86 failures
    - Identifies DuckDB limitations and workarounds
    - Status: Resolved (Q86 fixed, Q36 documented as DuckDB limitation)
 
-2. **[DUCKDB_TPCDS_DISCOVERY.md](DUCKDB_TPCDS_DISCOVERY.md)**
+3. **[DUCKDB_TPCDS_DISCOVERY.md](DUCKDB_TPCDS_DISCOVERY.md)**
    - Critical discovery of how DuckDB handles TPC-DS queries
    - Analysis of DuckDB's official TPC-DS implementation
    - Key finding: DuckDB rewrites Q36 to avoid ROLLUP limitations
 
-3. **[Q36_DUCKDB_LIMITATION.md](Q36_DUCKDB_LIMITATION.md)**
+4. **[Q36_DUCKDB_LIMITATION.md](Q36_DUCKDB_LIMITATION.md)**
    - Final documentation of Q36's unsupported pattern
    - GROUPING() in PARTITION BY is not supported by DuckDB
    - Includes DuckDB's official workaround approach
 
+5. **[Q36_REWRITE_SOLUTION.md](Q36_REWRITE_SOLUTION.md)**
+   - Complete rewrite solution for Q36 using UNION ALL
+   - Implementation strategy and code structure
+   - Performance considerations and testing approach
+
 ### GROUPING() Function Research
 
-4. **[GROUPING_FUNCTION_ANALYSIS.md](GROUPING_FUNCTION_ANALYSIS.md)**
+6. **[GROUPING_FUNCTION_ANALYSIS.md](GROUPING_FUNCTION_ANALYSIS.md)**
    - Initial analysis of GROUPING() function discrepancies
    - Hypothesis testing and behavior comparison
    - Led to deeper investigation of SQL standards
 
-5. **[GROUPING_STANDARD_RESEARCH.md](GROUPING_STANDARD_RESEARCH.md)**
+7. **[GROUPING_STANDARD_RESEARCH.md](GROUPING_STANDARD_RESEARCH.md)**
    - Research into SQL standard specifications
    - Cross-database compatibility analysis
    - Investigation of GROUPING() semantics across systems
 
-6. **[GROUPING_ANSWER.md](GROUPING_ANSWER.md)**
+8. **[GROUPING_ANSWER.md](GROUPING_ANSWER.md)**
    - Definitive answer: GROUPING() is SQL standard (SQL:1999)
    - All major databases implement identical semantics
    - Confirms DuckDB follows the standard for basic usage

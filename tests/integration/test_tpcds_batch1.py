@@ -1104,6 +1104,44 @@ class TestTPCDSBatch1:
         print(f"✓ All values match!")
         print(f"\n✅ TPC-DS Q29 CORRECTNESS VALIDATED")
 
+    def test_tpcds_q30_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q30: Customer web returns with correlated subquery"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q30 CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference(30)
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query(30)
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows), \
+            f"Row count mismatch: Spark={len(ref_rows)}, Thunderduck={len(td_rows)}"
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        # Compare values
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        if mismatches:
+            print(f"\n❌ Found {len(mismatches)} value mismatches:")
+            for m in mismatches[:10]:
+                print(f"  {m}")
+            assert False, f"{len(mismatches)} value mismatches found"
+
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q30 CORRECTNESS VALIDATED")
+
     def test_tpcds_q31_correctness(self, spark, tpcds_tables, load_tpcds_query):
         """TPC-DS Q31: Customer cross-channel analysis validation"""
         print("\n" + "=" * 80)
@@ -1228,6 +1266,44 @@ class TestTPCDSBatch1:
         assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
         print(f"✓ All values match (after stable sort)!")
         print(f"\n✅ TPC-DS Q34 CORRECTNESS VALIDATED")
+
+    def test_tpcds_q35_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q35: Customer demographics with complex EXISTS clauses"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q35 CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference(35)
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query(35)
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows), \
+            f"Row count mismatch: Spark={len(ref_rows)}, Thunderduck={len(td_rows)}"
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        # Compare values
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        if mismatches:
+            print(f"\n❌ Found {len(mismatches)} value mismatches:")
+            for m in mismatches[:10]:
+                print(f"  {m}")
+            assert False, f"{len(mismatches)} value mismatches found"
+
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q35 CORRECTNESS VALIDATED")
 
     # COMMENTED OUT: Q36 uses GROUPING() in PARTITION BY which is not supported by DuckDB
     #
@@ -2335,6 +2411,44 @@ class TestTPCDSBatch1:
         assert len(mismatches) == 0, f"Mismatches: {mismatches[:5]}"
         print(f"✓ All values match!")
         print(f"\n✅ TPC-DS Q68 CORRECTNESS VALIDATED")
+
+    def test_tpcds_q69_correctness(self, spark, tpcds_tables, load_tpcds_query):
+        """TPC-DS Q69: Customer demographics with NOT EXISTS subqueries"""
+        print("\n" + "=" * 80)
+        print("TPC-DS Q69 CORRECTNESS TEST")
+        print("=" * 80)
+
+        reference = self.load_reference(69)
+        ref_rows = reference['rows']
+
+        query = load_tpcds_query(69)
+        result = spark.sql(query)
+        td_rows = result.collect()
+
+        assert len(td_rows) == len(ref_rows), \
+            f"Row count mismatch: Spark={len(ref_rows)}, Thunderduck={len(td_rows)}"
+        print(f"\n✓ Row counts match: {len(td_rows)}")
+
+        # Compare values
+        mismatches = []
+        for i, (ref_row, td_row) in enumerate(zip(ref_rows, td_rows)):
+            td_dict = {k: float(v) if hasattr(v, '__float__') else v
+                      for k, v in td_row.asDict().items()}
+
+            for col in ref_row.keys():
+                if not self.compare_values(ref_row[col], td_dict.get(col)):
+                    mismatches.append(
+                        f"Row {i}, '{col}': {ref_row[col]} vs {td_dict.get(col)}"
+                    )
+
+        if mismatches:
+            print(f"\n❌ Found {len(mismatches)} value mismatches:")
+            for m in mismatches[:10]:
+                print(f"  {m}")
+            assert False, f"{len(mismatches)} value mismatches found"
+
+        print(f"✓ All values match!")
+        print(f"\n✅ TPC-DS Q69 CORRECTNESS VALIDATED")
 
     def test_tpcds_q70_correctness(self, spark, tpcds_tables, load_tpcds_query):
         """TPC-DS Q70: Store monthly sales ranking validation"""
