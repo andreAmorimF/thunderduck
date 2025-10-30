@@ -399,17 +399,20 @@ public class Phase2IntegrationTest extends TestBase {
         @Test
         @DisplayName("SQL Generator is stateless across multiple generations")
         void testGeneratorStateless() {
+            // Create a fresh generator instance for this test to ensure proper isolation
+            SQLGenerator freshGenerator = new SQLGenerator();
+
             Expression condition = new BinaryExpression(
                 new ColumnReference("id", IntegerType.get()),
                 BinaryExpression.Operator.EQUAL,
                 new ColumnReference("customer_id", IntegerType.get())
             );
 
-            // Generate SQL multiple times
+            // Generate SQL multiple times with the fresh generator
             Join join = new Join(customers, orders, Join.JoinType.INNER, condition);
-            String sql1 = generator.generate(join);
-            String sql2 = generator.generate(join);
-            String sql3 = generator.generate(join);
+            String sql1 = freshGenerator.generate(join);
+            String sql2 = freshGenerator.generate(join);
+            String sql3 = freshGenerator.generate(join);
 
             // All generations should be identical
             assertEquals(sql1, sql2, "First and second generation should match");

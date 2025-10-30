@@ -65,6 +65,12 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // Check if this is a recursive call (buffer not empty or subquery depth > 0)
         boolean isRecursive = sql.length() > 0 || subqueryDepth > 0;
 
+        // State tracking for debugging (can be enabled if needed)
+        // System.err.println("DEBUG: generate() called - sql.length()=" + sql.length() +
+        //                   ", aliasCounter=" + aliasCounter +
+        //                   ", subqueryDepth=" + subqueryDepth +
+        //                   ", isRecursive=" + isRecursive);
+
         // Save state for recursive calls or rollback
         int savedLength = sql.length();
         
@@ -81,9 +87,12 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             visit(plan);
             String result = sql.toString().substring(savedLength);  // Get only the new part
 
-            // Clear the buffer after generating SQL for non-recursive calls
+            // Clear the buffer and reset counters after generating SQL for non-recursive calls
+            // This ensures the generator is stateless between top-level calls
             if (!isRecursive) {
                 sql.setLength(0);
+                aliasCounter = 0;
+                subqueryDepth = 0;
             }
 
             return result;
