@@ -80,6 +80,12 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             // Generate SQL
             visit(plan);
             String result = sql.toString().substring(savedLength);  // Get only the new part
+
+            // Clear the buffer after generating SQL for non-recursive calls
+            if (!isRecursive) {
+                sql.setLength(0);
+            }
+
             return result;
 
         } catch (UnsupportedOperationException e) {

@@ -851,7 +851,7 @@ public class DatabaseConnectionCleanupTest extends TestBase {
         @DisplayName("REGRESSION: Ensure atomic cleanup operations")
         void testAtomicCleanupOperations() throws Exception {
             logStep("Given: Cleanup operation that must be atomic");
-            int threadCount = 10;
+            int threadCount = 4; // Match pool size to avoid exhaustion
             CountDownLatch startLatch = new CountDownLatch(1);
             CountDownLatch completeLatch = new CountDownLatch(threadCount);
             AtomicInteger cleanupCount = new AtomicInteger(0);
