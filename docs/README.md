@@ -26,6 +26,7 @@ This directory contains comprehensive documentation for the thunderduck project.
 
 ### DataFrame API Documentation
 - **[DataFrame_API_Reference.md](DataFrame_API_Reference.md)** - Comprehensive DataFrame API reference, implementation status, and migration guide
+- **[TPC-DS_DataFrame_Implementation.md](TPC-DS_DataFrame_Implementation.md)** - TPC-DS DataFrame test suite with 34 queries (100% validation)
 
 ### Research & Analysis (research/)
 Deep technical investigations and root cause analyses conducted during development:

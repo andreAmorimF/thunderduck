@@ -1,0 +1,67 @@
+{
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "queries": {
+    "1": {
+      "query": "Q1",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "3": {
+      "query": "Q3",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 89,
+      "actual_rows": 89,
+      "differences": []
+    },
+    "6": {
+      "query": "Q6",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 46,
+      "actual_rows": 46,
+      "differences": []
+    },
+    "7": {
+      "query": "Q7",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "8": {
+      "query": "Q8",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 5,
+      "actual_rows": 5,
+      "differences": []
+    },
+    "10": {
+      "query": "Q10",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 6,
+      "actual_rows": 6,
+      "differences": []
+    }
+  }
+}

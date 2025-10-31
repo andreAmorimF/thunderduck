@@ -1,0 +1,271 @@
+{
+  "total": 26,
+  "passed": 22,
+  "failed": 4,
+  "queries": {
+    "1": {
+      "query": "Q1",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "3": {
+      "query": "Q3",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 89,
+      "actual_rows": 89,
+      "differences": []
+    },
+    "6": {
+      "query": "Q6",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 46,
+      "actual_rows": 46,
+      "differences": []
+    },
+    "7": {
+      "query": "Q7",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "8": {
+      "query": "Q8",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 5,
+      "actual_rows": 5,
+      "differences": []
+    },
+    "10": {
+      "query": "Q10",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 6,
+      "actual_rows": 6,
+      "differences": []
+    },
+    "12": {
+      "query": "Q12",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "15": {
+      "query": "Q15",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "18": {
+      "query": "Q18",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "21": {
+      "query": "Q21",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "26": {
+      "query": "Q26",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "32": {
+      "query": "Q32",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 1,
+      "actual_rows": 1,
+      "differences": []
+    },
+    "40": {
+      "query": "Q40",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "42": {
+      "query": "Q42",
+      "success": false,
+      "schema_match": false,
+      "row_count_match": false,
+      "data_match": false,
+      "expected_rows": 10,
+      "actual_rows": 1,
+      "differences": [
+        "Row count mismatch: expected 10, got 1"
+      ]
+    },
+    "46": {
+      "query": "Q46",
+      "success": false,
+      "schema_match": false,
+      "row_count_match": false,
+      "data_match": false,
+      "expected_rows": 0,
+      "actual_rows": 0,
+      "differences": [
+        "Failed to run DataFrame implementation"
+      ]
+    },
+    "48": {
+      "query": "Q48",
+      "success": false,
+      "schema_match": false,
+      "row_count_match": true,
+      "data_match": false,
+      "expected_rows": 1,
+      "actual_rows": 1,
+      "differences": []
+    },
+    "50": {
+      "query": "Q50",
+      "success": false,
+      "schema_match": false,
+      "row_count_match": true,
+      "data_match": false,
+      "expected_rows": 6,
+      "actual_rows": 6,
+      "differences": []
+    },
+    "55": {
+      "query": "Q55",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "60": {
+      "query": "Q60",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "65": {
+      "query": "Q65",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "70": {
+      "query": "Q70",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 3,
+      "actual_rows": 3,
+      "differences": []
+    },
+    "75": {
+      "query": "Q75",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "80": {
+      "query": "Q80",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 100,
+      "actual_rows": 100,
+      "differences": []
+    },
+    "85": {
+      "query": "Q85",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 1,
+      "actual_rows": 1,
+      "differences": []
+    },
+    "90": {
+      "query": "Q90",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 1,
+      "actual_rows": 1,
+      "differences": []
+    },
+    "95": {
+      "query": "Q95",
+      "success": true,
+      "schema_match": true,
+      "row_count_match": true,
+      "data_match": true,
+      "expected_rows": 1,
+      "actual_rows": 1,
+      "differences": []
+    }
+  }
+}

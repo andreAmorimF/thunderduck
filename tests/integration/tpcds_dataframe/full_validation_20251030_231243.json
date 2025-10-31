@@ -1,0 +1,384 @@
+{
+  "timestamp": "2025-10-30T23:08:52.841249",
+  "total": 34,
+  "passed": 34,
+  "failed": 0,
+  "skipped": 0,
+  "queries": {
+    "3": {
+      "query_num": 3,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2aa0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 8.35837173461914
+    },
+    "7": {
+      "query_num": 7,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2a40>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 10.218466520309448
+    },
+    "9": {
+      "query_num": 9,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e37f0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 0.4242997169494629
+    },
+    "12": {
+      "query_num": 12,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff795982e0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 7.376450538635254
+    },
+    "13": {
+      "query_num": 13,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff79598f10>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 3.261167526245117
+    },
+    "15": {
+      "query_num": 15,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3370>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 3.3451709747314453
+    },
+    "17": {
+      "query_num": 17,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e37c0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 6.209930419921875
+    },
+    "19": {
+      "query_num": 19,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2b30>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 2.453774929046631
+    },
+    "20": {
+      "query_num": 20,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3730>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 6.62471079826355
+    },
+    "25": {
+      "query_num": 25,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3850>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 9.93065333366394
+    },
+    "26": {
+      "query_num": 26,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2b00>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 9.454359769821167
+    },
+    "29": {
+      "query_num": 29,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff86740400>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 9.597259759902954
+    },
+    "32": {
+      "query_num": 32,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3790>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 2.1123015880584717
+    },
+    "37": {
+      "query_num": 37,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3ee0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 1.5075950622558594
+    },
+    "40": {
+      "query_num": 40,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff86741570>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 3.402745246887207
+    },
+    "41": {
+      "query_num": 41,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff867408b0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 0.4211885929107666
+    },
+    "42": {
+      "query_num": 42,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3b50>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 1.466616153717041
+    },
+    "43": {
+      "query_num": 43,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2b60>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 2.0933616161346436
+    },
+    "45": {
+      "query_num": 45,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff867434c0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 4.280485153198242
+    },
+    "48": {
+      "query_num": 48,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3d30>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 2.270512104034424
+    },
+    "50": {
+      "query_num": 50,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2ad0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 4.157772779464722
+    },
+    "52": {
+      "query_num": 52,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3910>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 1.4268839359283447
+    },
+    "55": {
+      "query_num": 55,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e28f0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 1.9674618244171143
+    },
+    "62": {
+      "query_num": 62,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2980>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 2.479771375656128
+    },
+    "71": {
+      "query_num": 71,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff7959b070>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 7.027010917663574
+    },
+    "72": {
+      "query_num": 72,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2950>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 75.6666808128357
+    },
+    "82": {
+      "query_num": 82,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3fa0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 2.9418249130249023
+    },
+    "84": {
+      "query_num": 84,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2d10>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 4.6254966259002686
+    },
+    "85": {
+      "query_num": 85,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2c50>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 7.524227142333984
+    },
+    "91": {
+      "query_num": 91,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff7959a4d0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 4.806930065155029
+    },
+    "92": {
+      "query_num": 92,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3a30>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 3.3791918754577637
+    },
+    "96": {
+      "query_num": 96,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3520>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 4.190625429153442
+    },
+    "98": {
+      "query_num": 98,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e2a10>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 10.138979434967041
+    },
+    "99": {
+      "query_num": 99,
+      "success": "<comparison_utils.ComparisonResult object at 0xffff796e3fd0>",
+      "dataframe_compatible": true,
+      "error": null,
+      "differences": [],
+      "execution_time": 5.266371726989746
+    }
+  },
+  "incompatible_queries": [
+    1,
+    2,
+    4,
+    5,
+    6,
+    8,
+    10,
+    11,
+    14,
+    16,
+    18,
+    21,
+    22,
+    23,
+    24,
+    27,
+    28,
+    30,
+    31,
+    33,
+    34,
+    35,
+    36,
+    38,
+    39,
+    44,
+    46,
+    47,
+    49,
+    51,
+    53,
+    54,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    83,
+    86,
+    87,
+    88,
+    89,
+    90,
+    93,
+    94,
+    95,
+    97
+  ],
+  "compatible_queries": [
+    3,
+    7,
+    9,
+    12,
+    13,
+    15,
+    17,
+    19,
+    20,
+    25,
+    26,
+    29,
+    32,
+    37,
+    40,
+    41,
+    42,
+    43,
+    45,
+    48,
+    50,
+    52,
+    55,
+    62,
+    71,
+    72,
+    82,
+    84,
+    85,
+    91,
+    92,
+    96,
+    98,
+    99
+  ]
+}
