@@ -48,14 +48,31 @@
             <version>${protobuf.version}</version>
         </dependency>
 
-        <!-- Spark Connect (compile scope - includes protocol buffer classes in shaded JAR) -->
-        <!-- NOTE: Using compile scope instead of provided to include proto classes (DataType, etc.) -->
-        <!-- The protobuf-maven-plugin generates some classes but not all - we need the full set from Spark -->
+        <!--
+        ============================================================================
+        CRITICAL: Spark Connect Dependency Configuration
+        ============================================================================
+        This MUST use 'provided' scope, NOT 'compile' scope!
+
+        Reason: spark-connect_2.13 contains pre-compiled protobuf classes that were
+        compiled with a different protobuf version. Using 'compile' scope bundles
+        these incompatible classes, causing VerifyError at runtime:
+
+        java.lang.VerifyError: Bad type on operand stack
+        Type 'org/apache/spark/connect/proto/Relation' is not assignable to
+        'com/google/protobuf/AbstractMessage'
+
+        Solution: Use 'provided' scope and generate our own protobuf classes with
+        the protobuf-maven-plugin using our specified protobuf version (3.23.4).
+
+        Validated: 2025-11-05 - Works with PySpark 3.5.3 client
+        ============================================================================
+        -->
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-connect_2.13</artifactId>
             <version>${spark.version}</version>
-            <scope>compile</scope>
+            <scope>provided</scope>  <!-- CRITICAL: Must be 'provided' not 'compile' -->
         </dependency>
 
         <!-- Apache Arrow (versions inherited from parent) -->

@@ -120,3 +120,63 @@ When comparing results with potential ties:
 **Goal**: Drop-in replacement for Spark, not "Spark-like" behavior.
 
 **Last Updated**: 2025-10-27
+
+## Spark Connect Server Configuration
+
+**Critical**: The following configuration is required for the ThunderDuck Spark Connect Server to work correctly.
+
+### Protobuf Dependency Configuration
+
+**Issue**: Spark Connect includes pre-compiled protobuf classes that can cause `VerifyError` at runtime if version mismatch occurs.
+
+**Solution**: Use `provided` scope for `spark-connect_2.13` dependency:
+```xml
+<dependency>
+    <groupId>org.apache.spark</groupId>
+    <artifactId>spark-connect_2.13</artifactId>
+    <version>${spark.version}</version>
+    <scope>provided</scope>  <!-- CRITICAL: Must be 'provided' not 'compile' -->
+</dependency>
+```
+
+**Reason**: This prevents bundling Spark's pre-compiled protobuf classes which were compiled with a different protobuf version, avoiding runtime `VerifyError`.
+
+### Apache Arrow on ARM64 Platforms
+
+**Issue**: Apache Arrow 17.0.0 requires special JVM flags on ARM64 platforms (AWS Graviton, Apple Silicon) to access internal Java NIO classes.
+
+**Required JVM Flags**:
+```bash
+--add-opens=java.base/java.nio=ALL-UNNAMED
+```
+
+**How to Run Server**:
+```bash
+# Option 1: Direct JAR execution (recommended for production)
+java --add-opens=java.base/java.nio=ALL-UNNAMED \
+     -jar connect-server/target/thunderduck-connect-server-*.jar
+
+# Option 2: Using Maven exec plugin
+export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED"
+mvn exec:java -pl connect-server \
+    -Dexec.mainClass="com.thunderduck.connect.server.SparkConnectServer"
+
+# Option 3: Using start-server.sh script (already configured)
+./start-server.sh
+```
+
+**Error if Missing**:
+```
+java.lang.RuntimeException: Failed to initialize MemoryUtil.
+You must start Java with `--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED`
+```
+
+### Key Learnings
+
+1. **Always use clean builds** when diagnosing server issues: `mvn clean compile` or `mvn clean package`
+2. **Dependency scoping matters**: `compile` vs `provided` scope can cause runtime class conflicts
+3. **Platform-specific requirements**: ARM64 platforms have special requirements for Apache Arrow
+4. **Test with actual client**: Always test with PySpark client after server changes
+
+**Last Updated**: 2025-11-05
+**Fix Applied**: See `/workspace/PROTOBUF_FIX_REPORT.md` for detailed resolution history

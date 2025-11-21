@@ -39,18 +39,35 @@ mvn clean install
 
 ### Run Server
 
+#### ⚠️ CRITICAL: Apache Arrow on ARM64 Platforms
+If running on **ARM64** (AWS Graviton, Apple Silicon), you MUST include JVM flags for Apache Arrow:
+
 ```bash
-# Default configuration (port 15002, in-memory, 5-minute timeout)
-java -cp connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar \
-  com.thunderduck.connect.server.SparkConnectServer
+# ARM64 REQUIRED: Add --add-opens flag for Apache Arrow
+java --add-opens=java.base/java.nio=ALL-UNNAMED \
+  -jar connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar
 
-# Custom port
-java -cp connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar \
-  com.thunderduck.connect.server.SparkConnectServer 50051
+# Without this flag on ARM64, you'll get:
+# java.lang.RuntimeException: Failed to initialize MemoryUtil
+```
 
-# Persistent database
-java -cp connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar \
-  com.thunderduck.connect.server.SparkConnectServer 15002 300000 /data/my.duckdb
+#### Standard Startup Commands
+
+```bash
+# Option 1: Using start-server.sh script (RECOMMENDED - includes ARM64 flags)
+./start-server.sh
+
+# Option 2: Direct JAR execution (ARM64 - AWS Graviton, Apple Silicon)
+java --add-opens=java.base/java.nio=ALL-UNNAMED \
+  -jar connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar
+
+# Option 3: Direct JAR execution (x86_64)
+java -jar connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar
+
+# Option 4: Using Maven exec plugin (set MAVEN_OPTS first)
+export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED"
+mvn exec:java -pl connect-server \
+  -Dexec.mainClass="com.thunderduck.connect.server.SparkConnectServer"
 ```
 
 ### Connect with PySpark
@@ -114,6 +131,45 @@ duckdb.connection.string=:memory:
 ```
 
 ## Troubleshooting
+
+### Protobuf VerifyError
+
+**Error**:
+```
+java.lang.VerifyError: Bad type on operand stack
+Type 'org/apache/spark/connect/proto/Relation' is not assignable to 'com/google/protobuf/AbstractMessage'
+```
+
+**Cause**: The `spark-connect_2.13` dependency is using `compile` scope instead of `provided` scope in pom.xml.
+
+**Solution**: Ensure pom.xml uses `provided` scope:
+```xml
+<dependency>
+    <groupId>org.apache.spark</groupId>
+    <artifactId>spark-connect_2.13</artifactId>
+    <version>${spark.version}</version>
+    <scope>provided</scope>  <!-- CRITICAL: Must be 'provided' not 'compile' -->
+</dependency>
+```
+
+Then clean rebuild:
+```bash
+mvn clean package -pl connect-server -DskipTests
+```
+
+### Apache Arrow Memory Error on ARM64
+
+**Error**:
+```
+java.lang.RuntimeException: Failed to initialize MemoryUtil.
+You must start Java with `--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED`
+```
+
+**Solution**: Add JVM flag when starting server:
+```bash
+java --add-opens=java.base/java.nio=ALL-UNNAMED \
+  -jar connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar
+```
 
 ### Server Busy Error
 

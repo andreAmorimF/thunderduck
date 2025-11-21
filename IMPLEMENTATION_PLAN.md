@@ -1217,6 +1217,31 @@ tests/integration/
 
 ---
 
+#### Week 17: TPC-DS DataFrame API Implementation ✅ COMPLETE
+
+**Goal**: Implement and validate TPC-DS queries using pure Spark DataFrame API (no SQL) for differential testing
+
+**Status**: COMPLETE - 100% validation success (34/34 DataFrame-compatible queries passing)
+
+**Achievement Date**: October 30, 2025
+
+**Key Results**:
+- Implemented 34 DataFrame-compatible TPC-DS queries (34% of total 99 queries)
+- 100% pass rate on all implemented queries
+- Average execution time: ~7 seconds per query
+- Created comprehensive validation framework for order-independent comparison
+- Successfully debugged and fixed 6 failing queries
+
+**Deliverables**:
+- `tests/integration/tpcds_dataframe/tpcds_dataframe_queries.py` - All 34 query implementations
+- `tests/integration/tpcds_dataframe/dataframe_validation_runner.py` - Validation framework
+- `tests/integration/tpcds_dataframe/run_full_validation.py` - Full test suite
+- WEEK17_COMPLETION_REPORT.md - Detailed completion documentation
+
+**Note**: 65 queries require SQL-specific features not available in DataFrame API and were dropped per requirements (no SQL fallbacks allowed).
+
+---
+
 INSERT NEW WEEK MILESTONES HERE
 
 ---
