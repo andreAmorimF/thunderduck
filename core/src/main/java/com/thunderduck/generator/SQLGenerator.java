@@ -160,6 +160,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             visitSQLRelation((SQLRelation) plan);
         } else if (plan instanceof Distinct) {
             visitDistinct((Distinct) plan);
+        } else if (plan instanceof RangeRelation) {
+            visitRangeRelation((RangeRelation) plan);
         } else {
             throw new UnsupportedOperationException(
                 "SQL generation not implemented for: " + plan.getClass().getSimpleName());
@@ -250,6 +252,30 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         visit(plan.children().get(0));
         subqueryDepth--;
         sql.append(") AS ").append(generateSubqueryAlias());
+    }
+
+    /**
+     * Visits a RangeRelation node.
+     *
+     * <p>Generates SQL using DuckDB's native range() table function.
+     * The range() function returns a column named "range", which we alias to "id"
+     * to match Spark's convention.
+     *
+     * <p>Example output:
+     * <pre>
+     *   SELECT range AS id FROM range(0, 10, 1)
+     * </pre>
+     */
+    private void visitRangeRelation(RangeRelation plan) {
+        // DuckDB's range(start, end, step) generates values from start to end-1
+        // which matches Spark's semantics exactly (end is exclusive)
+        sql.append("SELECT range AS \"id\" FROM range(")
+           .append(plan.start())
+           .append(", ")
+           .append(plan.end())
+           .append(", ")
+           .append(plan.step())
+           .append(")");
     }
 
     /**

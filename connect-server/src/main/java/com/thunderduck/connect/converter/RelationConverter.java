@@ -5,6 +5,7 @@ import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.FunctionCall;
 import com.thunderduck.expression.AliasExpression;
 import com.thunderduck.logical.LocalDataRelation;
+import com.thunderduck.logical.RangeRelation;
 
 import org.apache.spark.connect.proto.*;
 import org.slf4j.Logger;
@@ -68,6 +69,8 @@ public class RelationConverter {
             case DEDUPLICATE:
                 // Handle distinct() operation
                 return convertDeduplicate(relation.getDeduplicate());
+            case RANGE:
+                return convertRange(relation.getRange());
             default:
                 throw new PlanConversionException("Unsupported relation type: " + relation.getRelTypeCase());
         }
@@ -420,5 +423,29 @@ public class RelationConverter {
 
         logger.debug("Creating LocalDataRelation");
         return new LocalDataRelation(arrowData, schema);
+    }
+
+    /**
+     * Converts a Range relation to a RangeRelation.
+     *
+     * <p>Range generates a DataFrame with a single column "id" containing
+     * sequential BIGINT values from start (inclusive) to end (exclusive).
+     *
+     * @param range the Range protobuf message
+     * @return a RangeRelation logical plan
+     */
+    private LogicalPlan convertRange(org.apache.spark.connect.proto.Range range) {
+        // Start defaults to 0 if not specified
+        long start = range.hasStart() ? range.getStart() : 0;
+        long end = range.getEnd();
+        long step = range.getStep();
+
+        // Validate step is not zero (protobuf may allow it)
+        if (step == 0) {
+            throw new PlanConversionException("Range step cannot be zero");
+        }
+
+        logger.debug("Creating RangeRelation(start={}, end={}, step={})", start, end, step);
+        return new RangeRelation(start, end, step);
     }
 }

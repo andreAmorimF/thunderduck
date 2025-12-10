@@ -933,6 +933,9 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
     /**
      * Execute SQL query and stream results as Arrow batches.
      *
+     * <p>Handles both queries (SELECT) and DDL statements (CREATE, DROP, ALTER, etc.).
+     * DDL statements return an empty result set with success status.
+     *
      * @param sql SQL query string
      * @param sessionId Session ID
      * @param responseObserver Response stream
@@ -947,6 +950,27 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
 
             // Create QueryExecutor with connection manager
             QueryExecutor executor = new QueryExecutor(connectionManager);
+
+            // Check if this is a DDL statement (doesn't return results)
+            if (isDDLStatement(sql)) {
+                // Execute DDL using executeUpdate (no ResultSet)
+                executor.executeUpdate(sql);
+
+                long durationMs = (System.nanoTime() - startTime) / 1_000_000;
+                logger.info("[{}] DDL completed in {}ms", operationId, durationMs);
+
+                // Return empty success response for DDL
+                ExecutePlanResponse response = ExecutePlanResponse.newBuilder()
+                    .setSessionId(sessionId)
+                    .setOperationId(operationId)
+                    .setResponseId(java.util.UUID.randomUUID().toString())
+                    .setResultComplete(ExecutePlanResponse.ResultComplete.newBuilder().build())
+                    .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+                return;
+            }
 
             // Execute query and get Arrow results
             org.apache.arrow.vector.VectorSchemaRoot results = executor.executeQuery(sql);
@@ -976,6 +1000,42 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
 
             responseObserver.onError(status.asRuntimeException());
         }
+    }
+
+    /**
+     * Checks if a SQL statement is a DDL statement that doesn't return a ResultSet.
+     *
+     * <p>DDL statements include: CREATE, DROP, ALTER, TRUNCATE, RENAME, GRANT, REVOKE.
+     * These need to be executed with executeUpdate() instead of executeQuery().
+     *
+     * @param sql the SQL statement to check
+     * @return true if the statement is DDL
+     */
+    private boolean isDDLStatement(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return false;
+        }
+
+        String trimmed = sql.trim().toUpperCase();
+
+        // Check for common DDL keywords
+        return trimmed.startsWith("CREATE ") ||
+               trimmed.startsWith("DROP ") ||
+               trimmed.startsWith("ALTER ") ||
+               trimmed.startsWith("TRUNCATE ") ||
+               trimmed.startsWith("RENAME ") ||
+               trimmed.startsWith("GRANT ") ||
+               trimmed.startsWith("REVOKE ") ||
+               trimmed.startsWith("SET ") ||
+               trimmed.startsWith("RESET ") ||
+               trimmed.startsWith("PRAGMA ") ||
+               trimmed.startsWith("INSTALL ") ||
+               trimmed.startsWith("LOAD ") ||
+               trimmed.startsWith("ATTACH ") ||
+               trimmed.startsWith("DETACH ") ||
+               trimmed.startsWith("USE ") ||
+               trimmed.startsWith("CHECKPOINT ") ||
+               trimmed.startsWith("VACUUM ");
     }
 
     /**

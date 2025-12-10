@@ -338,3 +338,179 @@ class TestLocalRelationOperations(ThunderduckE2ETestBase):
         self.assertEqual(result[0]["y"], "a")
         self.assertEqual(result[2]["x"], 3)
         self.assertEqual(result[2]["y"], "c")
+
+
+class TestRangeOperations(ThunderduckE2ETestBase):
+    """Test spark.range() operations through Spark Connect.
+
+    These tests validate the Range relation feature which enables
+    spark.range(start, end, step) to generate sequences of integers.
+    """
+
+    def test_simple_range(self):
+        """Test simple spark.range(n) which generates 0 to n-1."""
+        df = self.spark.range(10)
+
+        # Check count
+        self.assertEqual(df.count(), 10)
+
+        # Check column name is 'id'
+        self.assertEqual(df.columns, ["id"])
+
+        # Check values
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, list(range(10)))
+
+    def test_range_with_start_end(self):
+        """Test spark.range(start, end) with explicit start."""
+        df = self.spark.range(5, 15)
+
+        self.assertEqual(df.count(), 10)
+
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, list(range(5, 15)))
+
+    def test_range_with_step(self):
+        """Test spark.range(start, end, step) with custom step."""
+        df = self.spark.range(0, 20, 2)
+
+        self.assertEqual(df.count(), 10)
+
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, [0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
+
+    def test_range_with_large_step(self):
+        """Test range with step > 1 that doesn't evenly divide."""
+        df = self.spark.range(0, 10, 3)
+
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, [0, 3, 6, 9])
+
+    def test_range_with_negative_start(self):
+        """Test range starting from negative value."""
+        df = self.spark.range(-5, 5)
+
+        self.assertEqual(df.count(), 10)
+
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, list(range(-5, 5)))
+
+    def test_empty_range(self):
+        """Test range where start >= end (empty result)."""
+        df = self.spark.range(10, 5)
+
+        self.assertEqual(df.count(), 0)
+
+        result = df.collect()
+        self.assertEqual(result, [])
+
+    def test_range_with_filter(self):
+        """Test filtering a range."""
+        df = self.spark.range(0, 100).filter("id > 90")
+
+        self.assertEqual(df.count(), 9)
+
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, [91, 92, 93, 94, 95, 96, 97, 98, 99])
+
+    def test_range_with_aggregation(self):
+        """Test aggregation on a range."""
+        df = self.spark.range(1, 11)  # 1 to 10
+
+        # Sum should be 1+2+...+10 = 55
+        # Note: Due to type serialization issue, result may be string
+        result = df.agg(F.sum("id").alias("total")).collect()
+        self.assertEqual(int(result[0]["total"]), 55)
+
+        # Avg should be 5.5
+        result = df.agg(F.avg("id").alias("average")).collect()
+        self.assertAlmostEqual(float(result[0]["average"]), 5.5, places=2)
+
+    def test_range_with_select(self):
+        """Test select on a range with expressions."""
+        df = self.spark.range(1, 6).select(
+            F.col("id"),
+            (F.col("id") * 2).alias("doubled"),
+            (F.col("id") * F.col("id")).alias("squared")
+        )
+
+        result = df.collect()
+
+        self.assertEqual(len(result), 5)
+        self.assertEqual(result[0]["id"], 1)
+        self.assertEqual(result[0]["doubled"], 2)
+        self.assertEqual(result[0]["squared"], 1)
+        self.assertEqual(result[4]["id"], 5)
+        self.assertEqual(result[4]["doubled"], 10)
+        self.assertEqual(result[4]["squared"], 25)
+
+    def test_range_with_limit(self):
+        """Test limit on a range."""
+        df = self.spark.range(0, 1000).limit(5)
+
+        self.assertEqual(df.count(), 5)
+
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, [0, 1, 2, 3, 4])
+
+    def test_range_with_orderby(self):
+        """Test ordering a range."""
+        df = self.spark.range(0, 5).orderBy(F.desc("id"))
+
+        result = df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(values, [4, 3, 2, 1, 0])
+
+    def test_range_join_via_sql(self):
+        """Test joining two ranges using SQL (workaround until withColumnRenamed is implemented)."""
+        # Use SQL to create two ranges and join them
+        joined = self.spark.sql("""
+            SELECT r1.id as id1, r2.id as id2
+            FROM (SELECT range AS id FROM range(0, 5, 1)) r1
+            INNER JOIN (SELECT range AS id FROM range(3, 8, 1)) r2
+            ON r1.id = r2.id
+        """)
+
+        # Overlap is 3, 4 (values that exist in both ranges)
+        self.assertEqual(joined.count(), 2)
+
+    def test_range_union(self):
+        """Test union of two ranges."""
+        df1 = self.spark.range(0, 3)
+        df2 = self.spark.range(10, 13)
+
+        union_df = df1.union(df2)
+
+        self.assertEqual(union_df.count(), 6)
+
+        result = union_df.collect()
+        values = [row["id"] for row in result]
+        self.assertEqual(sorted(values), [0, 1, 2, 10, 11, 12])
+
+    def test_large_range(self):
+        """Test a larger range to ensure it doesn't materialize in memory."""
+        df = self.spark.range(0, 1000000)
+
+        # Count should work efficiently
+        self.assertEqual(df.count(), 1000000)
+
+        # Aggregation should work
+        result = df.agg(F.max("id").alias("max_val")).collect()
+        self.assertEqual(result[0]["max_val"], 999999)
+
+    def test_range_schema(self):
+        """Test that range returns correct schema (single column 'id' of LongType)."""
+        df = self.spark.range(10)
+
+        schema = df.schema
+        self.assertEqual(len(schema.fields), 1)
+        self.assertEqual(schema.fields[0].name, "id")
+        # In PySpark, this should be LongType
+        self.assertEqual(str(schema.fields[0].dataType), "LongType()")

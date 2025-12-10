@@ -1,7 +1,7 @@
 # Spark Connect 3.5.3 Gap Analysis for Thunderduck
 
-**Version:** 1.0
-**Date:** 2025-12-09
+**Version:** 1.1
+**Date:** 2025-12-10
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 
 ---
@@ -18,9 +18,9 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 | Category | Total Operators | Implemented | Coverage |
 |----------|----------------|-------------|----------|
-| Relations | 40 | 13 | **32.5%** |
+| Relations | 40 | 14 | **35%** |
 | Expressions | 16 | 9 | **56.25%** |
-| Commands | 10 | 0 | **0%** |
+| Commands | 10 | 2 | **20%** |
 | Catalog | 26 | 0 | **0%** |
 
 ---
@@ -45,6 +45,7 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **LocalRelation** | `local_relation` | ✅ Implemented | Arrow IPC data (recent addition) |
 | **Deduplicate** | `deduplicate` | ✅ Implemented | DISTINCT operations |
 | **ShowString** | `show_string` | ✅ Implemented | Passthrough to input relation |
+| **Range** | `range` | ✅ Implemented | `spark.range(start, end, step)` |
 | **SubqueryAlias** | `subquery_alias` | ⚠️ Partial | Need explicit handling |
 
 ### 1.2 Not Implemented Relations
@@ -60,7 +61,6 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **WithColumnsRenamed** | `with_columns_renamed` | 🔴 HIGH | `df.withColumnRenamed("old", "new")` |
 | **ToDF** | `to_df` | 🔴 HIGH | `df.toDF("a", "b", "c")` |
 | **Sample** | `sample` | 🔴 HIGH | `df.sample(0.1)` - random sampling |
-| **Range** | `range` | 🔴 HIGH | `spark.range(0, 100)` |
 
 #### Medium Priority (Advanced Operations)
 
@@ -177,8 +177,8 @@ Commands are operations that don't return result data directly but perform side 
 | Command | Proto Field | Status | Priority | Use Case |
 |---------|-------------|--------|----------|----------|
 | **WriteOperation** | `write_operation` | ❌ Not Implemented | 🔴 HIGH | `df.write.parquet()` |
-| **CreateDataFrameViewCommand** | `create_dataframe_view` | ❌ Not Implemented | 🔴 HIGH | `df.createOrReplaceTempView()` |
-| **SqlCommand** | `sql_command` | ❌ Not Implemented | 🔴 HIGH | `spark.sql()` with side effects |
+| **CreateDataFrameViewCommand** | `create_dataframe_view` | ✅ Implemented | - | `df.createOrReplaceTempView()` |
+| **SqlCommand** | `sql_command` | ✅ Implemented | - | `spark.sql()` (DDL + queries) |
 | **WriteOperationV2** | `write_operation_v2` | ❌ Not Implemented | 🟡 MEDIUM | Table writes |
 | **RegisterFunction** | `register_function` | ❌ Not Implemented | 🔵 FUTURE | UDF registration |
 | **RegisterTableFunction** | `register_table_function` | ❌ Not Implemented | 🔵 FUTURE | UDTF registration |
@@ -289,15 +289,16 @@ Fully supported:
 
 These are commonly used operations that users will expect to work:
 
-1. **Offset** - Required for pagination
-2. **Drop** - Drop columns from DataFrame
-3. **WithColumns** - Add/replace columns
-4. **WithColumnsRenamed** - Rename columns
-5. **ToDF** - Rename all columns
-6. **Sample** - Random sampling
-7. **Range** - Generate sequences
-8. **CreateDataFrameViewCommand** - Temp view creation
-9. **WriteOperation** - Write to files/tables
+1. ~~**Range** - Generate sequences~~ ✅ Implemented (2025-12-10)
+2. ~~**CreateDataFrameViewCommand** - Temp view creation~~ ✅ Implemented
+3. ~~**SqlCommand** - DDL support~~ ✅ Implemented (2025-12-10)
+4. **Offset** - Required for pagination
+5. **Drop** - Drop columns from DataFrame
+6. **WithColumns** - Add/replace columns
+7. **WithColumnsRenamed** - Rename columns
+8. **ToDF** - Rename all columns
+9. **Sample** - Random sampling
+10. **WriteOperation** - Write to files/tables
 
 **Estimated effort:** 2-3 weeks
 
@@ -418,7 +419,10 @@ df.join(df2, "key")                           # Join
 df.union(df2)                                 # SetOperation
 df.distinct()                                 # Deduplicate
 spark.sql("SELECT * FROM ...")                # SQL
+spark.sql("CREATE TEMP VIEW ...")             # DDL via SqlCommand
 spark.createDataFrame([(1,2),(3,4)])          # LocalRelation
+spark.range(0, 100)                           # Range
+df.createOrReplaceTempView("view")            # CreateDataFrameViewCommand
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
@@ -432,9 +436,7 @@ df.toDF("a", "b", "c")                        # ToDF
 df.sample(0.1)                                # Sample
 df.na.fill(0)                                 # NAFill
 df.na.drop()                                  # NADrop
-df.createOrReplaceTempView("view")            # CreateDataFrameViewCommand
 df.write.parquet("output")                    # WriteOperation
-spark.range(0, 100)                           # Range
 df.hint("BROADCAST")                          # Hint
 df.repartition(10)                            # Repartition
 df.unpivot(...)                               # Unpivot
@@ -444,6 +446,6 @@ spark.catalog.listTables()                    # Catalog operations
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2025-12-09
+**Document Version:** 1.1
+**Last Updated:** 2025-12-10
 **Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
