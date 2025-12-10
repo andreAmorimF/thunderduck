@@ -18,7 +18,7 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 | Category | Total Operators | Implemented | Coverage |
 |----------|----------------|-------------|----------|
-| Relations | 40 | 14 | **35%** |
+| Relations | 40 | 17 | **42.5%** |
 | Expressions | 16 | 9 | **56.25%** |
 | Commands | 10 | 2 | **20%** |
 | Catalog | 26 | 0 | **0%** |
@@ -46,6 +46,9 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **Deduplicate** | `deduplicate` | ✅ Implemented | DISTINCT operations |
 | **ShowString** | `show_string` | ✅ Implemented | Passthrough to input relation |
 | **Range** | `range` | ✅ Implemented | `spark.range(start, end, step)` |
+| **Drop** | `drop` | ✅ Implemented | `df.drop("col")` - uses DuckDB EXCLUDE (M19) |
+| **WithColumns** | `with_columns` | ✅ Implemented | `df.withColumn("name", expr)` - uses REPLACE/append (M19) |
+| **WithColumnsRenamed** | `with_columns_renamed` | ✅ Implemented | `df.withColumnRenamed("old", "new")` - uses EXCLUDE+alias (M19) |
 | **SubqueryAlias** | `subquery_alias` | ⚠️ Partial | Need explicit handling |
 
 ### 1.2 Not Implemented Relations
@@ -56,9 +59,6 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 |----------|-------------|----------|----------|
 | **Offset** | `offset` | 🔴 HIGH | `df.offset(n)` - pagination |
 | **Tail** | `tail` | 🔴 HIGH | `df.tail(n)` - last n rows |
-| **Drop** | `drop` | 🔴 HIGH | `df.drop("col")` - drop columns |
-| **WithColumns** | `with_columns` | 🔴 HIGH | `df.withColumn("name", expr)` |
-| **WithColumnsRenamed** | `with_columns_renamed` | 🔴 HIGH | `df.withColumnRenamed("old", "new")` |
 | **ToDF** | `to_df` | 🔴 HIGH | `df.toDF("a", "b", "c")` |
 | **Sample** | `sample` | 🔴 HIGH | `df.sample(0.1)` - random sampling |
 
@@ -292,15 +292,15 @@ These are commonly used operations that users will expect to work:
 1. ~~**Range** - Generate sequences~~ ✅ Implemented (2025-12-10)
 2. ~~**CreateDataFrameViewCommand** - Temp view creation~~ ✅ Implemented
 3. ~~**SqlCommand** - DDL support~~ ✅ Implemented (2025-12-10)
-4. **Offset** - Required for pagination
-5. **Drop** - Drop columns from DataFrame
-6. **WithColumns** - Add/replace columns
-7. **WithColumnsRenamed** - Rename columns
+4. ~~**Drop** - Drop columns from DataFrame~~ ✅ Implemented (M19, 2025-12-10)
+5. ~~**WithColumns** - Add/replace columns~~ ✅ Implemented (M19, 2025-12-10)
+6. ~~**WithColumnsRenamed** - Rename columns~~ ✅ Implemented (M19, 2025-12-10)
+7. **Offset** - Required for pagination
 8. **ToDF** - Rename all columns
 9. **Sample** - Random sampling
 10. **WriteOperation** - Write to files/tables
 
-**Estimated effort:** 2-3 weeks
+**Estimated effort:** 1-2 weeks
 
 ### Phase 2: DataFrame NA/Stat Functions (Medium Priority)
 
@@ -369,8 +369,8 @@ The current implementation successfully handles TPC-H and TPC-DS queries because
 - Join (various types)
 
 These are all implemented. However, production workloads often include:
-- `df.withColumn()` - NOT implemented
-- `df.drop()` - NOT implemented
+- `df.withColumn()` - ✅ Implemented (M19)
+- `df.drop()` - ✅ Implemented (M19)
 - `df.sample()` - NOT implemented
 - `df.na.fill()` - NOT implemented
 
@@ -423,15 +423,15 @@ spark.sql("CREATE TEMP VIEW ...")             # DDL via SqlCommand
 spark.createDataFrame([(1,2),(3,4)])          # LocalRelation
 spark.range(0, 100)                           # Range
 df.createOrReplaceTempView("view")            # CreateDataFrameViewCommand
+df.drop("col")                                # Drop (M19)
+df.withColumn("new", expr)                    # WithColumns (M19)
+df.withColumnRenamed("old", "new")            # WithColumnsRenamed (M19)
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
 
 ```python
 # These operations do NOT work (will throw PlanConversionException):
-df.drop("col")                                # Drop
-df.withColumn("new", expr)                    # WithColumns
-df.withColumnRenamed("old", "new")            # WithColumnsRenamed
 df.toDF("a", "b", "c")                        # ToDF
 df.sample(0.1)                                # Sample
 df.na.fill(0)                                 # NAFill
@@ -446,6 +446,7 @@ spark.catalog.listTables()                    # Catalog operations
 
 ---
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Last Updated:** 2025-12-10
 **Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
+**M19 Update:** Added Drop, WithColumns, WithColumnsRenamed implementations
