@@ -46,15 +46,22 @@ thunderduck/
 ├── IMPLEMENTATION_PLAN.md              # ONE high-level plan
 ├── README.md                            # Project overview
 ├── WEEK11_IMPLEMENTATION_PLAN.md        # Current milestone (active)
-├── WEEK*_COMPLETION_REPORT.md           # Historical completion reports
 ├── docs/
 │   ├── SPARK_CONNECT_PROTOCOL_SPEC.md  # Protocol reference
 │   ├── Testing_Strategy.md              # Testing approach
 │   ├── architect/                       # Architecture documentation
-│   └── coder/                           # Build/CI documentation
+│   ├── coder/                           # Build/CI documentation
+│   └── dev_journal/                     # Weekly completion reports
+├── tests/
+│   └── scripts/                         # Test runner scripts
+│       ├── start-server.sh
+│       ├── start-spark-connect.sh
+│       ├── stop-spark-connect.sh
+│       ├── run-differential-tests.sh
+│       └── run-tpc-spark-connect-tests.sh
 ```
 
-**Last Updated**: 2025-10-27
+**Last Updated**: 2025-12-09
 **Cleanup Report**: See `DOCUMENTATION_CLEANUP_PLAN.md` for the rationale behind this structure
 
 ## Spark Parity Requirements
@@ -162,7 +169,7 @@ mvn exec:java -pl connect-server \
     -Dexec.mainClass="com.thunderduck.connect.server.SparkConnectServer"
 
 # Option 3: Using start-server.sh script (already configured)
-./start-server.sh
+./tests/scripts/start-server.sh
 ```
 
 **Error if Missing**:
@@ -179,4 +186,4 @@ You must start Java with `--add-opens=java.base/java.nio=org.apache.arrow.memory
 4. **Test with actual client**: Always test with PySpark client after server changes
 
 **Last Updated**: 2025-11-05
-**Fix Applied**: See `/workspace/PROTOBUF_FIX_REPORT.md` for detailed resolution history
+**Fix Applied**: See `/workspace/docs/PROTOBUF_FIX_REPORT.md` for detailed resolution history

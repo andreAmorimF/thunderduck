@@ -564,6 +564,7 @@ thunderduck includes a comprehensive test suite with 500+ tests:
 - **Unit Tests (300+)**: Type mapping, expression translation, SQL generation
 - **Integration Tests (100+)**: End-to-end pipelines, format readers
 - **Differential Tests (200+)**: Spark 3.5.3 parity validation
+- **End-to-End Tests**: PySpark client → Spark Connect → thunderduck validation
 - **Performance Benchmarks (70+)**: TPC-H queries, micro-benchmarks
 
 ### Running Tests
@@ -582,12 +583,234 @@ mvn verify -Pcoverage
 open tests/target/site/jacoco/index.html
 ```
 
+## End-to-End Testing (E2E)
+
+The E2E test suite validates the complete pipeline: **PySpark client → Spark Connect protocol → thunderduck server → DuckDB execution**. This ensures thunderduck works correctly as a drop-in replacement for Spark.
+
+### Prerequisites
+
+1. **Python 3.8+** with pip
+2. **PySpark 3.5.3** (automatically installed)
+3. **thunderduck server** JAR built
+
+### Starting the Spark Connect Server
+
+Before running E2E tests, start the thunderduck Spark Connect server:
+
+```bash
+# Build the server if not already built
+mvn clean package -pl connect-server
+
+# Start the server (default port 15002)
+# For x86_64:
+java -jar connect-server/target/thunderduck-connect-server-*.jar
+
+# For ARM64 (AWS Graviton, Apple Silicon):
+java --add-opens=java.base/java.nio=ALL-UNNAMED \
+     -jar connect-server/target/thunderduck-connect-server-*.jar
+
+# Or use the convenience script (auto-detects platform):
+./tests/scripts/start-server.sh
+```
+
+The server will show:
+```
+INFO SparkConnectServer - Starting Spark Connect Server...
+INFO SparkConnectServer - Configuration: port=15002, sessionTimeout=300000ms
+INFO SparkConnectServer - Server started successfully
+```
+
+### Running E2E Tests
+
+#### Method 1: Maven Integration (Recommended)
+
+**Note:** Maven automatically starts and stops the thunderduck server for you!
+
+```bash
+# Build server JAR first (required once)
+mvn clean package -pl connect-server
+
+# Run all E2E tests (starts server automatically)
+mvn verify -Pe2e
+
+# Run E2E tests with TPC benchmarks enabled
+mvn verify -Pe2e,tpc
+
+# Skip unit tests, run only E2E tests
+mvn verify -Pe2e -DskipTests=true
+```
+
+The Maven integration:
+- ✅ Automatically starts the server before tests
+- ✅ Automatically stops the server after tests (even on failure/interruption)
+- ✅ Reuses existing server if already running on port 15002
+- ✅ Installs Python dependencies automatically
+
+#### Method 2: Direct Python Execution
+
+**Note:** When using Python directly, you must manually manage the server!
+
+```bash
+# Start the server first (in a separate terminal)
+./tests/scripts/start-server.sh  # Or manually with java -jar ...
+
+# Install Python dependencies
+pip install -r tests/src/test/python/requirements.txt
+
+# Run all E2E tests
+python -m pytest tests/src/test/python/thunderduck_e2e/ -v
+
+# Run specific test suite
+python -m pytest tests/src/test/python/thunderduck_e2e/test_dataframes.py -v
+python -m pytest tests/src/test/python/thunderduck_e2e/test_sql.py -v
+python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -v
+
+# Run specific test
+python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py::TestTPCH::test_q01_sql -v
+```
+
+### E2E Test Suite Structure
+
+```
+tests/src/test/python/thunderduck_e2e/
+├── test_runner.py        # Base test class with PySpark session setup
+├── test_dataframes.py    # DataFrame operation tests
+├── test_sql.py          # SQL query tests
+├── test_tpch.py         # TPC-H benchmark tests (dual implementation)
+├── test_tpcds.py        # TPC-DS benchmark tests (planned)
+└── test_edge_cases.py   # Error handling and edge cases
+```
+
+### TPC-H E2E Tests (Dual Implementation)
+
+The TPC-H test suite is unique: **each query is tested in TWO ways** to ensure complete Spark API compatibility:
+
+1. **SQL Version**: Direct SQL query execution
+2. **DataFrame API Version**: Equivalent operations using PySpark DataFrame API
+
+Example from `test_tpch.py`:
+
+```python
+def test_q01_sql(self):
+    """Q1: Pricing Summary Report (SQL version)."""
+    query = """
+        SELECT ... FROM lineitem WHERE ...
+    """
+    df = self.spark.sql(query)
+    result = df.collect()
+    self.assertGreater(len(result), 0)
+
+def test_q01_dataframe(self):
+    """Q1: Pricing Summary Report (DataFrame API version)."""
+    df = self.df_lineitem \
+        .filter(F.col("l_shipdate") <= F.date_sub(F.lit("1998-12-01"), 90)) \
+        .groupBy("l_returnflag", "l_linestatus") \
+        .agg(F.sum("l_quantity").alias("sum_qty"), ...)
+    result = df.collect()
+    self.assertGreater(len(result), 0)
+```
+
+**Coverage Status**: All 22 TPC-H queries (Q1-Q22) have both SQL and DataFrame implementations ✅
+
+### Running TPC-H E2E Tests
+
+```bash
+# Ensure TPC-H data is generated (see Data Generation section)
+# Default location: ./data/tpch_sf001/
+
+# Run all TPC-H tests (44 tests total: 22 SQL + 22 DataFrame)
+python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -v
+
+# Run only SQL versions
+python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -k "sql" -v
+
+# Run only DataFrame versions
+python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -k "dataframe" -v
+
+# Run specific query (both versions)
+python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -k "q01" -v
+```
+
+### E2E Test Configuration
+
+Environment variables for test configuration:
+
+```bash
+# Specify thunderduck server location (default: localhost:15002)
+export THUNDERDUCK_URL="sc://localhost:15002"
+
+# Specify TPC-H data path (default: ./data/tpch_sf001)
+export TPCH_DATA_PATH="./data/tpch_sf001"
+
+# Enable verbose test output
+export PYTEST_VERBOSE=1
+
+# Run tests
+mvn verify -Pe2e
+```
+
+### Continuous Integration
+
+The E2E tests are integrated into CI/CD pipelines:
+
+```yaml
+# Example GitHub Actions workflow
+- name: Start thunderduck Server
+  run: |
+    ./tests/scripts/start-server.sh &
+    sleep 5  # Wait for server startup
+
+- name: Run E2E Tests
+  run: mvn verify -Pe2e,tpc -DskipTests=true
+
+- name: Stop Server
+  run: pkill -f thunderduck-connect-server
+```
+
+### Debugging E2E Tests
+
+1. **Check server is running**:
+   ```bash
+   netstat -an | grep 15002  # Should show LISTEN
+   ```
+
+2. **Enable debug logging**:
+   ```bash
+   export THUNDERDUCK_LOG_LEVEL=DEBUG
+   python -m pytest tests/src/test/python/thunderduck_e2e/ -v -s
+   ```
+
+3. **Test connection manually**:
+   ```python
+   from pyspark.sql import SparkSession
+   spark = SparkSession.builder \
+       .appName("test") \
+       .remote("sc://localhost:15002") \
+       .getOrCreate()
+   spark.sql("SELECT 1").show()
+   ```
+
+### E2E Test Results
+
+Expected output when running E2E tests:
+
+```
+============================= test session starts ==============================
+tests/src/test/python/thunderduck_e2e/test_tpch.py::TestTPCH::test_q01_sql PASSED
+tests/src/test/python/thunderduck_e2e/test_tpch.py::TestTPCH::test_q01_dataframe PASSED
+tests/src/test/python/thunderduck_e2e/test_tpch.py::TestTPCH::test_q02_sql PASSED
+tests/src/test/python/thunderduck_e2e/test_tpch.py::TestTPCH::test_q02_dataframe PASSED
+...
+===================== 44 passed in 45.23s =====================
+```
+
 ### Quality Gates
 
 All PRs must meet these criteria:
 - Line coverage ≥ 85%
 - Branch coverage ≥ 80%
 - All differential tests passing (100%)
+- All E2E tests passing (100%)
 - Zero compiler warnings
 
 ## Documentation

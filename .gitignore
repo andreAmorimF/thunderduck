@@ -38,6 +38,16 @@ dependency-reduced-pom.xml
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+*.egg-info/
+.eggs/
 # Claude Code authentication (auto-generated, keep secret)
 .devcontainer/.claude-token
 .devcontainer/.claude-oauth.json

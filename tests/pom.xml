@@ -56,6 +56,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Spark Connect client for remote connections -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-connect-client-jvm_2.13</artifactId>
+            <version>${spark.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -92,9 +100,94 @@
                         --add-opens=java.base/java.nio=ALL-UNNAMED
                         --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
                     </argLine>
+                    <!-- Exclude E2E tests from unit test run -->
+                    <excludes>
+                        <exclude>**/*E2ETest.java</exclude>
+                        <exclude>**/SparkConnect*.java</exclude>
+                    </excludes>
                 </configuration>
+            </plugin>
+
+            <!-- Failsafe plugin for E2E/Integration tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.0.0-M7</version>
+                <configuration>
+                    <includes>
+                        <include>**/*E2ETest.java</include>
+                        <include>**/SparkConnect*.java</include>
+                    </includes>
+                    <argLine>
+                        --add-opens=java.base/java.nio=ALL-UNNAMED
+                        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+                    </argLine>
+                    <systemPropertyVariables>
+                        <thunderduck.server.port>50051</thunderduck.server.port>
+                        <test.data.dir>${project.basedir}/../data</test.data.dir>
+                        <python.test.dir>${project.basedir}/src/test/python</python.test.dir>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Python test support -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>install-python-deps</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>pip3</executable>
+                            <arguments>
+                                <argument>install</argument>
+                                <argument>--quiet</argument>
+                                <argument>--user</argument>
+                                <argument>-r</argument>
+                                <argument>${project.basedir}/src/test/python/requirements.txt</argument>
+                            </arguments>
+                            <successCodes>
+                                <successCode>0</successCode>
+                            </successCodes>
+                            <skip>${skipITs}</skip>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Profile for running only E2E tests -->
+        <profile>
+            <id>e2e</id>
+            <properties>
+                <skipTests>true</skipTests>
+                <skipITs>false</skipITs>
+            </properties>
+        </profile>
+
+        <!-- Profile with TPC benchmarks enabled -->
+        <profile>
+            <id>tpc</id>
+            <properties>
+                <tpch.enabled>true</tpch.enabled>
+                <tpcds.enabled>true</tpcds.enabled>
+            </properties>
+        </profile>
+    </profiles>
 
 </project>

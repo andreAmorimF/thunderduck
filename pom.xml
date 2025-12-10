@@ -84,6 +84,12 @@
                 <version>${spark.version}</version>
                 <scope>provided</scope>
             </dependency>
+            <dependency>
+                <groupId>org.apache.spark</groupId>
+                <artifactId>spark-connect-client-jvm_2.13</artifactId>
+                <version>${spark.version}</version>
+                <scope>test</scope>
+            </dependency>
 
             <!-- Logging -->
             <dependency>

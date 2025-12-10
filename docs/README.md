@@ -38,6 +38,45 @@ Deep technical investigations and root cause analyses conducted during developme
 - **[GROUPING_STANDARD_RESEARCH.md](research/GROUPING_STANDARD_RESEARCH.md)** - Research on SQL standard GROUPING() semantics
 - **[GROUPING_ANSWER.md](research/GROUPING_ANSWER.md)** - Definitive answer on GROUPING() standardization
 
+### Testing
+- **[Differential_Testing_Guide.md](Differential_Testing_Guide.md)** - Comprehensive guide for differential and end-to-end testing
+
+### Test Scripts (../tests/scripts/)
+Shell scripts for running tests and servers:
+
+| Script | Description |
+|--------|-------------|
+| [start-server.sh](../tests/scripts/start-server.sh) | Start Thunderduck Spark Connect server |
+| [start-spark-connect.sh](../tests/scripts/start-spark-connect.sh) | Start Apache Spark Connect server for differential testing |
+| [stop-spark-connect.sh](../tests/scripts/stop-spark-connect.sh) | Stop Apache Spark Connect server |
+| [run-differential-tests.sh](../tests/scripts/run-differential-tests.sh) | Run differential tests against Spark |
+| [run-tpc-spark-connect-tests.sh](../tests/scripts/run-tpc-spark-connect-tests.sh) | Run TPC-H/TPC-DS benchmarks via Spark Connect |
+
+### Troubleshooting & Fixes
+- **[PROTOBUF_FIX_REPORT.md](PROTOBUF_FIX_REPORT.md)** - Resolution of protobuf version conflict causing VerifyError
+
+### Development Journal (dev_journal/)
+Weekly completion reports documenting the project's development progress:
+
+| Week | Report | Key Achievements |
+|------|--------|------------------|
+| 1 | [WEEK1_COMPLETION_REPORT.md](dev_journal/WEEK1_COMPLETION_REPORT.md) | Project setup, initial architecture |
+| 2 | [WEEK2_COMPLETION_REPORT.md](dev_journal/WEEK2_COMPLETION_REPORT.md) | Core infrastructure |
+| 3 | [WEEK3_COMPLETION_REPORT.md](dev_journal/WEEK3_COMPLETION_REPORT.md) | DataFrame API foundation |
+| 4 | [WEEK4_COMPLETION_REPORT.md](dev_journal/WEEK4_COMPLETION_REPORT.md) | TPC-H implementation |
+| 5 | [WEEK5_COMPLETION_REPORT.md](dev_journal/WEEK5_COMPLETION_REPORT.md) | Query optimization |
+| 7 | [WEEK7_FINAL_REPORT.md](dev_journal/WEEK7_FINAL_REPORT.md) | Final report |
+| 8 | [WEEK8_COMPLETION_REPORT.md](dev_journal/WEEK8_COMPLETION_REPORT.md) | Advanced features |
+| 10 | [WEEK10_COMPLETION_REPORT.md](dev_journal/WEEK10_COMPLETION_REPORT.md) | Spark Connect research |
+| 11 | [WEEK11_COMPLETION_REPORT.md](dev_journal/WEEK11_COMPLETION_REPORT.md) | Spark Connect server |
+| 11+ | [WEEK11_POST_CLEANUP_REPORT.md](dev_journal/WEEK11_POST_CLEANUP_REPORT.md) | Post-cleanup documentation |
+| 12 | [WEEK12_COMPLETION_REPORT.md](dev_journal/WEEK12_COMPLETION_REPORT.md) | TPC-H via Spark Connect |
+| 13 | [WEEK13_COMPLETION_REPORT.md](dev_journal/WEEK13_COMPLETION_REPORT.md) | TPC-DS implementation |
+| 14 | [WEEK14_COMPLETION_REPORT.md](dev_journal/WEEK14_COMPLETION_REPORT.md) | DataFrame API expansion |
+| 15 | [WEEK15_COMPLETION_REPORT.md](dev_journal/WEEK15_COMPLETION_REPORT.md) | Window functions |
+| 16 | [WEEK16_COMPLETION_REPORT.md](dev_journal/WEEK16_COMPLETION_REPORT.md) | Production readiness |
+| 17 | [WEEK17_COMPLETION_REPORT.md](dev_journal/WEEK17_COMPLETION_REPORT.md) | Protobuf fix, stabilization |
+
 ---
 
 ## Quick Links
@@ -59,4 +98,4 @@ Deep technical investigations and root cause analyses conducted during developme
 
 ---
 
-**Last Updated**: 2025-10-30
+**Last Updated**: 2025-12-09
