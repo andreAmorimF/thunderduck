@@ -698,3 +698,126 @@ class TestColumnOperations(ThunderduckE2ETestBase):
         self.assertEqual(row_dict["x"], 1)
         self.assertEqual(row_dict["b"], 2)
         self.assertEqual(row_dict["sum"], 3)
+
+
+class TestOffsetAndToDF(ThunderduckE2ETestBase):
+    """Test offset and toDF operations (M20)."""
+
+    def test_offset_basic(self):
+        """Test basic offset operation."""
+        df = self.spark.range(10)
+
+        result = df.offset(3).collect()
+
+        # Should skip first 3 rows (0, 1, 2), returning 3-9
+        self.assertEqual(len(result), 7)
+        ids = [r.id for r in result]
+        self.assertEqual(ids, [3, 4, 5, 6, 7, 8, 9])
+
+    def test_offset_zero(self):
+        """Test offset(0) - should return all rows."""
+        df = self.spark.range(5)
+
+        result = df.offset(0).collect()
+
+        self.assertEqual(len(result), 5)
+        ids = [r.id for r in result]
+        self.assertEqual(ids, [0, 1, 2, 3, 4])
+
+    def test_offset_all_rows(self):
+        """Test offset that skips all rows."""
+        df = self.spark.range(5)
+
+        result = df.offset(5).collect()
+
+        # Should return empty result
+        self.assertEqual(len(result), 0)
+
+    def test_offset_more_than_rows(self):
+        """Test offset greater than row count."""
+        df = self.spark.range(5)
+
+        result = df.offset(10).collect()
+
+        # Should return empty result
+        self.assertEqual(len(result), 0)
+
+    def test_offset_with_limit(self):
+        """Test offset combined with limit for pagination."""
+        df = self.spark.range(20)
+
+        # Skip first 5, take next 3
+        result = df.offset(5).limit(3).collect()
+
+        self.assertEqual(len(result), 3)
+        ids = [r.id for r in result]
+        self.assertEqual(ids, [5, 6, 7])
+
+    def test_offset_with_filter(self):
+        """Test offset after filter."""
+        df = self.spark.range(10).filter(F.col("id") % 2 == 0)  # 0, 2, 4, 6, 8
+
+        result = df.offset(2).collect()
+
+        # Skip first 2 even numbers (0, 2), get 4, 6, 8
+        self.assertEqual(len(result), 3)
+        ids = [r.id for r in result]
+        self.assertEqual(ids, [4, 6, 8])
+
+    def test_todf_basic(self):
+        """Test basic toDF operation."""
+        df = self.spark.sql("SELECT 1 as a, 2 as b, 3 as c")
+
+        result = df.toDF("x", "y", "z").collect()
+
+        self.assertEqual(len(result), 1)
+        row = result[0]
+        self.assertEqual(row.x, 1)
+        self.assertEqual(row.y, 2)
+        self.assertEqual(row.z, 3)
+
+    def test_todf_with_range(self):
+        """Test toDF on range DataFrame."""
+        df = self.spark.range(3)
+
+        result = df.toDF("value").collect()
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0].value, 0)
+        self.assertEqual(result[1].value, 1)
+        self.assertEqual(result[2].value, 2)
+
+    def test_todf_with_multiple_columns(self):
+        """Test toDF with multiple columns from a select."""
+        df = self.spark.range(2).select(
+            F.col("id"),
+            (F.col("id") * 10).alias("tens")
+        )
+
+        result = df.toDF("num", "big_num").collect()
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0].num, 0)
+        self.assertEqual(result[0].big_num, 0)
+        self.assertEqual(result[1].num, 1)
+        self.assertEqual(result[1].big_num, 10)
+
+    def test_todf_chained_operations(self):
+        """Test toDF followed by other operations."""
+        df = self.spark.range(5).toDF("value")
+
+        result = df.filter(F.col("value") > 2).collect()
+
+        self.assertEqual(len(result), 2)
+        values = [r.value for r in result]
+        self.assertEqual(values, [3, 4])
+
+    def test_offset_todf_combined(self):
+        """Test combining offset and toDF."""
+        df = self.spark.range(10).toDF("num").offset(5)
+
+        result = df.collect()
+
+        self.assertEqual(len(result), 5)
+        nums = [r.num for r in result]
+        self.assertEqual(nums, [5, 6, 7, 8, 9])

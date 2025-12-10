@@ -79,6 +79,10 @@ public class RelationConverter {
                 return convertWithColumnsRenamed(relation.getWithColumnsRenamed());
             case WITH_COLUMNS:
                 return convertWithColumns(relation.getWithColumns());
+            case OFFSET:
+                return convertOffset(relation.getOffset());
+            case TO_DF:
+                return convertToDF(relation.getToDf());
             default:
                 throw new PlanConversionException("Unsupported relation type: " + relation.getRelTypeCase());
         }
@@ -622,6 +626,67 @@ public class RelationConverter {
             columnExprs.toString(), inputSql);
 
         logger.debug("Creating WithColumns SQL: {}", sql);
+        return new SQLRelation(sql);
+    }
+
+    /**
+     * Converts an Offset relation to a LogicalPlan.
+     *
+     * <p>Offset skips the first N rows from the input. Uses the existing Limit
+     * class which already supports offset natively.
+     *
+     * @param offset the Offset protobuf message
+     * @return a Limit logical plan with offset
+     */
+    private LogicalPlan convertOffset(org.apache.spark.connect.proto.Offset offset) {
+        LogicalPlan input = convert(offset.getInput());
+        int offsetValue = offset.getOffset();
+
+        logger.debug("Creating Offset with value: {}", offsetValue);
+        // Use Limit with Long.MAX_VALUE to represent "all remaining rows after offset"
+        return new com.thunderduck.logical.Limit(input, Long.MAX_VALUE, offsetValue);
+    }
+
+    /**
+     * Converts a ToDF relation to a LogicalPlan.
+     *
+     * <p>ToDF renames all columns in the DataFrame to the provided names.
+     * The number of names must match the number of columns.
+     *
+     * <p>Uses DuckDB's positional column aliasing syntax.
+     *
+     * @param toDF the ToDF protobuf message
+     * @return a LogicalPlan with renamed columns
+     */
+    private LogicalPlan convertToDF(org.apache.spark.connect.proto.ToDF toDF) {
+        LogicalPlan input = convert(toDF.getInput());
+        List<String> newNames = toDF.getColumnNamesList();
+
+        if (newNames.isEmpty()) {
+            logger.debug("ToDF: no column names provided, returning input as-is");
+            return input;
+        }
+
+        // Generate SQL to rename all columns positionally
+        // SELECT col1 AS new1, col2 AS new2, ... FROM (input)
+        // Since we don't have schema info, use DuckDB's positional syntax:
+        // SELECT * FROM (input) AS _todf_subquery(new1, new2, ...)
+        SQLGenerator generator = new SQLGenerator();
+        String inputSql = generator.generate(input);
+
+        StringBuilder columnList = new StringBuilder();
+        for (int i = 0; i < newNames.size(); i++) {
+            if (i > 0) {
+                columnList.append(", ");
+            }
+            columnList.append(SQLQuoting.quoteIdentifier(newNames.get(i)));
+        }
+
+        // DuckDB supports table alias with column names: AS alias(col1, col2, ...)
+        String sql = String.format("SELECT * FROM (%s) AS _todf_subquery(%s)",
+            inputSql, columnList.toString());
+
+        logger.debug("Creating ToDF SQL: {}", sql);
         return new SQLRelation(sql);
     }
 }

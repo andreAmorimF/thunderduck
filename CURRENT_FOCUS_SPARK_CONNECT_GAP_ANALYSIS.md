@@ -18,7 +18,7 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 | Category | Total Operators | Implemented | Coverage |
 |----------|----------------|-------------|----------|
-| Relations | 40 | 17 | **42.5%** |
+| Relations | 40 | 19 | **47.5%** |
 | Expressions | 16 | 9 | **56.25%** |
 | Commands | 10 | 2 | **20%** |
 | Catalog | 26 | 0 | **0%** |
@@ -49,6 +49,8 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **Drop** | `drop` | ✅ Implemented | `df.drop("col")` - uses DuckDB EXCLUDE (M19) |
 | **WithColumns** | `with_columns` | ✅ Implemented | `df.withColumn("name", expr)` - uses REPLACE/append (M19) |
 | **WithColumnsRenamed** | `with_columns_renamed` | ✅ Implemented | `df.withColumnRenamed("old", "new")` - uses EXCLUDE+alias (M19) |
+| **Offset** | `offset` | ✅ Implemented | `df.offset(n)` - uses existing Limit class (M20) |
+| **ToDF** | `to_df` | ✅ Implemented | `df.toDF("a", "b", "c")` - uses positional aliasing (M20) |
 | **SubqueryAlias** | `subquery_alias` | ⚠️ Partial | Need explicit handling |
 
 ### 1.2 Not Implemented Relations
@@ -57,9 +59,7 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 
 | Relation | Proto Field | Priority | Use Case |
 |----------|-------------|----------|----------|
-| **Offset** | `offset` | 🔴 HIGH | `df.offset(n)` - pagination |
 | **Tail** | `tail` | 🔴 HIGH | `df.tail(n)` - last n rows |
-| **ToDF** | `to_df` | 🔴 HIGH | `df.toDF("a", "b", "c")` |
 | **Sample** | `sample` | 🔴 HIGH | `df.sample(0.1)` - random sampling |
 
 #### Medium Priority (Advanced Operations)
@@ -295,12 +295,12 @@ These are commonly used operations that users will expect to work:
 4. ~~**Drop** - Drop columns from DataFrame~~ ✅ Implemented (M19, 2025-12-10)
 5. ~~**WithColumns** - Add/replace columns~~ ✅ Implemented (M19, 2025-12-10)
 6. ~~**WithColumnsRenamed** - Rename columns~~ ✅ Implemented (M19, 2025-12-10)
-7. **Offset** - Required for pagination
-8. **ToDF** - Rename all columns
+7. ~~**Offset** - Required for pagination~~ ✅ Implemented (M20, 2025-12-10)
+8. ~~**ToDF** - Rename all columns~~ ✅ Implemented (M20, 2025-12-10)
 9. **Sample** - Random sampling
 10. **WriteOperation** - Write to files/tables
 
-**Estimated effort:** 1-2 weeks
+**Estimated effort:** 1 week
 
 ### Phase 2: DataFrame NA/Stat Functions (Medium Priority)
 
@@ -426,13 +426,15 @@ df.createOrReplaceTempView("view")            # CreateDataFrameViewCommand
 df.drop("col")                                # Drop (M19)
 df.withColumn("new", expr)                    # WithColumns (M19)
 df.withColumnRenamed("old", "new")            # WithColumnsRenamed (M19)
+df.offset(n)                                  # Offset (M20)
+df.toDF("a", "b", "c")                        # ToDF (M20)
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
 
 ```python
 # These operations do NOT work (will throw PlanConversionException):
-df.toDF("a", "b", "c")                        # ToDF
+df.tail(n)                                    # Tail
 df.sample(0.1)                                # Sample
 df.na.fill(0)                                 # NAFill
 df.na.drop()                                  # NADrop
@@ -446,7 +448,8 @@ spark.catalog.listTables()                    # Catalog operations
 
 ---
 
-**Document Version:** 1.2
+**Document Version:** 1.3
 **Last Updated:** 2025-12-10
 **Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
 **M19 Update:** Added Drop, WithColumns, WithColumnsRenamed implementations
+**M20 Update:** Added Offset, ToDF implementations
