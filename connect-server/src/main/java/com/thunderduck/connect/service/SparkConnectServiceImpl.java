@@ -5,8 +5,11 @@ import com.thunderduck.connect.session.Session;
 import com.thunderduck.connect.session.SessionManager;
 import com.thunderduck.generator.SQLGenerator;
 import com.thunderduck.logical.LogicalPlan;
+import com.thunderduck.runtime.ArrowBatchIterator;
+import com.thunderduck.runtime.ArrowStreamingExecutor;
 import com.thunderduck.runtime.DuckDBConnectionManager;
 import com.thunderduck.runtime.QueryExecutor;
+import com.thunderduck.runtime.StreamingConfig;
 import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -36,6 +39,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
     private final DuckDBConnectionManager connectionManager;
     private final PlanConverter planConverter;
     private final SQLGenerator sqlGenerator;
+    private final ArrowStreamingExecutor streamingExecutor;
 
     /**
      * Create Spark Connect service with session manager and DuckDB connection manager.
@@ -49,7 +53,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         this.connectionManager = connectionManager;
         this.planConverter = new PlanConverter();
         this.sqlGenerator = new SQLGenerator();
-        logger.info("SparkConnectServiceImpl initialized with plan deserialization support");
+        this.streamingExecutor = new ArrowStreamingExecutor(connectionManager);
+
+        logger.info("SparkConnectServiceImpl initialized with plan deserialization support" +
+                   (StreamingConfig.STREAMING_ENABLED ? " [STREAMING ENABLED]" : ""));
     }
 
     /**
@@ -936,12 +943,86 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
      * <p>Handles both queries (SELECT) and DDL statements (CREATE, DROP, ALTER, etc.).
      * DDL statements return an empty result set with success status.
      *
+     * <p>If streaming is enabled (via -Dthunderduck.streaming.enabled=true), uses
+     * the new ArrowStreamingExecutor for batch-by-batch streaming. Otherwise, uses
+     * the legacy full-materialization path.
+     *
      * @param sql SQL query string
      * @param sessionId Session ID
      * @param responseObserver Response stream
      */
     private void executeSQL(String sql, String sessionId,
                            StreamObserver<ExecutePlanResponse> responseObserver) {
+        // Use streaming path if enabled and not a DDL statement
+        if (StreamingConfig.STREAMING_ENABLED && !isDDLStatement(sql)) {
+            executeSQLStreaming(sql, sessionId, responseObserver);
+            return;
+        }
+
+        // Legacy materialized execution path
+        executeSQLMaterialized(sql, sessionId, responseObserver);
+    }
+
+    /**
+     * Execute SQL query using streaming Arrow batch iteration.
+     *
+     * <p>Uses DuckDB's native arrowExportStream() for zero-copy batch streaming.
+     * Each batch is serialized to Arrow IPC format and sent immediately to the client.
+     *
+     * @param sql SQL query string
+     * @param sessionId Session ID
+     * @param responseObserver Response stream
+     */
+    private void executeSQLStreaming(String sql, String sessionId,
+                                     StreamObserver<ExecutePlanResponse> responseObserver) {
+        String operationId = java.util.UUID.randomUUID().toString();
+        long startTime = System.nanoTime();
+
+        try {
+            logger.info("[{}] Executing streaming SQL for session {}: {}",
+                operationId, sessionId,
+                sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+
+            // Execute with streaming
+            try (ArrowBatchIterator iterator = streamingExecutor.executeStreaming(sql)) {
+                StreamingResultHandler handler = new StreamingResultHandler(
+                    responseObserver, sessionId, operationId);
+                handler.streamResults(iterator);
+
+                long durationMs = (System.nanoTime() - startTime) / 1_000_000;
+                logger.info("[{}] Streaming query completed in {}ms, {} batches, {} rows",
+                    operationId, durationMs, handler.getBatchCount(), handler.getTotalRows());
+            }
+
+        } catch (Exception e) {
+            logger.error("[{}] Streaming SQL execution failed", operationId, e);
+
+            // Determine appropriate gRPC status code based on exception type
+            Status status;
+            if (e instanceof java.sql.SQLException) {
+                status = Status.INVALID_ARGUMENT.withDescription("SQL error: " + e.getMessage());
+            } else if (e instanceof IllegalArgumentException) {
+                status = Status.INVALID_ARGUMENT.withDescription(e.getMessage());
+            } else {
+                status = Status.INTERNAL.withDescription("Execution failed: " + e.getMessage());
+            }
+
+            responseObserver.onError(status.asRuntimeException());
+        }
+    }
+
+    /**
+     * Execute SQL query using legacy full-materialization approach.
+     *
+     * <p>Handles both queries (SELECT) and DDL statements (CREATE, DROP, ALTER, etc.).
+     * DDL statements return an empty result set with success status.
+     *
+     * @param sql SQL query string
+     * @param sessionId Session ID
+     * @param responseObserver Response stream
+     */
+    private void executeSQLMaterialized(String sql, String sessionId,
+                                        StreamObserver<ExecutePlanResponse> responseObserver) {
         String operationId = java.util.UUID.randomUUID().toString();
         long startTime = System.nanoTime();
 
