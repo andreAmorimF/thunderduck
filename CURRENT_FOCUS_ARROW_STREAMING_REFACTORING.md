@@ -715,8 +715,8 @@ private void executeSQL(String sql, String sessionId, ...) {
 - [x] Add feature flag to `StreamingConfig` - **COMPLETE** (Phase 1)
 - [x] Gate streaming behind feature flag - **COMPLETE**
 - [x] E2E tests with streaming enabled - **COMPLETE** (11/13 pass, 2 pre-existing failures)
-- [ ] Verify PySpark client receives multi-batch results correctly - **PENDING** (requires large dataset test)
-- [ ] Performance comparison test (streaming vs materialized) - **PENDING**
+- [x] Verify PySpark client receives multi-batch results correctly - **COMPLETE** (20K rows = 3 batches: 8192+8192+3616)
+- [x] Performance comparison test (streaming vs materialized) - **COMPLETE** (see benchmark below)
 - [x] All existing tests pass with flag disabled - **COMPLETE** (baseline verified)
 
 **Phase 3 COMPLETE** - 2025-12-11
@@ -748,6 +748,24 @@ Sent batch 0: 1 rows, 328 bytes
 Streamed 1 batches, 1 total rows
 Streaming query completed in 19ms, 1 batches, 1 rows
 ```
+
+**Multi-Batch Verification** (20,000 rows):
+```
+Sent batch 0: 8192 rows, 66864 bytes
+Sent batch 1: 8192 rows, 66864 bytes
+Sent batch 2: 3616 rows, 29688 bytes
+Streamed 3 batches, 20000 total rows
+```
+
+**Performance Benchmark** (average of 3 runs each):
+| Rows | Streaming | Materialized | Speedup |
+|------|-----------|--------------|---------|
+| 1,000 | 7.5ms | 11.9ms | 1.59x |
+| 10,000 | 21.4ms | 27.6ms | 1.29x |
+| 50,000 | 100.1ms | 84.7ms | 0.85x |
+| 100,000 | 165.8ms | 171.6ms | 1.04x |
+
+**Analysis**: Streaming shows 29-59% improvement for small-medium result sets (1K-10K rows). For larger results (50K+), performance is comparable. The primary benefit remains memory efficiency (87% reduction) rather than raw throughput.
 
 ---
 
