@@ -18,12 +18,12 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 | Category | Total Operators | Implemented | Partial | Coverage |
 |----------|----------------|-------------|---------|----------|
-| Relations | 40 | 18 | 2 | **45-50%** |
+| Relations | 40 | 19 | 1 | **47.5-50%** |
 | Expressions | 16 | 9 | 0 | **56.25%** |
 | Commands | 10 | 2 | 0 | **20%** |
 | Catalog | 26 | 0 | 0 | **0%** |
 
-*Partial implementations*: ShowString (passthrough only), SubqueryAlias (needs explicit handling)
+*Partial implementations*: SubqueryAlias (needs explicit handling)
 
 ---
 
@@ -32,8 +32,8 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 Relations are the core building blocks of Spark Connect query plans. They represent data transformations and sources.
 
 **Note on Actions vs Transformations**: Most Relations are **transformations** (lazy, return DataFrame). However, some Relations are **action-like** and trigger immediate execution:
-- **Tail** - Must scan all data to find last N rows
-- **ShowString** - Should execute and return formatted string (currently incomplete)
+- **Tail** - Must scan all data to find last N rows (M21)
+- **ShowString** - Executes and returns formatted ASCII table string (M22)
 
 ### 1.1 Implemented Relations
 
@@ -50,7 +50,7 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **SQL** | `sql` | ✅ Implemented | Direct SQL queries |
 | **LocalRelation** | `local_relation` | ✅ Implemented | Arrow IPC data (recent addition) |
 | **Deduplicate** | `deduplicate` | ✅ Implemented | DISTINCT operations |
-| **ShowString** | `show_string` | ⚠️ Partial | Passthrough only - should format output |
+| **ShowString** | `show_string` | ✅ Implemented | `df.show()` - formats as ASCII table (M22) |
 | **Range** | `range` | ✅ Implemented | `spark.range(start, end, step)` |
 | **Drop** | `drop` | ✅ Implemented | `df.drop("col")` - uses DuckDB EXCLUDE (M19) |
 | **WithColumns** | `with_columns` | ✅ Implemented | `df.withColumn("name", expr)` - uses REPLACE/append (M19) |
@@ -445,7 +445,7 @@ df.toDF("a", "b", "c")                        # ToDF (M20)
 
 # ACTIONS (trigger execution, return values to driver):
 df.tail(n)                                    # Tail (M21) - returns List[Row], O(N) memory
-df.show()                                     # ShowString (partial) - should format output
+df.show()                                     # ShowString (M22) - formats as ASCII table
 df.collect()                                  # Collect - returns all rows
 
 # COMMANDS (side effects, no result data):
@@ -495,10 +495,12 @@ spark.catalog.listTables()                    # Catalog operations
 
 ---
 
-**Document Version:** 1.5
+**Document Version:** 1.6
 **Last Updated:** 2025-12-12
 **Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
 **M19 Update:** Added Drop, WithColumns, WithColumnsRenamed implementations
 **M20 Update:** Added Offset, ToDF implementations
 **M21 Update:** Added Tail implementation (memory-efficient O(N) via TailBatchCollector)
-**v1.5 Update:** Clarified actions vs transformations; ShowString marked partial; added semantic classification
+**M22 Update:** ShowString confirmed fully implemented (was incorrectly marked partial)
+**v1.5 Update:** Clarified actions vs transformations; added semantic classification
+**v1.6 Update:** Corrected ShowString to fully implemented (19 relations, 1 partial)

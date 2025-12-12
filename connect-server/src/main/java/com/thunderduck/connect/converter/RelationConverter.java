@@ -68,8 +68,10 @@ public class RelationConverter {
                 // Direct SQL relation - we'll handle this as a special case
                 return new SQLRelation(relation.getSql().getQuery());
             case SHOW_STRING:
-                // ShowString wraps another relation - just unwrap and convert the inner relation
-                return convert(relation.getShowString().getInput());
+                // ShowString is handled at root level in SparkConnectServiceImpl.executeShowString()
+                // If we reach here, something is wrong - ShowString should never be nested
+                throw new PlanConversionException(
+                    "ShowString should be handled at root level, not in RelationConverter");
             case DEDUPLICATE:
                 // Handle distinct() operation
                 return convertDeduplicate(relation.getDeduplicate());
