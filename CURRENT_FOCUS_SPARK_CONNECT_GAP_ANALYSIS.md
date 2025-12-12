@@ -1,6 +1,6 @@
 # Spark Connect 3.5.3 Gap Analysis for Thunderduck
 
-**Version:** 1.7
+**Version:** 1.8
 **Date:** 2025-12-12
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 
@@ -20,10 +20,10 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 |----------|----------------|-------------|---------|----------|
 | Relations | 40 | 20 | 1 | **50-52.5%** |
 | Expressions | 16 | 9 | 0 | **56.25%** |
-| Commands | 10 | 2 | 0 | **20%** |
+| Commands | 10 | 2 | 1 | **25-30%** |
 | Catalog | 26 | 0 | 0 | **0%** |
 
-*Partial implementations*: SubqueryAlias (needs explicit handling)
+*Partial implementations*: SubqueryAlias (needs explicit handling), WriteOperation (local paths only, S3/cloud needs httpfs extension)
 
 ---
 
@@ -187,7 +187,7 @@ Commands are operations that don't return result data directly but perform side 
 
 | Command | Proto Field | Status | Priority | Use Case |
 |---------|-------------|--------|----------|----------|
-| **WriteOperation** | `write_operation` | ❌ Not Implemented | 🔴 HIGH | `df.write.parquet()` |
+| **WriteOperation** | `write_operation` | ⚠️ Partial | - | `df.write.parquet()`, `.csv()`, `.json()` - local paths only (M24). S3/cloud not yet supported. |
 | **CreateDataFrameViewCommand** | `create_dataframe_view` | ✅ Implemented | - | `df.createOrReplaceTempView()` |
 | **SqlCommand** | `sql_command` | ✅ Implemented | - | `spark.sql()` (DDL + queries) |
 | **WriteOperationV2** | `write_operation_v2` | ❌ Not Implemented | 🟡 MEDIUM | Table writes |
@@ -308,10 +308,10 @@ These are commonly used operations that users will expect to work:
 6. ~~**WithColumnsRenamed** - Rename columns~~ ✅ Implemented (M19, 2025-12-10)
 7. ~~**Offset** - Required for pagination~~ ✅ Implemented (M20, 2025-12-10)
 8. ~~**ToDF** - Rename all columns~~ ✅ Implemented (M20, 2025-12-10)
-9. **Sample** - Random sampling
-10. **WriteOperation** - Write to files/tables
+9. ~~**Sample** - Random sampling~~ ✅ Implemented (M23, 2025-12-12)
+10. ~~**WriteOperation** - Write to files/tables~~ ✅ Implemented (M24, 2025-12-12)
 
-**Estimated effort:** 1 week
+**Phase 1 Complete!**
 
 ### Phase 2: DataFrame NA/Stat Functions (Medium Priority)
 
@@ -382,7 +382,8 @@ The current implementation successfully handles TPC-H and TPC-DS queries because
 These are all implemented. However, production workloads often include:
 - `df.withColumn()` - ✅ Implemented (M19)
 - `df.drop()` - ✅ Implemented (M19)
-- `df.sample()` - NOT implemented
+- `df.sample()` - ✅ Implemented (M23)
+- `df.write.parquet()` - ✅ Implemented (M24)
 - `df.na.fill()` - NOT implemented
 
 ### Compatibility Concerns
@@ -395,7 +396,21 @@ These are all implemented. However, production workloads often include:
 
 ---
 
-## 8. Source Files
+## 8. Intentional Incompatibilities
+
+Features intentionally not supported due to Spark/DuckDB architectural differences:
+
+| Feature | Reason |
+|---------|--------|
+| `df.sample(withReplacement=True)` | DuckDB has no Poisson sampling; throws `PlanConversionException` |
+| Streaming operations | DuckDB is not a streaming engine |
+| Python/Scala UDFs | Requires JVM/Python interop not available in DuckDB |
+| Distributed hints (BROADCAST, etc.) | DuckDB is single-node |
+| Bucketing | No DuckDB equivalent |
+
+---
+
+## 9. Source Files
 
 ### Protocol Definitions
 
@@ -437,6 +452,7 @@ df.withColumn("new", expr)                    # WithColumns (M19)
 df.withColumnRenamed("old", "new")            # WithColumnsRenamed (M19)
 df.offset(n)                                  # Offset (M20)
 df.toDF("a", "b", "c")                        # ToDF (M20)
+df.sample(0.1, seed=42)                       # Sample (M23)
 
 # ACTIONS (trigger execution, return values to driver):
 df.tail(n)                                    # Tail (M21) - returns List[Row], O(N) memory
@@ -446,13 +462,22 @@ df.collect()                                  # Collect - returns all rows
 # COMMANDS (side effects, no result data):
 spark.sql("CREATE TEMP VIEW ...")             # DDL via SqlCommand
 df.createOrReplaceTempView("view")            # CreateDataFrameViewCommand
+df.write.parquet("/local/path")               # WriteOperation (M24) - local paths only
+df.write.csv("/local/path")                   # WriteOperation (M24) - local paths only
+df.write.json("/local/path")                  # WriteOperation (M24) - local paths only
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
 
 ```python
+# INTENTIONALLY NOT SUPPORTED (see Section 8):
+df.sample(withReplacement=True, fraction=0.5) # Poisson sampling not available in DuckDB
+
+# COMMANDS partially implemented:
+df.write.parquet("s3://bucket/path")          # S3 writes need httpfs extension
+df.write.csv("s3://bucket/path")              # S3 writes need httpfs extension
+
 # TRANSFORMATIONS not yet implemented (return DataFrames):
-df.sample(0.1)                                # Sample
 df.na.fill(0)                                 # NAFill  - returns DataFrame
 df.na.drop()                                  # NADrop  - returns DataFrame
 df.hint("BROADCAST")                          # Hint
@@ -460,9 +485,6 @@ df.repartition(10)                            # Repartition
 df.unpivot(...)                               # Unpivot
 df.describe()                                 # StatDescribe - returns DataFrame!
 df.summary()                                  # StatSummary - returns DataFrame!
-
-# COMMANDS not yet implemented (side effects):
-df.write.parquet("output")                    # WriteOperation
 
 # CATALOG not yet implemented:
 spark.catalog.listTables()                    # Catalog operations
@@ -490,7 +512,7 @@ spark.catalog.listTables()                    # Catalog operations
 
 ---
 
-**Document Version:** 1.6
+**Document Version:** 1.8
 **Last Updated:** 2025-12-12
 **Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
 **M19 Update:** Added Drop, WithColumns, WithColumnsRenamed implementations
@@ -499,3 +521,5 @@ spark.catalog.listTables()                    # Catalog operations
 **M22 Update:** ShowString confirmed fully implemented (was incorrectly marked partial)
 **v1.5 Update:** Clarified actions vs transformations; added semantic classification
 **v1.6 Update:** Corrected ShowString to fully implemented (19 relations, 1 partial)
+**v1.7 Update:** Added Sample (M23) - Bernoulli sampling via USING SAMPLE
+**v1.8 Update:** Added WriteOperation (M24) - df.write.parquet/csv/json support

@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 import static com.thunderduck.generator.SQLQuoting.quoteIdentifier;
+import static com.thunderduck.generator.SQLQuoting.quoteFilePath;
 
 /**
  * Implementation of Spark Connect gRPC service.
@@ -302,6 +303,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                 responseObserver.onCompleted();
 
                 logger.info("✓ Temp view created in DuckDB: '{}' (session: {})", viewName, sessionId);
+
+            } else if (command.hasWriteOperation()) {
+                // Handle df.write.parquet(), df.write.csv(), etc.
+                executeWriteOperation(command.getWriteOperation(), sessionId, responseObserver);
 
             } else {
                 // Unsupported command type
@@ -1403,5 +1408,224 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         // Default to string for unknown types
         logger.warn("Unknown Arrow type: {}, defaulting to STRING", arrowType.getClass().getSimpleName());
         return com.thunderduck.types.StringType.get();
+    }
+
+    /**
+     * Execute a WriteOperation command (df.write.parquet(), df.write.csv(), etc.).
+     *
+     * Generates a DuckDB COPY statement based on the WriteOperation parameters.
+     * Supports:
+     * - Formats: parquet, csv, json (via source parameter)
+     * - Modes: OVERWRITE, ERROR_IF_EXISTS, IGNORE, APPEND
+     * - Partitioning: via partitioning_columns
+     * - Compression and other options via options map
+     *
+     * @param writeOp The WriteOperation proto message
+     * @param sessionId The session ID
+     * @param responseObserver Stream observer for responses
+     */
+    private void executeWriteOperation(WriteOperation writeOp, String sessionId,
+                                       StreamObserver<ExecutePlanResponse> responseObserver) {
+        try {
+            // 1. Validate required fields
+            if (!writeOp.hasInput()) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                    .withDescription("WriteOperation requires an input relation")
+                    .asRuntimeException());
+                return;
+            }
+
+            // 2. Get output path (only path writes supported for now)
+            String outputPath;
+            if (writeOp.hasPath()) {
+                outputPath = writeOp.getPath();
+            } else if (writeOp.hasTable()) {
+                responseObserver.onError(Status.UNIMPLEMENTED
+                    .withDescription("WriteOperation to table is not yet supported. Use df.write.parquet('/path') instead.")
+                    .asRuntimeException());
+                return;
+            } else {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                    .withDescription("WriteOperation requires a path or table destination")
+                    .asRuntimeException());
+                return;
+            }
+
+            // 3. Determine format (default to parquet)
+            String format = writeOp.hasSource() ? writeOp.getSource().toLowerCase() : "parquet";
+            if (!format.equals("parquet") && !format.equals("csv") && !format.equals("json")) {
+                responseObserver.onError(Status.UNIMPLEMENTED
+                    .withDescription("Unsupported write format: " + format + ". Supported formats: parquet, csv, json")
+                    .asRuntimeException());
+                return;
+            }
+
+            // 4. Handle SaveMode
+            WriteOperation.SaveMode mode = writeOp.getMode();
+            boolean fileExists = checkFileExists(outputPath);
+
+            switch (mode) {
+                case SAVE_MODE_ERROR_IF_EXISTS:
+                    if (fileExists) {
+                        responseObserver.onError(Status.ALREADY_EXISTS
+                            .withDescription("Path already exists: " + outputPath)
+                            .asRuntimeException());
+                        return;
+                    }
+                    break;
+                case SAVE_MODE_IGNORE:
+                    if (fileExists) {
+                        // Return success without writing
+                        logger.info("WriteOperation IGNORE mode: path exists, skipping write: {}", outputPath);
+                        sendWriteSuccessResponse(sessionId, responseObserver);
+                        return;
+                    }
+                    break;
+                case SAVE_MODE_APPEND:
+                    // APPEND requires special handling - read existing + union + write
+                    if (fileExists && format.equals("parquet")) {
+                        executeAppendWrite(writeOp, outputPath, sessionId, responseObserver);
+                        return;
+                    }
+                    // If file doesn't exist, fall through to normal write
+                    break;
+                case SAVE_MODE_OVERWRITE:
+                case SAVE_MODE_UNSPECIFIED:
+                default:
+                    // OVERWRITE is DuckDB's default behavior - just write
+                    break;
+            }
+
+            // 5. Convert input relation to SQL
+            LogicalPlan inputPlan = planConverter.convertRelation(writeOp.getInput());
+            String inputSQL = sqlGenerator.generate(inputPlan);
+            logger.debug("WriteOperation input SQL: {}", inputSQL);
+
+            // 6. Build COPY statement
+            StringBuilder copySQL = new StringBuilder();
+            copySQL.append("COPY (").append(inputSQL).append(") TO ");
+            copySQL.append(quoteFilePath(outputPath));
+            copySQL.append(" (FORMAT ").append(format.toUpperCase());
+
+            // Add compression if specified in options
+            Map<String, String> options = writeOp.getOptionsMap();
+            if (options.containsKey("compression")) {
+                copySQL.append(", COMPRESSION ").append(options.get("compression").toUpperCase());
+            } else if (format.equals("parquet")) {
+                copySQL.append(", COMPRESSION SNAPPY"); // Default for parquet
+            }
+
+            // Add partitioning if specified
+            if (writeOp.getPartitioningColumnsCount() > 0) {
+                copySQL.append(", PARTITION_BY (");
+                for (int i = 0; i < writeOp.getPartitioningColumnsCount(); i++) {
+                    if (i > 0) copySQL.append(", ");
+                    copySQL.append(quoteIdentifier(writeOp.getPartitioningColumns(i)));
+                }
+                copySQL.append(")");
+            }
+
+            // Add CSV-specific options
+            if (format.equals("csv")) {
+                if (options.containsKey("header")) {
+                    copySQL.append(", HEADER ").append(options.get("header").toLowerCase().equals("true"));
+                } else {
+                    copySQL.append(", HEADER true"); // Default to header for CSV
+                }
+                if (options.containsKey("delimiter") || options.containsKey("sep")) {
+                    String delimiter = options.getOrDefault("delimiter", options.get("sep"));
+                    copySQL.append(", DELIMITER '").append(delimiter).append("'");
+                }
+            }
+
+            copySQL.append(")");
+
+            logger.info("Executing WriteOperation: {}", copySQL);
+
+            // 7. Execute the COPY statement
+            QueryExecutor executor = new QueryExecutor(connectionManager);
+            executor.execute(copySQL.toString());
+
+            // 8. Return success response
+            sendWriteSuccessResponse(sessionId, responseObserver);
+            logger.info("✓ WriteOperation completed: {} rows written to {}", "unknown", outputPath);
+
+        } catch (Exception e) {
+            logger.error("WriteOperation failed", e);
+            responseObserver.onError(Status.INTERNAL
+                .withDescription("WriteOperation failed: " + e.getMessage())
+                .withCause(e)
+                .asRuntimeException());
+        }
+    }
+
+    /**
+     * Check if a file or directory exists.
+     * Supports local paths and potentially cloud paths if extensions loaded.
+     */
+    private boolean checkFileExists(String path) {
+        try {
+            java.io.File file = new java.io.File(path);
+            return file.exists();
+        } catch (Exception e) {
+            // For cloud paths, assume doesn't exist (let DuckDB handle errors)
+            return false;
+        }
+    }
+
+    /**
+     * Execute an APPEND write by reading existing data, unioning with new data, and writing back.
+     */
+    private void executeAppendWrite(WriteOperation writeOp, String outputPath, String sessionId,
+                                    StreamObserver<ExecutePlanResponse> responseObserver) {
+        try {
+            // Convert input relation to SQL
+            LogicalPlan inputPlan = planConverter.convertRelation(writeOp.getInput());
+            String newDataSQL = sqlGenerator.generate(inputPlan);
+
+            // Build union query: existing + new
+            String unionSQL = String.format(
+                "SELECT * FROM read_parquet(%s) UNION ALL %s",
+                quoteFilePath(outputPath),
+                newDataSQL
+            );
+
+            // Build COPY statement
+            StringBuilder copySQL = new StringBuilder();
+            copySQL.append("COPY (").append(unionSQL).append(") TO ");
+            copySQL.append(quoteFilePath(outputPath));
+            copySQL.append(" (FORMAT PARQUET, COMPRESSION SNAPPY)");
+
+            logger.info("Executing WriteOperation APPEND: {}", copySQL);
+
+            // Execute
+            QueryExecutor executor = new QueryExecutor(connectionManager);
+            executor.execute(copySQL.toString());
+
+            sendWriteSuccessResponse(sessionId, responseObserver);
+            logger.info("✓ WriteOperation APPEND completed to {}", outputPath);
+
+        } catch (Exception e) {
+            logger.error("WriteOperation APPEND failed", e);
+            responseObserver.onError(Status.INTERNAL
+                .withDescription("WriteOperation APPEND failed: " + e.getMessage())
+                .withCause(e)
+                .asRuntimeException());
+        }
+    }
+
+    /**
+     * Send a success response for WriteOperation.
+     */
+    private void sendWriteSuccessResponse(String sessionId,
+                                          StreamObserver<ExecutePlanResponse> responseObserver) {
+        String operationId = java.util.UUID.randomUUID().toString();
+        ExecutePlanResponse response = ExecutePlanResponse.newBuilder()
+            .setSessionId(sessionId)
+            .setOperationId(operationId)
+            .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
     }
 }
