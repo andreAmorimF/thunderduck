@@ -87,6 +87,8 @@ public class RelationConverter {
                 return convertOffset(relation.getOffset());
             case TO_DF:
                 return convertToDF(relation.getToDf());
+            case SAMPLE:
+                return convertSample(relation.getSample());
             default:
                 throw new PlanConversionException("Unsupported relation type: " + relation.getRelTypeCase());
         }
@@ -709,5 +711,47 @@ public class RelationConverter {
 
         logger.debug("Creating ToDF SQL: {}", sql);
         return new SQLRelation(sql);
+    }
+
+    /**
+     * Converts a Sample relation to a LogicalPlan.
+     *
+     * <p>Sample returns a random subset of rows from the input using Bernoulli
+     * sampling to match Spark's per-row probability algorithm.
+     *
+     * <p>The Spark Connect protocol uses lower_bound/upper_bound to specify the
+     * sampling fraction. Typically lower_bound=0.0 and upper_bound is the fraction.
+     *
+     * <p>IMPORTANT: withReplacement=true is NOT supported. DuckDB does not have
+     * an equivalent to Spark's Poisson sampling, so we fail fast with an error.
+     *
+     * @param sample the Sample protobuf message
+     * @return a Sample logical plan
+     * @throws PlanConversionException if withReplacement=true is requested
+     */
+    private LogicalPlan convertSample(org.apache.spark.connect.proto.Sample sample) {
+        LogicalPlan input = convert(sample.getInput());
+
+        // Check for unsupported withReplacement=true
+        if (sample.hasWithReplacement() && sample.getWithReplacement()) {
+            throw new PlanConversionException(
+                "sample() with withReplacement=true is not supported. " +
+                "DuckDB does not support sampling with replacement.");
+        }
+
+        // The fraction is specified via upper_bound (lower_bound is typically 0.0)
+        double fraction = sample.getUpperBound();
+
+        // Check for seed
+        java.util.OptionalLong seed;
+        if (sample.hasSeed()) {
+            seed = java.util.OptionalLong.of(sample.getSeed());
+            logger.debug("Creating Sample with fraction: {}, seed: {}", fraction, sample.getSeed());
+        } else {
+            seed = java.util.OptionalLong.empty();
+            logger.debug("Creating Sample with fraction: {} (no seed)", fraction);
+        }
+
+        return new com.thunderduck.logical.Sample(input, fraction, seed);
     }
 }

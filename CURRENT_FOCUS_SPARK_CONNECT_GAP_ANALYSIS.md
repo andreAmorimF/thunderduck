@@ -1,6 +1,6 @@
 # Spark Connect 3.5.3 Gap Analysis for Thunderduck
 
-**Version:** 1.5
+**Version:** 1.7
 **Date:** 2025-12-12
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 
@@ -18,7 +18,7 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 | Category | Total Operators | Implemented | Partial | Coverage |
 |----------|----------------|-------------|---------|----------|
-| Relations | 40 | 19 | 1 | **47.5-50%** |
+| Relations | 40 | 20 | 1 | **50-52.5%** |
 | Expressions | 16 | 9 | 0 | **56.25%** |
 | Commands | 10 | 2 | 0 | **20%** |
 | Catalog | 26 | 0 | 0 | **0%** |
@@ -59,14 +59,9 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **ToDF** | `to_df` | ✅ Implemented | `df.toDF("a", "b", "c")` - uses positional aliasing (M20) |
 | **SubqueryAlias** | `subquery_alias` | ⚠️ Partial | Need explicit handling |
 | **Tail** | `tail` | ✅ Implemented | `df.tail(n)` - ACTION, O(N) memory via TailBatchCollector (M21) |
+| **Sample** | `sample` | ✅ Implemented | `df.sample(fraction, seed)` - Bernoulli sampling via DuckDB USING SAMPLE (M23) |
 
 ### 1.2 Not Implemented Relations
-
-#### High Priority (Common DataFrame Operations)
-
-| Relation | Proto Field | Priority | Use Case |
-|----------|-------------|----------|----------|
-| **Sample** | `sample` | 🔴 HIGH | `df.sample(0.1)` - random sampling |
 
 #### Medium Priority (Advanced Operations)
 

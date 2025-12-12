@@ -164,6 +164,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             visitRangeRelation((RangeRelation) plan);
         } else if (plan instanceof Tail) {
             visitTail((Tail) plan);
+        } else if (plan instanceof Sample) {
+            visitSample((Sample) plan);
         } else {
             throw new UnsupportedOperationException(
                 "SQL generation not implemented for: " + plan.getClass().getSimpleName());
@@ -386,6 +388,39 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // Simply generate SQL for the child plan
         // The tail operation is handled in memory by TailBatchCollector
         visit(plan.child());
+    }
+
+    /**
+     * Visits a Sample node.
+     *
+     * <p>Generates SQL using DuckDB's USING SAMPLE clause with Bernoulli sampling
+     * to match Spark's per-row probability algorithm. The Bernoulli method
+     * evaluates each row independently with the specified probability.
+     *
+     * <p>Example outputs:
+     * <pre>
+     *   SELECT * FROM (child) AS subquery_1 USING SAMPLE 10% (bernoulli)
+     *   SELECT * FROM (child) AS subquery_1 USING SAMPLE 10% (bernoulli, 42)
+     * </pre>
+     */
+    private void visitSample(Sample plan) {
+        sql.append("SELECT * FROM (");
+        subqueryDepth++;
+        visit(plan.child());
+        subqueryDepth--;
+        sql.append(") AS ").append(generateSubqueryAlias());
+
+        // Convert fraction to percentage for DuckDB SAMPLE clause
+        double percentage = plan.fraction() * 100.0;
+
+        // Use Bernoulli sampling to match Spark's per-row probability algorithm
+        if (plan.seed().isPresent()) {
+            sql.append(String.format(" USING SAMPLE %.6f%% (bernoulli, %d)",
+                percentage, plan.seed().getAsLong()));
+        } else {
+            sql.append(String.format(" USING SAMPLE %.6f%% (bernoulli)",
+                percentage));
+        }
     }
 
     /**
