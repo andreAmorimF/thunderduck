@@ -18,7 +18,7 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 | Category | Total Operators | Implemented | Coverage |
 |----------|----------------|-------------|----------|
-| Relations | 40 | 19 | **47.5%** |
+| Relations | 40 | 20 | **50%** |
 | Expressions | 16 | 9 | **56.25%** |
 | Commands | 10 | 2 | **20%** |
 | Catalog | 26 | 0 | **0%** |
@@ -52,6 +52,7 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **Offset** | `offset` | ✅ Implemented | `df.offset(n)` - uses existing Limit class (M20) |
 | **ToDF** | `to_df` | ✅ Implemented | `df.toDF("a", "b", "c")` - uses positional aliasing (M20) |
 | **SubqueryAlias** | `subquery_alias` | ⚠️ Partial | Need explicit handling |
+| **Tail** | `tail` | ✅ Implemented | `df.tail(n)` - last n rows, O(N) memory via TailBatchCollector |
 
 ### 1.2 Not Implemented Relations
 
@@ -59,7 +60,6 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 
 | Relation | Proto Field | Priority | Use Case |
 |----------|-------------|----------|----------|
-| **Tail** | `tail` | 🔴 HIGH | `df.tail(n)` - last n rows |
 | **Sample** | `sample` | 🔴 HIGH | `df.sample(0.1)` - random sampling |
 
 #### Medium Priority (Advanced Operations)
@@ -428,13 +428,13 @@ df.withColumn("new", expr)                    # WithColumns (M19)
 df.withColumnRenamed("old", "new")            # WithColumnsRenamed (M19)
 df.offset(n)                                  # Offset (M20)
 df.toDF("a", "b", "c")                        # ToDF (M20)
+df.tail(n)                                    # Tail (M21) - memory-efficient O(N)
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
 
 ```python
 # These operations do NOT work (will throw PlanConversionException):
-df.tail(n)                                    # Tail
 df.sample(0.1)                                # Sample
 df.na.fill(0)                                 # NAFill
 df.na.drop()                                  # NADrop
@@ -448,8 +448,9 @@ spark.catalog.listTables()                    # Catalog operations
 
 ---
 
-**Document Version:** 1.3
-**Last Updated:** 2025-12-10
+**Document Version:** 1.4
+**Last Updated:** 2025-12-12
 **Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
 **M19 Update:** Added Drop, WithColumns, WithColumnsRenamed implementations
 **M20 Update:** Added Offset, ToDF implementations
+**M21 Update:** Added Tail implementation (memory-efficient O(N) via TailBatchCollector)
