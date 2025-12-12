@@ -1,7 +1,7 @@
 # Spark Connect 3.5.3 Gap Analysis for Thunderduck
 
-**Version:** 1.1
-**Date:** 2025-12-10
+**Version:** 1.5
+**Date:** 2025-12-12
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 
 ---
@@ -16,18 +16,24 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 ### Overall Coverage
 
-| Category | Total Operators | Implemented | Coverage |
-|----------|----------------|-------------|----------|
-| Relations | 40 | 20 | **50%** |
-| Expressions | 16 | 9 | **56.25%** |
-| Commands | 10 | 2 | **20%** |
-| Catalog | 26 | 0 | **0%** |
+| Category | Total Operators | Implemented | Partial | Coverage |
+|----------|----------------|-------------|---------|----------|
+| Relations | 40 | 18 | 2 | **45-50%** |
+| Expressions | 16 | 9 | 0 | **56.25%** |
+| Commands | 10 | 2 | 0 | **20%** |
+| Catalog | 26 | 0 | 0 | **0%** |
+
+*Partial implementations*: ShowString (passthrough only), SubqueryAlias (needs explicit handling)
 
 ---
 
 ## 1. Relations (Logical Plan Operators)
 
 Relations are the core building blocks of Spark Connect query plans. They represent data transformations and sources.
+
+**Note on Actions vs Transformations**: Most Relations are **transformations** (lazy, return DataFrame). However, some Relations are **action-like** and trigger immediate execution:
+- **Tail** - Must scan all data to find last N rows
+- **ShowString** - Should execute and return formatted string (currently incomplete)
 
 ### 1.1 Implemented Relations
 
@@ -44,7 +50,7 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **SQL** | `sql` | ✅ Implemented | Direct SQL queries |
 | **LocalRelation** | `local_relation` | ✅ Implemented | Arrow IPC data (recent addition) |
 | **Deduplicate** | `deduplicate` | ✅ Implemented | DISTINCT operations |
-| **ShowString** | `show_string` | ✅ Implemented | Passthrough to input relation |
+| **ShowString** | `show_string` | ⚠️ Partial | Passthrough only - should format output |
 | **Range** | `range` | ✅ Implemented | `spark.range(start, end, step)` |
 | **Drop** | `drop` | ✅ Implemented | `df.drop("col")` - uses DuckDB EXCLUDE (M19) |
 | **WithColumns** | `with_columns` | ✅ Implemented | `df.withColumn("name", expr)` - uses REPLACE/append (M19) |
@@ -52,7 +58,7 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **Offset** | `offset` | ✅ Implemented | `df.offset(n)` - uses existing Limit class (M20) |
 | **ToDF** | `to_df` | ✅ Implemented | `df.toDF("a", "b", "c")` - uses positional aliasing (M20) |
 | **SubqueryAlias** | `subquery_alias` | ⚠️ Partial | Need explicit handling |
-| **Tail** | `tail` | ✅ Implemented | `df.tail(n)` - last n rows, O(N) memory via TailBatchCollector |
+| **Tail** | `tail` | ✅ Implemented | `df.tail(n)` - ACTION, O(N) memory via TailBatchCollector (M21) |
 
 ### 1.2 Not Implemented Relations
 
@@ -72,21 +78,31 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **Unpivot** | `unpivot` | 🟡 MEDIUM | Wide-to-long transformation |
 | **ToSchema** | `to_schema` | 🟡 MEDIUM | Schema enforcement |
 
-#### Lower Priority (NA Functions / Statistics)
+#### Lower Priority (NA Functions)
 
-| Relation | Proto Field | Priority | Use Case |
-|----------|-------------|----------|----------|
-| **NAFill** | `fill_na` | 🟡 MEDIUM | `df.na.fill()` |
-| **NADrop** | `drop_na` | 🟡 MEDIUM | `df.na.drop()` |
-| **NAReplace** | `replace` | 🟡 MEDIUM | `df.na.replace()` |
-| **StatSummary** | `summary` | 🟢 LOW | `df.summary()` |
-| **StatDescribe** | `describe` | 🟢 LOW | `df.describe()` |
-| **StatCrosstab** | `crosstab` | 🟢 LOW | `df.stat.crosstab()` |
-| **StatCov** | `cov` | 🟢 LOW | `df.stat.cov()` |
-| **StatCorr** | `corr` | 🟢 LOW | `df.stat.corr()` |
-| **StatApproxQuantile** | `approx_quantile` | 🟢 LOW | `df.stat.approxQuantile()` |
-| **StatFreqItems** | `freq_items` | 🟢 LOW | `df.stat.freqItems()` |
-| **StatSampleBy** | `sample_by` | 🟢 LOW | `df.stat.sampleBy()` |
+| Relation | Proto Field | Priority | Returns | Use Case |
+|----------|-------------|----------|---------|----------|
+| **NAFill** | `fill_na` | 🟡 MEDIUM | DataFrame | `df.na.fill()` - fill nulls |
+| **NADrop** | `drop_na` | 🟡 MEDIUM | DataFrame | `df.na.drop()` - drop nulls |
+| **NAReplace** | `replace` | 🟡 MEDIUM | DataFrame | `df.na.replace()` - replace values |
+
+#### Lower Priority (Statistics - Return DataFrames)
+
+| Relation | Proto Field | Priority | Returns | Use Case |
+|----------|-------------|----------|---------|----------|
+| **StatSummary** | `summary` | 🟢 LOW | DataFrame | `df.summary()` - stats as rows |
+| **StatDescribe** | `describe` | 🟢 LOW | DataFrame | `df.describe()` - count/mean/std/min/max |
+| **StatCrosstab** | `crosstab` | 🟢 LOW | DataFrame | `df.stat.crosstab()` - contingency table |
+| **StatFreqItems** | `freq_items` | 🟢 LOW | DataFrame | `df.stat.freqItems()` - frequent items |
+| **StatSampleBy** | `sample_by` | 🟢 LOW | DataFrame | `df.stat.sampleBy()` - stratified sample |
+
+#### Lower Priority (Statistics - Return Scalars)
+
+| Relation | Proto Field | Priority | Returns | Use Case |
+|----------|-------------|----------|---------|----------|
+| **StatCov** | `cov` | 🟢 LOW | Double | `df.stat.cov()` - covariance |
+| **StatCorr** | `corr` | 🟢 LOW | Double | `df.stat.corr()` - correlation |
+| **StatApproxQuantile** | `approx_quantile` | 🟢 LOW | Array[Double] | `df.stat.approxQuantile()` |
 
 #### Streaming / UDF (Future)
 
@@ -408,7 +424,7 @@ These are all implemented. However, production workloads often include:
 ## Appendix A: Quick Reference - What Works
 
 ```python
-# These operations work:
+# TRANSFORMATIONS (lazy, return DataFrame, chainable):
 df = spark.read.parquet("data.parquet")      # Read
 df.select("col1", "col2")                     # Project
 df.filter(df.col > 10)                        # Filter
@@ -419,38 +435,70 @@ df.join(df2, "key")                           # Join
 df.union(df2)                                 # SetOperation
 df.distinct()                                 # Deduplicate
 spark.sql("SELECT * FROM ...")                # SQL
-spark.sql("CREATE TEMP VIEW ...")             # DDL via SqlCommand
 spark.createDataFrame([(1,2),(3,4)])          # LocalRelation
 spark.range(0, 100)                           # Range
-df.createOrReplaceTempView("view")            # CreateDataFrameViewCommand
 df.drop("col")                                # Drop (M19)
 df.withColumn("new", expr)                    # WithColumns (M19)
 df.withColumnRenamed("old", "new")            # WithColumnsRenamed (M19)
 df.offset(n)                                  # Offset (M20)
 df.toDF("a", "b", "c")                        # ToDF (M20)
-df.tail(n)                                    # Tail (M21) - memory-efficient O(N)
+
+# ACTIONS (trigger execution, return values to driver):
+df.tail(n)                                    # Tail (M21) - returns List[Row], O(N) memory
+df.show()                                     # ShowString (partial) - should format output
+df.collect()                                  # Collect - returns all rows
+
+# COMMANDS (side effects, no result data):
+spark.sql("CREATE TEMP VIEW ...")             # DDL via SqlCommand
+df.createOrReplaceTempView("view")            # CreateDataFrameViewCommand
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
 
 ```python
-# These operations do NOT work (will throw PlanConversionException):
+# TRANSFORMATIONS not yet implemented (return DataFrames):
 df.sample(0.1)                                # Sample
-df.na.fill(0)                                 # NAFill
-df.na.drop()                                  # NADrop
-df.write.parquet("output")                    # WriteOperation
+df.na.fill(0)                                 # NAFill  - returns DataFrame
+df.na.drop()                                  # NADrop  - returns DataFrame
 df.hint("BROADCAST")                          # Hint
 df.repartition(10)                            # Repartition
 df.unpivot(...)                               # Unpivot
-df.stat.describe()                            # StatDescribe
+df.describe()                                 # StatDescribe - returns DataFrame!
+df.summary()                                  # StatSummary - returns DataFrame!
+
+# COMMANDS not yet implemented (side effects):
+df.write.parquet("output")                    # WriteOperation
+
+# CATALOG not yet implemented:
 spark.catalog.listTables()                    # Catalog operations
 ```
 
+## Appendix C: Actions vs Transformations
+
+**Understanding the Distinction**:
+
+| Type | Behavior | Returns | Chainable? |
+|------|----------|---------|------------|
+| **Transformation** | Lazy, builds plan | DataFrame | Yes |
+| **Action** | Eager, executes | List/Value | No (terminal) |
+| **Command** | Side effect | None/Result | N/A |
+
+**Key Action-Like Relations** (trigger execution):
+- `tail(n)` - Must scan all data to find last N rows, returns `List[Row]`
+- `show()` / ShowString - Executes and formats output, returns String
+- `collect()` - Returns all rows to driver
+- `count()` - Returns single Long value
+
+**Important**: Most "stat" operations (`describe()`, `summary()`, `crosstab()`) return **DataFrames**, not scalar values! They are transformations, not actions.
+
+**Protocol vs Semantics**: In Spark Connect protocol, both transformations AND actions are represented as Relations. The distinction is semantic (lazy vs eager), not protocol-based.
+
 ---
 
-**Document Version:** 1.4
+**Document Version:** 1.5
 **Last Updated:** 2025-12-12
 **Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
 **M19 Update:** Added Drop, WithColumns, WithColumnsRenamed implementations
 **M20 Update:** Added Offset, ToDF implementations
 **M21 Update:** Added Tail implementation (memory-efficient O(N) via TailBatchCollector)
+**v1.5 Update:** Clarified actions vs transformations; ShowString marked partial; added semantic classification
