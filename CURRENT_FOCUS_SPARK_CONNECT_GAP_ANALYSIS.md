@@ -1,6 +1,6 @@
 # Spark Connect 3.5.3 Gap Analysis for Thunderduck
 
-**Version:** 1.8
+**Version:** 1.9
 **Date:** 2025-12-12
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 
@@ -18,7 +18,7 @@ This document provides a detailed gap analysis between Spark Connect 3.5.3's pro
 
 | Category | Total Operators | Implemented | Partial | Coverage |
 |----------|----------------|-------------|---------|----------|
-| Relations | 40 | 20 | 1 | **50-52.5%** |
+| Relations | 40 | 23 | 1 | **57.5-60%** |
 | Expressions | 16 | 9 | 0 | **56.25%** |
 | Commands | 10 | 2 | 1 | **25-30%** |
 | Catalog | 26 | 0 | 0 | **0%** |
@@ -60,6 +60,9 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **SubqueryAlias** | `subquery_alias` | ⚠️ Partial | Need explicit handling |
 | **Tail** | `tail` | ✅ Implemented | `df.tail(n)` - ACTION, O(N) memory via TailBatchCollector (M21) |
 | **Sample** | `sample` | ✅ Implemented | `df.sample(fraction, seed)` - Bernoulli sampling via DuckDB USING SAMPLE (M23) |
+| **Hint** | `hint` | ✅ Implemented | `df.hint("BROADCAST")` - no-op pass-through (M25). DuckDB optimizer handles automatically. |
+| **Repartition** | `repartition` | ✅ Implemented | `df.repartition(n)` - no-op in single-node DuckDB (M25) |
+| **RepartitionByExpression** | `repartition_by_expression` | ✅ Implemented | `df.repartition(col("x"))` - no-op in single-node DuckDB (M25) |
 
 ### 1.2 Not Implemented Relations
 
@@ -67,9 +70,6 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 
 | Relation | Proto Field | Priority | Use Case |
 |----------|-------------|----------|----------|
-| **Hint** | `hint` | 🟡 MEDIUM | Query hints (BROADCAST, MERGE, etc.) |
-| **Repartition** | `repartition` | 🟡 MEDIUM | `df.repartition(n)` |
-| **RepartitionByExpression** | `repartition_by_expression` | 🟡 MEDIUM | `df.repartition(col("x"))` |
 | **Unpivot** | `unpivot` | 🟡 MEDIUM | Wide-to-long transformation |
 | **ToSchema** | `to_schema` | 🟡 MEDIUM | Schema enforcement |
 
@@ -403,9 +403,10 @@ Features intentionally not supported due to Spark/DuckDB architectural differenc
 | Feature | Reason |
 |---------|--------|
 | `df.sample(withReplacement=True)` | DuckDB has no Poisson sampling; throws `PlanConversionException` |
+| `df.hint("BROADCAST")` etc. | Accepted but ignored (no-op); DuckDB optimizer handles join strategies |
+| `df.repartition(n)` / `df.repartition(col)` | Accepted but ignored (no-op); meaningless in single-node DuckDB |
 | Streaming operations | DuckDB is not a streaming engine |
 | Python/Scala UDFs | Requires JVM/Python interop not available in DuckDB |
-| Distributed hints (BROADCAST, etc.) | DuckDB is single-node |
 | Bucketing | No DuckDB equivalent |
 
 ---
@@ -453,6 +454,9 @@ df.withColumnRenamed("old", "new")            # WithColumnsRenamed (M19)
 df.offset(n)                                  # Offset (M20)
 df.toDF("a", "b", "c")                        # ToDF (M20)
 df.sample(0.1, seed=42)                       # Sample (M23)
+df.hint("BROADCAST")                          # Hint (M25) - no-op, DuckDB optimizes automatically
+df.repartition(10)                            # Repartition (M25) - no-op in single-node DuckDB
+df.repartition(col("x"))                      # RepartitionByExpression (M25) - no-op
 
 # ACTIONS (trigger execution, return values to driver):
 df.tail(n)                                    # Tail (M21) - returns List[Row], O(N) memory
@@ -480,8 +484,6 @@ df.write.csv("s3://bucket/path")              # S3 writes need httpfs extension
 # TRANSFORMATIONS not yet implemented (return DataFrames):
 df.na.fill(0)                                 # NAFill  - returns DataFrame
 df.na.drop()                                  # NADrop  - returns DataFrame
-df.hint("BROADCAST")                          # Hint
-df.repartition(10)                            # Repartition
 df.unpivot(...)                               # Unpivot
 df.describe()                                 # StatDescribe - returns DataFrame!
 df.summary()                                  # StatSummary - returns DataFrame!
@@ -523,3 +525,4 @@ spark.catalog.listTables()                    # Catalog operations
 **v1.6 Update:** Corrected ShowString to fully implemented (19 relations, 1 partial)
 **v1.7 Update:** Added Sample (M23) - Bernoulli sampling via USING SAMPLE
 **v1.8 Update:** Added WriteOperation (M24) - df.write.parquet/csv/json support
+**v1.9 Update:** Added Hint, Repartition, RepartitionByExpression (M25) - no-op pass-throughs for distributed ops

@@ -89,6 +89,16 @@ public class RelationConverter {
                 return convertToDF(relation.getToDf());
             case SAMPLE:
                 return convertSample(relation.getSample());
+            case HINT:
+                // Hints are no-ops in DuckDB - pass through to child relation
+                // DuckDB's optimizer handles join ordering and strategies automatically
+                return convert(relation.getHint().getInput());
+            case REPARTITION:
+                // Repartition is a no-op in single-node DuckDB
+                return convert(relation.getRepartition().getInput());
+            case REPARTITION_BY_EXPRESSION:
+                // RepartitionByExpression is a no-op in single-node DuckDB
+                return convert(relation.getRepartitionByExpression().getInput());
             default:
                 throw new PlanConversionException("Unsupported relation type: " + relation.getRelTypeCase());
         }
