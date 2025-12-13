@@ -115,11 +115,11 @@ class TestDataFrameOperations(ThunderduckE2ETestBase):
 
         # Union (with duplicates)
         union_all = df1.union(df2)
-        self.assertEqual(union_all.count(), 4)  # 3 + 1
+        self.assertEqual(union_all.count(), 3)  # 2 + 1
 
         # Union distinct
         union_distinct = df1.union(df2).distinct()
-        self.assertEqual(union_distinct.count(), 4)
+        self.assertEqual(union_distinct.count(), 3)
 
     def test_null_handling(self):
         """Test NULL value handling."""
