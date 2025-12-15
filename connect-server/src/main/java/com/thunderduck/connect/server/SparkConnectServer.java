@@ -2,24 +2,24 @@ package com.thunderduck.connect.server;
 
 import com.thunderduck.connect.service.SparkConnectServiceImpl;
 import com.thunderduck.connect.session.SessionManager;
-import com.thunderduck.runtime.DuckDBConnectionManager;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Spark Connect Server bootstrap.
  *
  * Responsibilities:
- * 1. Create singleton DuckDB connection
- * 2. Initialize SessionManager with timeout
- * 3. Create and configure gRPC server
- * 4. Handle graceful shutdown
+ * 1. Initialize SessionManager with timeout
+ * 2. Create and configure gRPC server
+ * 3. Handle graceful shutdown
+ *
+ * Each session creates its own DuckDB runtime, providing session isolation
+ * and proper resource management.
  *
  * Usage:
  * <pre>
@@ -33,20 +33,17 @@ public class SparkConnectServer {
 
     private final int port;
     private final long sessionTimeoutMs;
-    private final String duckDbPath;
 
     private Server grpcServer;
-    private DuckDBConnectionManager connectionManager;
     private SessionManager sessionManager;
 
     /**
      * Create server with default configuration.
      * - Port: 15002 (Spark Connect default)
      * - Session timeout: 300 seconds (5 minutes)
-     * - DuckDB: in-memory
      */
     public SparkConnectServer() {
-        this(15002, 300_000, null);
+        this(15002, 300_000);
     }
 
     /**
@@ -54,45 +51,35 @@ public class SparkConnectServer {
      *
      * @param port gRPC server port
      * @param sessionTimeoutMs Session timeout in milliseconds
-     * @param duckDbPath Path to DuckDB database file (null for in-memory)
      */
-    public SparkConnectServer(int port, long sessionTimeoutMs, String duckDbPath) {
+    public SparkConnectServer(int port, long sessionTimeoutMs) {
         this.port = port;
         this.sessionTimeoutMs = sessionTimeoutMs;
-        this.duckDbPath = duckDbPath;
     }
 
     /**
      * Start the server.
      *
      * @throws IOException if server fails to bind
-     * @throws SQLException if DuckDB connection fails
      */
-    public void start() throws IOException, SQLException {
+    public void start() throws IOException {
         logger.info("Starting Spark Connect Server...");
-        logger.info("Configuration: port={}, sessionTimeout={}ms, duckDbPath={}",
-            port, sessionTimeoutMs, duckDbPath != null ? duckDbPath : "in-memory");
+        logger.info("Configuration: port={}, sessionTimeout={}ms", port, sessionTimeoutMs);
 
-        // 1. Create singleton DuckDB connection
-        initializeDuckDB();
-
-        // 2. Create SessionManager
+        // 1. Create SessionManager (sessions create their own DuckDB runtimes)
         sessionManager = new SessionManager(sessionTimeoutMs);
 
-        // 3. Create gRPC service implementation
-        SparkConnectServiceImpl service = new SparkConnectServiceImpl(
-            sessionManager,
-            connectionManager
-        );
+        // 2. Create gRPC service implementation
+        SparkConnectServiceImpl service = new SparkConnectServiceImpl(sessionManager);
 
-        // 4. Build and start gRPC server
+        // 3. Build and start gRPC server
         grpcServer = ServerBuilder.forPort(port)
             .addService(service)
             .build()
             .start();
 
         logger.info("Spark Connect Server started on port {}", port);
-        logger.info("Ready to accept connections (single-session mode)");
+        logger.info("Ready to accept connections (session-scoped DuckDB runtimes)");
 
         // Add shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -126,19 +113,9 @@ public class SparkConnectServer {
             }
         }
 
-        // 2. Shutdown session manager
+        // 2. Shutdown session manager (closes all sessions and their DuckDB runtimes)
         if (sessionManager != null) {
             sessionManager.shutdown();
-        }
-
-        // 3. Close DuckDB connection manager
-        if (connectionManager != null) {
-            try {
-                connectionManager.close();
-                logger.info("DuckDB connection manager closed");
-            } catch (SQLException e) {
-                logger.error("Error closing DuckDB connection manager", e);
-            }
         }
 
         logger.info("Spark Connect Server stopped");
@@ -156,48 +133,6 @@ public class SparkConnectServer {
     }
 
     /**
-     * Initialize singleton DuckDB connection manager.
-     *
-     * Creates a connection manager with pool size 1 (singleton pattern)
-     * for single-session usage.
-     *
-     * @throws SQLException if connection fails
-     */
-    private void initializeDuckDB() throws SQLException {
-        logger.info("Initializing DuckDB connection manager...");
-
-        // Create configuration with pool size 1 (singleton)
-        DuckDBConnectionManager.Configuration config;
-        if (duckDbPath != null) {
-            config = DuckDBConnectionManager.Configuration.persistent(duckDbPath);
-        } else {
-            config = DuckDBConnectionManager.Configuration.inMemory();
-        }
-        // Use default auto-detect pool size (min of CPUs, 8) for concurrent operations
-        // Pool size 1 causes connection exhaustion during concurrent schema analysis
-        // See: Connection pool exhausted - timeout after 30 seconds
-
-        // Create connection manager
-        connectionManager = new DuckDBConnectionManager(config);
-        logger.info("DuckDB connection manager created with pool size {}", connectionManager.getPoolSize());
-
-        // Test connection
-        try (var pooled = connectionManager.borrowConnection()) {
-            var conn = pooled.get();
-            var stmt = conn.createStatement();
-            var rs = stmt.executeQuery("SELECT 1 as test");
-            if (rs.next()) {
-                logger.info("DuckDB connection test successful: {}", rs.getInt(1));
-            }
-            rs.close();
-            stmt.close();
-        } catch (SQLException e) {
-            logger.error("DuckDB connection test failed", e);
-            throw e;
-        }
-    }
-
-    /**
      * Get the server port.
      *
      * @return Port number
@@ -211,19 +146,19 @@ public class SparkConnectServer {
      *
      * Usage:
      * <pre>
-     * java -jar connect-server.jar [port] [sessionTimeoutMs] [duckDbPath]
+     * java -jar connect-server.jar [port] [sessionTimeoutMs]
      * </pre>
      *
      * Examples:
      * <pre>
-     * # Start with defaults (port 15002, 5 min timeout, in-memory)
+     * # Start with defaults (port 15002, 5 min timeout)
      * java -jar connect-server.jar
      *
      * # Start on custom port
      * java -jar connect-server.jar 50051
      *
-     * # Start with persistent database
-     * java -jar connect-server.jar 15002 300000 /data/my.duckdb
+     * # Start with custom port and timeout
+     * java -jar connect-server.jar 15002 600000
      * </pre>
      */
     public static void main(String[] args) {
@@ -231,17 +166,16 @@ public class SparkConnectServer {
             // Parse command-line arguments
             int port = args.length > 0 ? Integer.parseInt(args[0]) : 15002;
             long sessionTimeout = args.length > 1 ? Long.parseLong(args[1]) : 300_000;
-            String duckDbPath = args.length > 2 ? args[2] : null;
 
             // Create and start server
-            SparkConnectServer server = new SparkConnectServer(port, sessionTimeout, duckDbPath);
+            SparkConnectServer server = new SparkConnectServer(port, sessionTimeout);
             server.start();
 
             logger.info("================================================");
             logger.info("Spark Connect Server is running");
             logger.info("Port: {}", port);
             logger.info("Session timeout: {}ms", sessionTimeout);
-            logger.info("DuckDB: {}", duckDbPath != null ? duckDbPath : "in-memory");
+            logger.info("DuckDB: Session-scoped in-memory databases");
             logger.info("================================================");
             logger.info("Connect with PySpark:");
             logger.info("  from pyspark.sql import SparkSession");

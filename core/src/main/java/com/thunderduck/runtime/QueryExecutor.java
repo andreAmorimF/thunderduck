@@ -21,21 +21,22 @@ import java.util.UUID;
  * Executes SQL queries against DuckDB and returns results.
  *
  * <p>This class provides a high-level API for executing queries and updates
- * against a DuckDB database, with automatic connection management and
- * Arrow data conversion.
+ * against a DuckDB database. Each QueryExecutor is bound to a specific
+ * DuckDBRuntime, typically owned by a session.
  *
  * <p>Features:
  * <ul>
  *   <li>Query execution with Arrow result conversion</li>
  *   <li>Update/DDL statement execution</li>
- *   <li>Automatic connection management</li>
+ *   <li>Session-scoped runtime binding</li>
  *   <li>Error handling and cleanup</li>
  * </ul>
  *
  * <p>Example usage:
  * <pre>
- *   DuckDBConnectionManager manager = new DuckDBConnectionManager();
- *   QueryExecutor executor = new QueryExecutor(manager);
+ *   // Get runtime from session
+ *   DuckDBRuntime runtime = session.getRuntime();
+ *   QueryExecutor executor = new QueryExecutor(runtime);
  *
  *   // Execute query
  *   VectorSchemaRoot result = executor.executeQuery(
@@ -46,27 +47,26 @@ import java.util.UUID;
  *       "CREATE TABLE users (id INTEGER, name VARCHAR)");
  * </pre>
  *
- * @see DuckDBConnectionManager
+ * @see DuckDBRuntime
  * @see ArrowInterchange
  */
 public class QueryExecutor {
 
     private static final Logger logger = LoggerFactory.getLogger(QueryExecutor.class);
 
-    private final DuckDBConnectionManager connectionManager;
+    private final DuckDBRuntime runtime;
     private final ArrowStreamingExecutor streamingExecutor;
     private final BufferAllocator allocator;
 
     /**
-     * Creates a query executor with the specified connection manager.
+     * Creates a query executor with the specified runtime.
      *
-     * @param connectionManager the connection manager
+     * @param runtime the DuckDB runtime (typically from a session)
      */
-    public QueryExecutor(DuckDBConnectionManager connectionManager) {
-        this.connectionManager = Objects.requireNonNull(
-            connectionManager, "connectionManager must not be null");
+    public QueryExecutor(DuckDBRuntime runtime) {
+        this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
         this.allocator = new RootAllocator(Long.MAX_VALUE);
-        this.streamingExecutor = new ArrowStreamingExecutor(connectionManager, allocator, StreamingConfig.DEFAULT_BATCH_SIZE);
+        this.streamingExecutor = new ArrowStreamingExecutor(runtime, allocator, StreamingConfig.DEFAULT_BATCH_SIZE);
     }
 
     /**
@@ -74,7 +74,7 @@ public class QueryExecutor {
      *
      * <p>This method executes the SQL query, converts the JDBC ResultSet
      * to Apache Arrow format, and returns the result. The connection is
-     * automatically acquired from the pool and released after execution.
+     * managed by the singleton runtime.
      *
      * <p>Supports SQL introspection via EXPLAIN statements:
      * <ul>
@@ -294,37 +294,30 @@ public class QueryExecutor {
     public int executeUpdate(String sql) throws QueryExecutionException {
         Objects.requireNonNull(sql, "sql must not be null");
 
-        // Use try-with-resources for automatic connection cleanup
-        try (PooledConnection pooled = connectionManager.borrowConnection()) {
-            DuckDBConnection conn = pooled.get();
-            Statement stmt = null;
+        DuckDBConnection conn = runtime.getConnection();
+        Statement stmt = null;
 
-            try {
-                // Execute update
-                stmt = conn.createStatement();
-                return stmt.executeUpdate(sql);
+        try {
+            // Execute update
+            stmt = conn.createStatement();
+            return stmt.executeUpdate(sql);
 
-            } catch (SQLException e) {
-                // Wrap in QueryExecutionException with context
-                throw new QueryExecutionException(
-                    "Failed to execute update: " + e.getMessage(), e, sql);
+        } catch (SQLException e) {
+            // Wrap in QueryExecutionException with context
+            throw new QueryExecutionException(
+                "Failed to execute update: " + e.getMessage(), e, sql);
 
-            } finally {
-                // Clean up JDBC resources
-                if (stmt != null) {
-                    try {
-                        stmt.close();
-                    } catch (SQLException e) {
-                        // Log but don't throw
-                        logger.warn("Error closing Statement: " + e.getMessage());
-                    }
+        } finally {
+            // Clean up JDBC resources (NOT the connection - singleton)
+            if (stmt != null) {
+                try {
+                    stmt.close();
+                } catch (SQLException e) {
+                    // Log but don't throw
+                    logger.warn("Error closing Statement: " + e.getMessage());
                 }
             }
-        } catch (SQLException e) {
-            // Wrap connection acquisition errors
-            throw new QueryExecutionException(
-                "Failed to acquire database connection: " + e.getMessage(), e, sql);
-        } // Connection automatically released here
+        }
     }
 
     /**
@@ -342,45 +335,38 @@ public class QueryExecutor {
     public boolean execute(String sql) throws QueryExecutionException {
         Objects.requireNonNull(sql, "sql must not be null");
 
-        // Use try-with-resources for automatic connection cleanup
-        try (PooledConnection pooled = connectionManager.borrowConnection()) {
-            DuckDBConnection conn = pooled.get();
-            Statement stmt = null;
+        DuckDBConnection conn = runtime.getConnection();
+        Statement stmt = null;
 
-            try {
-                // Execute statement
-                stmt = conn.createStatement();
-                return stmt.execute(sql);
+        try {
+            // Execute statement
+            stmt = conn.createStatement();
+            return stmt.execute(sql);
 
-            } catch (SQLException e) {
-                // Wrap in QueryExecutionException with context
-                throw new QueryExecutionException(
-                    "Failed to execute statement: " + e.getMessage(), e, sql);
+        } catch (SQLException e) {
+            // Wrap in QueryExecutionException with context
+            throw new QueryExecutionException(
+                "Failed to execute statement: " + e.getMessage(), e, sql);
 
-            } finally {
-                // Clean up JDBC resources
-                if (stmt != null) {
-                    try {
-                        stmt.close();
-                    } catch (SQLException e) {
-                        // Log but don't throw
-                        logger.warn("Error closing Statement: " + e.getMessage());
-                    }
+        } finally {
+            // Clean up JDBC resources (NOT the connection - singleton)
+            if (stmt != null) {
+                try {
+                    stmt.close();
+                } catch (SQLException e) {
+                    // Log but don't throw
+                    logger.warn("Error closing Statement: " + e.getMessage());
                 }
             }
-        } catch (SQLException e) {
-            // Wrap connection acquisition errors
-            throw new QueryExecutionException(
-                "Failed to acquire database connection: " + e.getMessage(), e, sql);
-        } // Connection automatically released here
+        }
     }
 
     /**
-     * Returns the connection manager used by this executor.
+     * Returns the runtime used by this executor.
      *
-     * @return the connection manager
+     * @return the DuckDB runtime
      */
-    public DuckDBConnectionManager getConnectionManager() {
-        return connectionManager;
+    public DuckDBRuntime getRuntime() {
+        return runtime;
     }
 }

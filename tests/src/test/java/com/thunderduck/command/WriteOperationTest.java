@@ -2,7 +2,7 @@ package com.thunderduck.command;
 
 import com.thunderduck.test.TestBase;
 import com.thunderduck.test.TestCategories;
-import com.thunderduck.runtime.DuckDBConnectionManager;
+import com.thunderduck.runtime.DuckDBRuntime;
 import com.thunderduck.runtime.QueryExecutor;
 
 import org.junit.jupiter.api.AfterEach;
@@ -14,7 +14,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.SQLException;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -33,19 +32,20 @@ import static org.assertj.core.api.Assertions.*;
 @DisplayName("WriteOperation Tests")
 public class WriteOperationTest extends TestBase {
 
-    private DuckDBConnectionManager connectionManager;
+    private DuckDBRuntime runtime;
     private QueryExecutor executor;
 
     @BeforeEach
     void setUp() {
-        connectionManager = new DuckDBConnectionManager();
-        executor = new QueryExecutor(connectionManager);
+        // Use unique in-memory database per test for isolation
+        runtime = DuckDBRuntime.create("jdbc:duckdb::memory:test_write_" + System.nanoTime());
+        executor = new QueryExecutor(runtime);
     }
 
     @AfterEach
-    void tearDown() throws SQLException {
-        if (connectionManager != null) {
-            connectionManager.close();
+    void tearDown() {
+        if (runtime != null) {
+            runtime.close();
         }
     }
 

@@ -1,22 +1,24 @@
 # E2E Testing Gap Analysis for Thunderduck
 
-**Version:** 1.2
-**Date:** 2025-12-13
+**Version:** 1.3
+**Date:** 2025-12-15
 **Purpose:** Catalog E2E test failures and gaps for Thunderduck Spark Connect
 
 ---
 
 ## Executive Summary
 
-The E2E test suite (`/workspace/tests/integration/`) has ~291 tests. After the **P0 fix for `createOrReplaceTempView`** and **TPC-H data regeneration**, all TPC-H query tests pass.
+The E2E test suite (`/workspace/tests/integration/`) has ~291 tests. After the **Spark 4.0.1 upgrade** (merged PR #2), there's a minor regression in DataFrame API tests due to schema inference for temp views.
 
 | Test Category | Tests | Status |
 |--------------|-------|--------|
 | Simple SQL | 3 | ALL PASS |
-| TPC-H Queries | 17 | **16 PASS, 1 XFAIL** |
+| TPC-H Queries | 17 | **14 PASS, 2 FAIL, 1 XFAIL** |
 | TPC-DS Queries | 102 | **100 PASS, 2 FAIL** |
 | Basic DataFrame Ops | 7 | ALL PASS |
 | Temp Views | 6 | ALL PASS (manual test) |
+
+**Spark Version:** 4.0.1 (upgraded from 3.5.3 on 2025-12-15)
 
 ---
 
@@ -80,14 +82,16 @@ for table in ['customer', 'lineitem', 'nation', 'orders', 'part', 'partsupp', 'r
 
 ## Current Test Status
 
-### Passing Tests
+### Passing Tests (Post Spark 4.0.1 Upgrade)
 | File | Tests | Status | Notes |
 |------|-------|--------|-------|
 | `test_simple_sql.py` | 3 | ALL PASS | Direct SQL |
-| `test_tpch_queries.py` | 17 | **16 PASS, 1 XFAIL** | Q1, Q3, Q5, Q6 + basic ops |
+| `test_tpch_queries.py` | 17 | **14 PASS, 2 FAIL, 1 XFAIL** | Regression: Q3, Q5 DataFrame API |
 | Manual temp view test | 6 | ALL PASS | create, query, replace, multiple |
 
-**Note**: `test_tpch_dataframe_poc.py` was merged into `test_tpch_queries.py` (Q5 and window function tests added). The window function test is marked `xfail` due to ORDER BY translation bug (`DESCENDING` instead of `DESC`).
+**Spark 4.0.1 Regression**: Q3 and Q5 DataFrame API tests fail with schema inference error when calling `groupBy("column_name")`. The error: `Schema analysis failed: Cannot invoke "StructType.fields()" because schema is null`. This is caused by the PR's change to use `TableScan.TableFormat.TABLE` for named tables with null schema.
+
+**Note**: The window function test is marked `xfail` due to ORDER BY translation bug (`DESCENDING` instead of `DESC`).
 
 ### TPC-DS Test Results (Retested 2025-12-13)
 | File | Tests | Status | Notes |
@@ -192,10 +196,30 @@ python3 -m pytest test_tpch_dataframe_poc.py -v   # DataFrame operations
 
 ## Next Steps
 
-1. **Retest all TPC-H/TPC-DS tests** with rebuilt server to confirm fix propagation
-2. **Investigate Q1/Q6 failures** - likely test data or expression issues, not infrastructure
+1. **~~Retest all TPC-H/TPC-DS tests~~** - DONE (2025-12-15 with Spark 4.0.1)
+2. **Fix Spark 4.0.1 schema inference regression** - Q3/Q5 DataFrame API tests fail
+   - Root cause: `TableScan.TableFormat.TABLE` created with null schema
+   - Fix: Implement schema inference for TABLE format in `TableScan.inferSchema()`
+   - Location: `RelationConverter.java:194` and `TableScan.java`
 3. **Add E2E tests for M19-M28** - create new test file for recent features
-4. **Update conftest.py comment** - line 167-170 comment is now stale
+4. **Investigate TPC-DS Q17/Q23b** - both return empty results
+
+---
+
+## Spark 4.0.1 Upgrade Details (2025-12-15)
+
+**PR**: lastrk/thunderduck#2 (by andreAmorimF)
+
+**Changes:**
+- Spark version: 3.5.3 → 4.0.1
+- PySpark version: 3.5.3 → 4.0.1
+- Java requirement: 11 → 17
+- New protos: `ml.proto`, `ml_common.proto`
+- Updated SQL extraction for backward compatibility with new `input` relation
+
+**Known Regression:**
+- Q3, Q5 DataFrame API tests fail due to schema inference for `NamedTable`
+- Error: `Schema analysis failed: Cannot invoke "StructType.fields()" because schema is null`
 
 ---
 
@@ -207,5 +231,5 @@ python3 -m pytest test_tpch_dataframe_poc.py -v   # DataFrame operations
 
 ---
 
-**Document Version:** 1.1
-**Last Updated:** 2025-12-13 (Updated after P0 fix)
+**Document Version:** 1.3
+**Last Updated:** 2025-12-15 (Updated after Spark 4.0.1 merge)

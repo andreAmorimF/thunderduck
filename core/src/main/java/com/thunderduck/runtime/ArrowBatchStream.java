@@ -20,9 +20,13 @@ import java.sql.Statement;
  * iteration with proper resource management. Uses zero-copy Arrow streaming
  * for efficient large result handling.
  *
+ * <p>Note: The connection is managed by DuckDBRuntime singleton and is NOT
+ * closed when this stream closes. Only the statement, result set, and Arrow
+ * reader are cleaned up.
+ *
  * <p>Usage:
  * <pre>{@code
- * try (ArrowBatchStream stream = new ArrowBatchStream(resultSet, connection, stmt, allocator, 8192)) {
+ * try (ArrowBatchStream stream = new ArrowBatchStream(resultSet, stmt, allocator, 8192)) {
  *     while (stream.hasNext()) {
  *         VectorSchemaRoot batch = stream.next();
  *         // Process batch - do NOT close, owned by stream
@@ -37,7 +41,6 @@ public class ArrowBatchStream implements ArrowBatchIterator {
     private static final Logger logger = LoggerFactory.getLogger(ArrowBatchStream.class);
 
     private final ArrowReader reader;
-    private final PooledConnection connection;
     private final Statement statement;
     private final ResultSet resultSet;
 
@@ -53,21 +56,21 @@ public class ArrowBatchStream implements ArrowBatchIterator {
     /**
      * Create a streaming batch iterator from a DuckDB ResultSet.
      *
+     * <p>Note: The connection is managed by DuckDBRuntime and should NOT be
+     * passed to this constructor. It will not be closed when the stream closes.
+     *
      * @param resultSet DuckDB ResultSet (will be unwrapped to DuckDBResultSet)
-     * @param connection Pooled connection (returned on close)
      * @param statement Statement that created the ResultSet
      * @param allocator Arrow memory allocator
      * @param batchSize Rows per batch hint
      * @throws SQLException if the ResultSet cannot be unwrapped or Arrow export fails
      */
     public ArrowBatchStream(ResultSet resultSet,
-                           PooledConnection connection,
                            Statement statement,
                            BufferAllocator allocator,
                            int batchSize) throws SQLException {
 
         this.resultSet = resultSet;
-        this.connection = connection;
         this.statement = statement;
 
         try {
@@ -83,13 +86,11 @@ public class ArrowBatchStream implements ArrowBatchIterator {
             // Cleanup on construction failure
             closeQuietly(resultSet, "ResultSet");
             closeQuietly(statement, "Statement");
-            if (connection != null) connection.close();
             throw e;
         } catch (Exception e) {
             // Cleanup on construction failure
             closeQuietly(resultSet, "ResultSet");
             closeQuietly(statement, "Statement");
-            if (connection != null) connection.close();
             throw new SQLException("Failed to create Arrow stream", e);
         }
     }
@@ -185,14 +186,10 @@ public class ArrowBatchStream implements ArrowBatchIterator {
         logger.debug("Closing ArrowBatchStream: {} batches, {} rows", batchCount, totalRowCount);
 
         // Close resources in reverse order of acquisition
+        // Note: connection is NOT closed - it's managed by DuckDBRuntime singleton
         closeQuietly(reader, "ArrowReader");
         closeQuietly(resultSet, "ResultSet");
         closeQuietly(statement, "Statement");
-
-        // Return connection to pool
-        if (connection != null) {
-            connection.close();
-        }
     }
 
     private void ensureInitialized() {

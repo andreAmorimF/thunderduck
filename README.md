@@ -102,7 +102,7 @@ thunderduck uses a three-layer architecture:
 - **SQL Generation** (`core/generator/`): DuckDB SQL code generation
 - **Type Mapping** (`core/types/`): Spark ↔ DuckDB type conversion
 - **Function Registry** (`core/functions/`): 500+ function mappings
-- **Runtime Execution** (`core/runtime/`): Connection management, Arrow interchange
+- **Runtime Execution** (`core/runtime/`): Session-scoped DuckDB runtime, Arrow streaming
 - **Format Readers** (`core/io/`): Parquet, Delta Lake, Iceberg support
 
 **Note**: thunderduck relies on **DuckDB's world-class query optimizer** rather than implementing custom optimization rules. DuckDB automatically performs filter pushdown, column pruning, join reordering, and many other optimizations.
@@ -130,24 +130,24 @@ Add thunderduck as a dependency to your Maven project:
 ### Basic Usage
 
 ```java
-import com.thunderduck.runtime.DuckDBConnectionManager;
+import com.thunderduck.runtime.DuckDBRuntime;
 import com.thunderduck.runtime.QueryExecutor;
 import org.apache.arrow.vector.VectorSchemaRoot;
 
-// Create connection manager and executor
-DuckDBConnectionManager connectionManager = new DuckDBConnectionManager();
-QueryExecutor executor = new QueryExecutor(connectionManager);
+// Create a session-scoped DuckDB runtime (each session gets isolated database)
+try (DuckDBRuntime runtime = DuckDBRuntime.create("my-session-id")) {
+    QueryExecutor executor = new QueryExecutor(runtime);
 
-// Execute query
-String sql = "SELECT * FROM read_parquet('data.parquet') WHERE age > 25";
-VectorSchemaRoot result = executor.executeQuery(sql);
+    // Execute query
+    String sql = "SELECT * FROM read_parquet('data.parquet') WHERE age > 25";
+    VectorSchemaRoot result = executor.executeQuery(sql);
 
-// Process results
-System.out.println("Rows: " + result.getRowCount());
+    // Process results
+    System.out.println("Rows: " + result.getRowCount());
 
-// Clean up
-result.close();
-connectionManager.close();
+    // Clean up result (runtime closes automatically via try-with-resources)
+    result.close();
+}
 ```
 
 ## Building from Source
@@ -819,7 +819,8 @@ All PRs must meet these criteria:
 
 - **[Implementation Plan](IMPLEMENTATION_PLAN.md)**: 16-week development roadmap
 - **[Spark Connect Architecture](docs/architect/SPARK_CONNECT_ARCHITECTURE.md)**: Server architecture and design
-- **[Single-Session Architecture](docs/architect/SINGLE_SESSION_ARCHITECTURE.md)**: Session management design rationale
+- **[Session Management](docs/architect/SESSION_MANAGEMENT_REDESIGN.md)**: Session-scoped DuckDB runtime architecture
+- **[Arrow Streaming](docs/architect/ARROW_STREAMING_ARCHITECTURE.md)**: Zero-copy Arrow streaming from DuckDB
 - **[Protocol Specification](docs/SPARK_CONNECT_PROTOCOL_SPEC.md)**: Spark Connect protocol details
 - **[Testing Strategy](docs/Testing_Strategy.md)**: BDD and differential testing approach
 - **[Benchmark Guide](benchmarks/README.md)**: TPC-H framework usage

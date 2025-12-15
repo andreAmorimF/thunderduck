@@ -82,32 +82,39 @@ public interface ArrowBatchIterator extends Iterator<VectorSchemaRoot>, AutoClos
 
 **File**: `core/src/main/java/com/thunderduck/runtime/ArrowStreamingExecutor.java`
 
-Executes queries and returns streaming Arrow batch iterators using DuckDB's native export.
+Executes queries and returns streaming Arrow batch iterators using DuckDB's native export. Each executor is bound to a session-scoped DuckDBRuntime.
 
 ```java
 public class ArrowStreamingExecutor implements StreamingQueryExecutor, AutoCloseable {
 
-    private final DuckDBConnectionManager connectionManager;
+    private final DuckDBRuntime runtime;  // Session-scoped runtime
     private final BufferAllocator allocator;
     private final int defaultBatchSize;
+
+    /**
+     * Create executor with session-scoped runtime.
+     * @param runtime the DuckDB runtime (typically from a session)
+     */
+    public ArrowStreamingExecutor(DuckDBRuntime runtime) {
+        this(runtime, new RootAllocator(Long.MAX_VALUE), StreamingConfig.DEFAULT_BATCH_SIZE);
+    }
 
     /**
      * Execute query and return streaming Arrow iterator.
      * Uses DuckDB's arrowExportStream() for zero-copy batches.
      */
     public ArrowBatchIterator executeStreaming(String sql) throws SQLException {
-        PooledConnection pooled = connectionManager.borrowConnection();
-        DuckDBConnection conn = pooled.get();
+        DuckDBConnection conn = runtime.getConnection();
         Statement stmt = conn.createStatement();
         ResultSet rs = stmt.executeQuery(sql);
 
-        DuckDBResultSet duckRS = rs.unwrap(DuckDBResultSet.class);
-        ArrowReader reader = (ArrowReader) duckRS.arrowExportStream(allocator, defaultBatchSize);
-
-        return new DuckDBArrowBatchIterator(reader, pooled, stmt, rs, allocator);
+        // Create streaming Arrow batch iterator
+        return new ArrowBatchStream(rs, stmt, allocator, defaultBatchSize);
     }
 }
 ```
+
+**Note**: The runtime is now obtained from the session, providing session-scoped database isolation. Each session has its own in-memory DuckDB database.
 
 ### 2.3 StreamingResultHandler
 

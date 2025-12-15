@@ -10,9 +10,6 @@ import org.junit.jupiter.api.*;
 import static org.assertj.core.api.Assertions.*;
 
 import java.util.Collections;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * End-to-end security validation tests.
@@ -27,23 +24,22 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Disabled("Requires DuckDB connection - enable when runtime is ready")
 public class SecurityIntegrationTest {
 
-    private DuckDBConnectionManager manager;
+    private DuckDBRuntime runtime;
     private QueryExecutor executor;
     private SQLGenerator generator;
 
     @BeforeEach
     void setup() throws Exception {
-        manager = new DuckDBConnectionManager(
-            DuckDBConnectionManager.Configuration.inMemory()
-        );
-        executor = new QueryExecutor(manager);
+        // Use unique in-memory database per test for isolation
+        runtime = DuckDBRuntime.create("jdbc:duckdb::memory:test_security_" + System.nanoTime());
+        executor = new QueryExecutor(runtime);
         generator = new SQLGenerator();
     }
 
     @AfterEach
     void teardown() throws Exception {
-        if (manager != null && !manager.isClosed()) {
-            manager.close();
+        if (runtime != null) {
+            runtime.close();
         }
     }
 
@@ -106,96 +102,6 @@ public class SecurityIntegrationTest {
                     generator.generate(scan);
                 }).as("Should block: " + path)
                   .isInstanceOf(IllegalArgumentException.class);
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("Connection Pool Leak Tests")
-    class ConnectionPoolLeakTests {
-
-        @Test
-        @DisplayName("No connection leak under normal load")
-        void testNoConnectionLeakUnderLoad() throws Exception {
-            // Given: Many concurrent operations
-            int operationCount = 100;
-            CountDownLatch latch = new CountDownLatch(operationCount);
-            AtomicInteger successCount = new AtomicInteger(0);
-
-            // When: Execute many operations concurrently
-            for (int i = 0; i < operationCount; i++) {
-                new Thread(() -> {
-                    try (PooledConnection conn = manager.borrowConnection()) {
-                        // Simulate work
-                        Thread.sleep(10);
-                        successCount.incrementAndGet();
-                    } catch (Exception e) {
-                        // Should not leak even if error occurs
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-
-            // Then: All should complete without leak
-            boolean completed = latch.await(30, TimeUnit.SECONDS);
-            assertThat(completed).as("All operations should complete").isTrue();
-            assertThat(successCount.get()).isEqualTo(operationCount);
-
-            // And: Pool should still be functional
-            try (PooledConnection conn = manager.borrowConnection()) {
-                assertThat(conn.get()).isNotNull();
-                assertThat(conn.get().isValid(5)).isTrue();
-            }
-        }
-
-        @Test
-        @DisplayName("Connection leak prevented even with exceptions")
-        void testNoLeakWithExceptions() throws Exception {
-            // Given: Operations that throw exceptions
-            int operationCount = 50;
-            CountDownLatch latch = new CountDownLatch(operationCount);
-
-            // When: Execute operations that may fail
-            for (int i = 0; i < operationCount; i++) {
-                final int index = i;
-                new Thread(() -> {
-                    try (PooledConnection conn = manager.borrowConnection()) {
-                        // Simulate work that sometimes fails
-                        if (index % 3 == 0) {
-                            throw new RuntimeException("Simulated failure");
-                        }
-                        Thread.sleep(5);
-                    } catch (Exception e) {
-                        // Expected for some operations
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-
-            // Then: All complete and pool is still healthy
-            latch.await(30, TimeUnit.SECONDS);
-
-            // Pool should still work
-            try (PooledConnection conn = manager.borrowConnection()) {
-                assertThat(conn.get()).isNotNull();
-            }
-        }
-
-        @Test
-        @DisplayName("Connection pool recovers from invalid connections")
-        void testPoolRecoversFromInvalidConnections() throws Exception {
-            // Given: Borrow connection and invalidate it
-            PooledConnection conn1 = manager.borrowConnection();
-            conn1.get().close(); // Invalidate
-            conn1.close(); // Return to pool
-
-            // When: Borrow new connection
-            try (PooledConnection conn2 = manager.borrowConnection()) {
-                // Then: Should get a valid connection
-                assertThat(conn2.get().isClosed()).isFalse();
-                assertThat(conn2.get().isValid(5)).isTrue();
             }
         }
     }
@@ -342,44 +248,6 @@ public class SecurityIntegrationTest {
 
             // Then: Should complete quickly (< 100ms for 1000 iterations)
             assertThat(duration).isLessThan(100);
-        }
-
-        @Test
-        @DisplayName("Connection pool maintains performance under load")
-        void testConnectionPoolPerformance() throws Exception {
-            // Given: High concurrent load
-            int threadCount = 20;
-            int operationsPerThread = 10;
-            CountDownLatch latch = new CountDownLatch(threadCount);
-            AtomicInteger totalOperations = new AtomicInteger(0);
-
-            long startTime = System.currentTimeMillis();
-
-            // When: Execute many concurrent operations
-            for (int i = 0; i < threadCount; i++) {
-                new Thread(() -> {
-                    try {
-                        for (int j = 0; j < operationsPerThread; j++) {
-                            try (PooledConnection conn = manager.borrowConnection()) {
-                                // Minimal work
-                                totalOperations.incrementAndGet();
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Ignore
-                    } finally {
-                        latch.countDown();
-                    }
-                }).start();
-            }
-
-            // Then: Should complete efficiently
-            boolean completed = latch.await(10, TimeUnit.SECONDS);
-            long duration = System.currentTimeMillis() - startTime;
-
-            assertThat(completed).isTrue();
-            assertThat(duration).isLessThan(10000); // 10 seconds max
-            assertThat(totalOperations.get()).isGreaterThan(0);
         }
     }
 }

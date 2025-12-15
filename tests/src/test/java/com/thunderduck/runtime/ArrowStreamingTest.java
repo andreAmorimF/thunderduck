@@ -18,15 +18,16 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Arrow Streaming Integration Tests")
 class ArrowStreamingTest {
 
-    private DuckDBConnectionManager connectionManager;
+    private DuckDBRuntime runtime;
     private ArrowStreamingExecutor executor;
     private BufferAllocator allocator;
 
     @BeforeEach
     void setUp() throws Exception {
-        connectionManager = new DuckDBConnectionManager();
+        // Use unique in-memory database per test for isolation
+        runtime = DuckDBRuntime.create("jdbc:duckdb::memory:test_arrow_" + System.nanoTime());
         allocator = new RootAllocator(Long.MAX_VALUE);
-        executor = new ArrowStreamingExecutor(connectionManager, allocator, 1024);
+        executor = new ArrowStreamingExecutor(runtime, allocator, 1024);
     }
 
     @AfterEach
@@ -34,8 +35,8 @@ class ArrowStreamingTest {
         if (executor != null) {
             executor.close();
         }
-        if (connectionManager != null) {
-            connectionManager.close();
+        if (runtime != null) {
+            runtime.close();
         }
         // Note: allocator is closed by executor
     }
