@@ -395,8 +395,9 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         LogicalPlan logicalPlan = createPlanConverter().convert(plan);
                         schema = logicalPlan.schema();
 
-                        if (schema == null) {
-                            // Infer schema from generated SQL
+                        if (schema == null || schema.size() == 0) {
+                            // Infer schema from generated SQL when plan doesn't provide schema
+                            // (e.g., SQLRelation returns empty schema since it can't infer without DuckDB)
                             sql = sqlGenerator.generate(logicalPlan);
                             schema = inferSchemaFromDuckDB(sql, sessionId);
                         }

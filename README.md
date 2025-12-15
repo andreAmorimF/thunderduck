@@ -37,7 +37,7 @@ thunderduck provides a Spark-compatible API that translates DataFrame operations
 - **Comprehensive Spark API compatibility** with 200+ differential tests
 - **SQL introspection** via EXPLAIN statements
 - **TPC-H benchmark framework** for performance validation
-- **Spark Connect Server** for remote client connectivity (PySpark, Scala Spark)
+- **Spark Connect Server** for remote client connectivity (PySpark 4.0.x, Scala Spark)
 
 ### Why thunderduck?
 
@@ -535,7 +535,7 @@ thunderduck/
 
 Based on TPC-H benchmark at scale factor 10 (10GB):
 
-| Metric | Target | Baseline (Spark 3.5.3) |
+| Metric | Target | Baseline (Spark 4.0.x) |
 |--------|--------|------------------------|
 | Query execution speed | 5-10x faster | 1x |
 | Memory efficiency | 6-8x less | 1x |
@@ -563,7 +563,7 @@ thunderduck includes a comprehensive test suite with 500+ tests:
 
 - **Unit Tests (300+)**: Type mapping, expression translation, SQL generation
 - **Integration Tests (100+)**: End-to-end pipelines, format readers
-- **Differential Tests (200+)**: Spark 3.5.3 parity validation
+- **Differential Tests (200+)**: Spark 4.0.x parity validation
 - **End-to-End Tests**: PySpark client → Spark Connect → thunderduck validation
 - **Performance Benchmarks (70+)**: TPC-H queries, micro-benchmarks
 
@@ -590,7 +590,7 @@ The E2E test suite validates the complete pipeline: **PySpark client → Spark C
 ### Prerequisites
 
 1. **Python 3.8+** with pip
-2. **PySpark 3.5.3** (automatically installed)
+2. **PySpark 4.0.1** (automatically installed)
 3. **thunderduck server** JAR built
 
 ### Starting the Spark Connect Server
@@ -602,10 +602,7 @@ Before running E2E tests, start the thunderduck Spark Connect server:
 mvn clean package -pl connect-server
 
 # Start the server (default port 15002)
-# For x86_64:
-java -jar connect-server/target/thunderduck-connect-server-*.jar
-
-# For ARM64 (AWS Graviton, Apple Silicon):
+# JVM flags required on ALL platforms for Spark 4.0.x:
 java --add-opens=java.base/java.nio=ALL-UNNAMED \
      -jar connect-server/target/thunderduck-connect-server-*.jar
 

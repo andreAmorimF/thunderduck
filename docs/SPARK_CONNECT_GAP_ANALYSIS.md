@@ -1,14 +1,14 @@
-# Spark Connect 3.5.3 Gap Analysis for Thunderduck
+# Spark Connect 4.0.x Gap Analysis for Thunderduck
 
-**Version:** 2.0
-**Date:** 2025-12-12
+**Version:** 3.0
+**Date:** 2025-12-15
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 
 ---
 
 ## Executive Summary
 
-This document provides a detailed gap analysis between Spark Connect 3.5.3's protocol specification and Thunderduck's current implementation. The analysis covers:
+This document provides a detailed gap analysis between Spark Connect 4.0.x's protocol specification and Thunderduck's current implementation. The analysis covers:
 - **Relations** (logical plan operators)
 - **Expressions** (value computation)
 - **Commands** (side-effecting operations)
@@ -389,7 +389,7 @@ These are all implemented. However, production workloads often include:
 
 2. **Graceful Degradation**: Consider implementing stub handlers that return helpful error messages rather than generic exceptions.
 
-3. **Version Compatibility**: This analysis is based on Spark Connect 3.5.3. Future Spark versions may add new operators.
+3. **Version Compatibility**: This analysis is based on Spark Connect 4.0.x. Spark 4.0 introduced protocol changes including deprecated `sql` field in SQL commands (replaced with `input` relation).
 
 ---
 
@@ -518,9 +518,9 @@ spark.catalog.listTables()                    # Catalog operations
 
 ---
 
-**Document Version:** 2.2
-**Last Updated:** 2025-12-12
-**Author:** Analysis generated from Spark Connect 3.5.3 protobuf definitions
+**Document Version:** 3.0
+**Last Updated:** 2025-12-15
+**Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 **M19 Update:** Added Drop, WithColumns, WithColumnsRenamed implementations
 **M20 Update:** Added Offset, ToDF implementations
 **M21 Update:** Added Tail implementation (memory-efficient O(N) via TailBatchCollector)

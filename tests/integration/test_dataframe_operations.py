@@ -14,13 +14,8 @@ from pyspark.sql.functions import col, lit, when
 
 
 class TestColumnOperations:
-    """M19: Drop, WithColumn, WithColumnRenamed
+    """M19: Drop, WithColumn, WithColumnRenamed"""
 
-    Known issue: df.columns returns empty list after drop/withColumn operations.
-    The operations execute but schema is not properly returned.
-    """
-
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_drop_single_column(self, spark, tpch_data_dir):
         """Test dropping a single column"""
@@ -35,7 +30,6 @@ class TestColumnOperations:
         assert result.count() == df.count()
         print(f"drop single column: {original_cols} -> {result_cols}")
 
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_drop_multiple_columns(self, spark, tpch_data_dir):
         """Test dropping multiple columns"""
@@ -50,7 +44,6 @@ class TestColumnOperations:
         assert "n_name" in result_cols
         print(f"drop multiple columns: {result_cols}")
 
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_with_column_new(self, spark, tpch_data_dir):
         """Test adding a new column with withColumn"""
@@ -121,7 +114,6 @@ class TestOffsetAndToDF:
         assert rows[0]["n_nationkey"] == 5
         print(f"offset(5).limit(5): got rows 5-9")
 
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_toDF(self, spark, tpch_data_dir):
         """Test toDF to rename all columns"""
@@ -357,7 +349,6 @@ class TestNAFunctions:
 class TestUnpivot:
     """M27: Unpivot operation"""
 
-    @pytest.mark.xfail(reason="createDataFrame or unpivot issue")
     @pytest.mark.timeout(30)
     def test_unpivot_basic(self, spark):
         """Test basic unpivot (melt) operation"""
