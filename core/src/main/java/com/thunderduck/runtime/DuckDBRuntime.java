@@ -1,6 +1,7 @@
 package com.thunderduck.runtime;
 
 import org.duckdb.DuckDBConnection;
+import org.duckdb.DuckDBDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,6 +9,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Properties;
 
 /**
  * DuckDB runtime - owns a single DuckDB connection.
@@ -65,12 +67,18 @@ public class DuckDBRuntime implements AutoCloseable {
 
         logger.info("Creating DuckDB runtime with URL: {}", jdbcUrl);
 
-        // Create and configure connection
-        Connection rawConn = DriverManager.getConnection(jdbcUrl);
+        // Configure connection properties for streaming results
+        // This enables true streaming where results are not fully materialized
+        // before iteration begins - critical for memory-efficient large result handling
+        Properties props = new Properties();
+        props.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, "true");
+
+        // Create and configure connection with streaming enabled
+        Connection rawConn = DriverManager.getConnection(jdbcUrl, props);
         this.connection = rawConn.unwrap(DuckDBConnection.class);
         configureConnection();
 
-        logger.info("DuckDB runtime initialized successfully");
+        logger.info("DuckDB runtime initialized with streaming results enabled");
     }
 
     /**
