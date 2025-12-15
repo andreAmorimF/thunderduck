@@ -155,18 +155,25 @@ public class Join extends LogicalPlan {
 
     @Override
     public StructType inferSchema() {
-        List<StructField> fields = new ArrayList<>();
+        // Get child schemas - if either is null, return null to trigger
+        // DuckDB-based schema inference fallback
+        StructType leftSchema = left.schema();
+        StructType rightSchema = right.schema();
 
         // For semi/anti joins, only include left schema
         if (joinType == JoinType.LEFT_SEMI || joinType == JoinType.LEFT_ANTI) {
-            return left.schema();
+            return leftSchema;
         }
 
-        // Include all fields from left
-        fields.addAll(left.schema().fields());
+        // If either schema is null, we can't compute join schema
+        if (leftSchema == null || rightSchema == null) {
+            return null;
+        }
 
-        // Include all fields from right (except for semi/anti joins)
-        fields.addAll(right.schema().fields());
+        // Include all fields from both sides
+        List<StructField> fields = new ArrayList<>();
+        fields.addAll(leftSchema.fields());
+        fields.addAll(rightSchema.fields());
 
         return new StructType(fields);
     }
