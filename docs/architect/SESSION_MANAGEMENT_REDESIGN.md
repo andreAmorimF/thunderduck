@@ -483,4 +483,84 @@ public void executePlan(ExecutePlanRequest request,
 
 ---
 
-**Last Updated**: 2025-12-10
+## Session-Scoped DuckDB Runtime
+
+### Overview
+
+As of December 2025, the session management architecture was enhanced to provide **session-scoped DuckDB runtime isolation**. Each session now owns its own DuckDB in-memory database, providing complete isolation between sessions.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         SESSION ARCHITECTURE                             │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │ Session (sessionId = "abc-123-def")                            │    │
+│  │  ├── DuckDBRuntime (jdbc:duckdb::memory:abc_123_def)           │    │
+│  │  │    └── DuckDBConnection (owned by runtime)                  │    │
+│  │  ├── config: Map<String, String>                               │    │
+│  │  ├── tempViews: Map<String, LogicalPlan>                       │    │
+│  │  └── createdAt: long                                           │    │
+│  └────────────────────────────────────────────────────────────────┘    │
+│                                                                         │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │ Session (sessionId = "xyz-789-uvw")                            │    │
+│  │  ├── DuckDBRuntime (jdbc:duckdb::memory:xyz_789_uvw)           │    │
+│  │  │    └── DuckDBConnection (owned by runtime)                  │    │
+│  │  ├── config: Map<String, String>                               │    │
+│  │  ├── tempViews: Map<String, LogicalPlan>                       │    │
+│  │  └── createdAt: long                                           │    │
+│  └────────────────────────────────────────────────────────────────┘    │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Design Decisions
+
+1. **Named In-Memory Databases**: Each session creates a DuckDB database with a name derived from the session ID:
+   - Session ID: `40c928db-7bce-4836-83ad-a375704ec597`
+   - JDBC URL: `jdbc:duckdb::memory:40c928db_7bce_4836_83ad_a375704ec597`
+
+2. **Session Owns Runtime**: The `Session` class owns its `DuckDBRuntime` and is responsible for closing it when the session ends.
+
+3. **Factory Pattern**: `DuckDBRuntime.create(jdbcUrl)` creates new instances - no singleton pattern.
+
+4. **Resource Cleanup**: Session implements `AutoCloseable` and closes its runtime in `close()`.
+
+### Benefits
+
+- **Session Isolation**: Each session has its own database namespace
+- **Resource Management**: Proper cleanup when sessions end
+- **Extensibility**: Session can be extended with additional context (e.g., user credentials, quotas)
+- **Testability**: Easy to inject mock runtimes for testing
+
+### Implementation Classes
+
+| Class | Location | Responsibility |
+|-------|----------|----------------|
+| `Session` | `connect-server/.../session/Session.java` | Owns DuckDBRuntime, manages temp views and config |
+| `DuckDBRuntime` | `core/.../runtime/DuckDBRuntime.java` | Factory for creating session-scoped connections |
+| `SessionManager` | `connect-server/.../session/SessionManager.java` | Manages execution slots, creates sessions |
+| `SparkConnectServiceImpl` | `connect-server/.../service/SparkConnectServiceImpl.java` | Gets runtime from session for query execution |
+
+### Example Usage
+
+```java
+// Session creation (in SessionManager)
+Session session = new Session(sessionId);  // Creates own DuckDBRuntime
+
+// Query execution (in SparkConnectServiceImpl)
+Session session = sessionManager.getSession(sessionId);
+DuckDBRuntime runtime = session.getRuntime();
+QueryExecutor executor = new QueryExecutor(runtime);
+VectorSchemaRoot result = executor.executeQuery(sql);
+
+// Session cleanup
+session.close();  // Closes DuckDBRuntime and clears temp views
+```
+
+---
+
+**Last Updated**: 2025-12-15

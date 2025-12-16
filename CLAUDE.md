@@ -138,9 +138,9 @@ When comparing results with potential ties:
 
 **Reason**: This prevents bundling Spark's pre-compiled protobuf classes which were compiled with a different protobuf version, avoiding runtime `VerifyError`.
 
-### Apache Arrow on ARM64 Platforms
+### Apache Arrow JVM Requirements (Spark 4.0.x)
 
-**Issue**: Apache Arrow 17.0.0 requires special JVM flags on ARM64 platforms (AWS Graviton, Apple Silicon) to access internal Java NIO classes.
+**Issue**: Apache Arrow requires special JVM flags on ALL platforms to access internal Java NIO classes. As of Spark 4.0.x, these flags are required everywhere (not just ARM64).
 
 **Required JVM Flags**:
 ```bash
@@ -172,8 +172,29 @@ You must start Java with `--add-opens=java.base/java.nio=org.apache.arrow.memory
 
 1. **Always use clean builds** when diagnosing server issues: `mvn clean compile` or `mvn clean package`
 2. **Dependency scoping matters**: `compile` vs `provided` scope can cause runtime class conflicts
-3. **Platform-specific requirements**: ARM64 platforms have special requirements for Apache Arrow
-4. **Test with actual client**: Always test with PySpark client after server changes
+3. **JVM flags required on ALL platforms**: As of Spark 4.0.x, `--add-opens` flags are needed everywhere
+4. **Test with actual client**: Always test with PySpark 4.0.x client after server changes
 
-**Last Updated**: 2025-11-05
+### Server Process Cleanup (IMPORTANT)
+
+**Critical Rule**: After running E2E tests or any tests that start the Thunderduck server, ALWAYS kill the server process when done.
+
+**Why**: Background server processes can accumulate and cause port conflicts, resource exhaustion, and confusing test failures.
+
+**How to cleanup**:
+```bash
+# Kill all thunderduck server processes
+pkill -9 -f thunderduck-connect-server
+
+# Or kill all java processes (more aggressive)
+pkill -9 -f java
+```
+
+**Best Practice**: When running tests:
+1. Kill any existing server before starting a new one
+2. After tests complete, kill the server
+3. Periodically check for dangling processes: `ps aux | grep thunderduck`
+
+**Last Updated**: 2025-12-16
 **Fix Applied**: See `/workspace/docs/PROTOBUF_FIX_REPORT.md` for detailed resolution history
+- Always do a full clean and rebuild before testing, you keep making the mistake to test with old build and be surprised that code changes have had no effect

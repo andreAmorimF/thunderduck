@@ -14,11 +14,13 @@ import java.sql.Statement;
  * Executes SQL queries and returns streaming Arrow batch iterators.
  *
  * <p>Uses DuckDB's native arrowExportStream() for zero-copy Arrow streaming.
- * This executor manages connection pooling and Arrow memory allocation.
+ * Each executor is bound to a specific DuckDBRuntime, typically owned by a session.
  *
  * <p>Example usage:
  * <pre>{@code
- * try (ArrowStreamingExecutor executor = new ArrowStreamingExecutor(connectionManager)) {
+ * // Get runtime from session
+ * DuckDBRuntime runtime = session.getRuntime();
+ * try (ArrowStreamingExecutor executor = new ArrowStreamingExecutor(runtime)) {
  *     try (ArrowBatchIterator iter = executor.executeStreaming("SELECT * FROM large_table")) {
  *         while (iter.hasNext()) {
  *             VectorSchemaRoot batch = iter.next();
@@ -34,31 +36,31 @@ public class ArrowStreamingExecutor implements StreamingQueryExecutor, AutoClose
 
     private static final Logger logger = LoggerFactory.getLogger(ArrowStreamingExecutor.class);
 
-    private final DuckDBConnectionManager connectionManager;
+    private final DuckDBRuntime runtime;
     private final BufferAllocator allocator;
     private final int defaultBatchSize;
     private volatile boolean closed = false;
 
     /**
-     * Create executor with default configuration.
+     * Create executor with specified runtime.
      *
-     * @param connectionManager the connection pool manager
+     * @param runtime the DuckDB runtime (typically from a session)
      */
-    public ArrowStreamingExecutor(DuckDBConnectionManager connectionManager) {
-        this(connectionManager, new RootAllocator(Long.MAX_VALUE), StreamingConfig.DEFAULT_BATCH_SIZE);
+    public ArrowStreamingExecutor(DuckDBRuntime runtime) {
+        this(runtime, new RootAllocator(Long.MAX_VALUE), StreamingConfig.DEFAULT_BATCH_SIZE);
     }
 
     /**
      * Create executor with custom allocator and batch size.
      *
-     * @param connectionManager the connection pool manager
+     * @param runtime DuckDB runtime
      * @param allocator Arrow memory allocator (caller retains ownership)
      * @param defaultBatchSize default rows per batch
      */
-    public ArrowStreamingExecutor(DuckDBConnectionManager connectionManager,
+    public ArrowStreamingExecutor(DuckDBRuntime runtime,
                                   BufferAllocator allocator,
                                   int defaultBatchSize) {
-        this.connectionManager = connectionManager;
+        this.runtime = runtime;
         this.allocator = allocator;
         this.defaultBatchSize = StreamingConfig.normalizeBatchSize(defaultBatchSize);
 
@@ -83,27 +85,24 @@ public class ArrowStreamingExecutor implements StreamingQueryExecutor, AutoClose
             logger.debug("Executing streaming query (batchSize={}): {}", normalizedBatchSize, truncatedSql);
         }
 
-        PooledConnection pooled = null;
         Statement stmt = null;
         ResultSet rs = null;
 
         try {
-            pooled = connectionManager.borrowConnection();
-            DuckDBConnection conn = pooled.get();
+            DuckDBConnection conn = runtime.getConnection();
 
             stmt = conn.createStatement();
             rs = stmt.executeQuery(sql);
 
             // Transfer ownership of resources to ArrowBatchStream
-            return new ArrowBatchStream(rs, pooled, stmt, allocator, normalizedBatchSize);
+            // Note: connection is NOT transferred - it's managed by the runtime
+            return new ArrowBatchStream(rs, stmt, allocator, normalizedBatchSize);
 
         } catch (Exception e) {
             // Cleanup on error - ArrowBatchStream was not created
             closeQuietly(rs);
             closeQuietly(stmt);
-            if (pooled != null) {
-                pooled.close();
-            }
+            // DO NOT close connection - it's managed by the runtime
 
             if (e instanceof SQLException) {
                 throw (SQLException) e;
@@ -147,6 +146,7 @@ public class ArrowStreamingExecutor implements StreamingQueryExecutor, AutoClose
                 logger.warn("Error closing Arrow allocator: {}", e.getMessage());
             }
         }
+        // DO NOT close the runtime - it's a shared singleton
     }
 
     private void closeQuietly(AutoCloseable resource) {

@@ -1,14 +1,9 @@
 package com.thunderduck.tpch;
 
-import com.thunderduck.runtime.DuckDBConnectionManager;
+import com.thunderduck.runtime.DuckDBRuntime;
 import com.thunderduck.runtime.QueryExecutor;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.VarCharVector;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Programmatic client for executing TPC-H queries using thunderduck.
@@ -36,7 +31,7 @@ public class TPCHClient implements AutoCloseable {
 
     private final String dataPath;
     private final double scaleFactor;
-    private final DuckDBConnectionManager connectionManager;
+    private final DuckDBRuntime runtime;
     private final QueryExecutor executor;
 
     /**
@@ -48,8 +43,9 @@ public class TPCHClient implements AutoCloseable {
     public TPCHClient(String dataPath, double scaleFactor) {
         this.dataPath = dataPath;
         this.scaleFactor = scaleFactor;
-        this.connectionManager = new DuckDBConnectionManager();
-        this.executor = new QueryExecutor(connectionManager);
+        // Use a dedicated runtime for TPC-H benchmarking
+        this.runtime = DuckDBRuntime.create("jdbc:duckdb::memory:tpch_" + System.nanoTime());
+        this.executor = new QueryExecutor(runtime);
     }
 
     /**
@@ -205,8 +201,8 @@ public class TPCHClient implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        if (connectionManager != null) {
-            connectionManager.close();
+        if (runtime != null) {
+            runtime.close();
         }
     }
 

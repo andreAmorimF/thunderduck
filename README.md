@@ -37,7 +37,7 @@ thunderduck provides a Spark-compatible API that translates DataFrame operations
 - **Comprehensive Spark API compatibility** with 200+ differential tests
 - **SQL introspection** via EXPLAIN statements
 - **TPC-H benchmark framework** for performance validation
-- **Spark Connect Server** for remote client connectivity (PySpark, Scala Spark)
+- **Spark Connect Server** for remote client connectivity (PySpark 4.0.x, Scala Spark)
 
 ### Why thunderduck?
 
@@ -102,7 +102,7 @@ thunderduck uses a three-layer architecture:
 - **SQL Generation** (`core/generator/`): DuckDB SQL code generation
 - **Type Mapping** (`core/types/`): Spark ↔ DuckDB type conversion
 - **Function Registry** (`core/functions/`): 500+ function mappings
-- **Runtime Execution** (`core/runtime/`): Connection management, Arrow interchange
+- **Runtime Execution** (`core/runtime/`): Session-scoped DuckDB runtime, Arrow streaming
 - **Format Readers** (`core/io/`): Parquet, Delta Lake, Iceberg support
 
 **Note**: thunderduck relies on **DuckDB's world-class query optimizer** rather than implementing custom optimization rules. DuckDB automatically performs filter pushdown, column pruning, join reordering, and many other optimizations.
@@ -130,24 +130,24 @@ Add thunderduck as a dependency to your Maven project:
 ### Basic Usage
 
 ```java
-import com.thunderduck.runtime.DuckDBConnectionManager;
+import com.thunderduck.runtime.DuckDBRuntime;
 import com.thunderduck.runtime.QueryExecutor;
 import org.apache.arrow.vector.VectorSchemaRoot;
 
-// Create connection manager and executor
-DuckDBConnectionManager connectionManager = new DuckDBConnectionManager();
-QueryExecutor executor = new QueryExecutor(connectionManager);
+// Create a session-scoped DuckDB runtime (each session gets isolated database)
+try (DuckDBRuntime runtime = DuckDBRuntime.create("my-session-id")) {
+    QueryExecutor executor = new QueryExecutor(runtime);
 
-// Execute query
-String sql = "SELECT * FROM read_parquet('data.parquet') WHERE age > 25";
-VectorSchemaRoot result = executor.executeQuery(sql);
+    // Execute query
+    String sql = "SELECT * FROM read_parquet('data.parquet') WHERE age > 25";
+    VectorSchemaRoot result = executor.executeQuery(sql);
 
-// Process results
-System.out.println("Rows: " + result.getRowCount());
+    // Process results
+    System.out.println("Rows: " + result.getRowCount());
 
-// Clean up
-result.close();
-connectionManager.close();
+    // Clean up result (runtime closes automatically via try-with-resources)
+    result.close();
+}
 ```
 
 ## Building from Source
@@ -535,7 +535,7 @@ thunderduck/
 
 Based on TPC-H benchmark at scale factor 10 (10GB):
 
-| Metric | Target | Baseline (Spark 3.5.3) |
+| Metric | Target | Baseline (Spark 4.0.x) |
 |--------|--------|------------------------|
 | Query execution speed | 5-10x faster | 1x |
 | Memory efficiency | 6-8x less | 1x |
@@ -563,7 +563,7 @@ thunderduck includes a comprehensive test suite with 500+ tests:
 
 - **Unit Tests (300+)**: Type mapping, expression translation, SQL generation
 - **Integration Tests (100+)**: End-to-end pipelines, format readers
-- **Differential Tests (200+)**: Spark 3.5.3 parity validation
+- **Differential Tests (200+)**: Spark 4.0.x parity validation
 - **End-to-End Tests**: PySpark client → Spark Connect → thunderduck validation
 - **Performance Benchmarks (70+)**: TPC-H queries, micro-benchmarks
 
@@ -590,7 +590,7 @@ The E2E test suite validates the complete pipeline: **PySpark client → Spark C
 ### Prerequisites
 
 1. **Python 3.8+** with pip
-2. **PySpark 3.5.3** (automatically installed)
+2. **PySpark 4.0.1** (automatically installed)
 3. **thunderduck server** JAR built
 
 ### Starting the Spark Connect Server
@@ -602,10 +602,7 @@ Before running E2E tests, start the thunderduck Spark Connect server:
 mvn clean package -pl connect-server
 
 # Start the server (default port 15002)
-# For x86_64:
-java -jar connect-server/target/thunderduck-connect-server-*.jar
-
-# For ARM64 (AWS Graviton, Apple Silicon):
+# JVM flags required on ALL platforms for Spark 4.0.x:
 java --add-opens=java.base/java.nio=ALL-UNNAMED \
      -jar connect-server/target/thunderduck-connect-server-*.jar
 
@@ -819,7 +816,8 @@ All PRs must meet these criteria:
 
 - **[Implementation Plan](IMPLEMENTATION_PLAN.md)**: 16-week development roadmap
 - **[Spark Connect Architecture](docs/architect/SPARK_CONNECT_ARCHITECTURE.md)**: Server architecture and design
-- **[Single-Session Architecture](docs/architect/SINGLE_SESSION_ARCHITECTURE.md)**: Session management design rationale
+- **[Session Management](docs/architect/SESSION_MANAGEMENT_REDESIGN.md)**: Session-scoped DuckDB runtime architecture
+- **[Arrow Streaming](docs/architect/ARROW_STREAMING_ARCHITECTURE.md)**: Zero-copy Arrow streaming from DuckDB
 - **[Protocol Specification](docs/SPARK_CONNECT_PROTOCOL_SPEC.md)**: Spark Connect protocol details
 - **[Testing Strategy](docs/Testing_Strategy.md)**: BDD and differential testing approach
 - **[Benchmark Guide](benchmarks/README.md)**: TPC-H framework usage

@@ -1,7 +1,7 @@
 package com.thunderduck.introspection;
 
 import com.thunderduck.exception.QueryExecutionException;
-import com.thunderduck.runtime.DuckDBConnectionManager;
+import com.thunderduck.runtime.DuckDBRuntime;
 import com.thunderduck.runtime.QueryExecutor;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.VarCharVector;
@@ -20,19 +20,20 @@ import static org.assertj.core.api.Assertions.*;
  */
 class ExplainStatementTest {
 
-    private DuckDBConnectionManager connectionManager;
+    private DuckDBRuntime runtime;
     private QueryExecutor executor;
 
     @BeforeEach
     void setUp() {
-        connectionManager = new DuckDBConnectionManager();
-        executor = new QueryExecutor(connectionManager);
+        // Use unique in-memory database per test for isolation
+        runtime = DuckDBRuntime.create("jdbc:duckdb::memory:test_explain_" + System.nanoTime());
+        executor = new QueryExecutor(runtime);
     }
 
     @AfterEach
     void tearDown() throws Exception {
-        if (connectionManager != null) {
-            connectionManager.close();
+        if (runtime != null) {
+            runtime.close();
         }
     }
 

@@ -14,13 +14,8 @@ from pyspark.sql.functions import col, lit, when
 
 
 class TestColumnOperations:
-    """M19: Drop, WithColumn, WithColumnRenamed
+    """M19: Drop, WithColumn, WithColumnRenamed"""
 
-    Known issue: df.columns returns empty list after drop/withColumn operations.
-    The operations execute but schema is not properly returned.
-    """
-
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_drop_single_column(self, spark, tpch_data_dir):
         """Test dropping a single column"""
@@ -35,7 +30,6 @@ class TestColumnOperations:
         assert result.count() == df.count()
         print(f"drop single column: {original_cols} -> {result_cols}")
 
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_drop_multiple_columns(self, spark, tpch_data_dir):
         """Test dropping multiple columns"""
@@ -50,7 +44,6 @@ class TestColumnOperations:
         assert "n_name" in result_cols
         print(f"drop multiple columns: {result_cols}")
 
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_with_column_new(self, spark, tpch_data_dir):
         """Test adding a new column with withColumn"""
@@ -64,7 +57,6 @@ class TestColumnOperations:
             assert row["doubled_key"] == row["n_nationkey"] * 2
         print(f"withColumn new: added doubled_key column")
 
-    @pytest.mark.xfail(reason="withColumn value calculation incorrect")
     @pytest.mark.timeout(30)
     def test_with_column_replace(self, spark, tpch_data_dir):
         """Test replacing an existing column with withColumn"""
@@ -78,7 +70,6 @@ class TestColumnOperations:
             assert row["n_nationkey"] == original_rows[i]["n_nationkey"] + 100
         print(f"withColumn replace: modified n_nationkey column")
 
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_with_column_renamed(self, spark, tpch_data_dir):
         """Test renaming a column"""
@@ -121,7 +112,6 @@ class TestOffsetAndToDF:
         assert rows[0]["n_nationkey"] == 5
         print(f"offset(5).limit(5): got rows 5-9")
 
-    @pytest.mark.xfail(reason="df.columns returns empty list - schema not returned")
     @pytest.mark.timeout(30)
     def test_toDF(self, spark, tpch_data_dir):
         """Test toDF to rename all columns"""
@@ -135,12 +125,11 @@ class TestOffsetAndToDF:
 
 
 class TestTail:
-    """M21: Tail operation
+    """M21: Tail operation - Fixed in M33
 
-    Known issue: Tail operation causes Arrow memory leak error.
+    Memory leak issue was resolved by proper ArrowBatchStream cleanup.
     """
 
-    @pytest.mark.xfail(reason="Memory leak error from Arrow allocator")
     @pytest.mark.timeout(30)
     def test_tail(self, spark, tpch_data_dir):
         """Test tail operation returns last N rows"""
@@ -154,7 +143,6 @@ class TestTail:
         assert rows[-1]["n_nationkey"] == 24
         print(f"tail(5): got last 5 rows, last nationkey={rows[-1]['n_nationkey']}")
 
-    @pytest.mark.xfail(reason="Memory leak error from Arrow allocator")
     @pytest.mark.timeout(30)
     def test_tail_more_than_rows(self, spark, tpch_data_dir):
         """Test tail with n > row count"""
@@ -297,7 +285,6 @@ class TestNAFunctions:
             (5, None, None),
         ], ["id", "name", "value"])
 
-    @pytest.mark.xfail(reason="NA functions error - likely createDataFrame or na.drop issue")
     @pytest.mark.timeout(30)
     def test_na_drop_any(self, spark, df_with_nulls):
         """Test dropping rows with any NULL"""
@@ -309,7 +296,7 @@ class TestNAFunctions:
         assert row["id"] == 1
         print(f"na.drop('any'): 5 -> {result.count()} rows")
 
-    @pytest.mark.xfail(reason="NA functions error - likely createDataFrame or na.drop issue")
+    @pytest.mark.xfail(reason="Union operation with createDataFrame has separate issue")
     @pytest.mark.timeout(30)
     def test_na_drop_all(self, spark, df_with_nulls):
         """Test dropping rows where all values are NULL"""
@@ -331,7 +318,6 @@ class TestNAFunctions:
         assert result.count() == 3
         print(f"na.drop(subset=['name']): 5 -> {result.count()} rows")
 
-    @pytest.mark.xfail(reason="NA functions error - likely createDataFrame or na.fill issue")
     @pytest.mark.timeout(30)
     def test_na_fill_value(self, spark, df_with_nulls):
         """Test filling NULL values with a scalar"""
@@ -343,7 +329,6 @@ class TestNAFunctions:
             assert row["value"] is not None
         print(f"na.fill: filled NULLs with defaults")
 
-    @pytest.mark.xfail(reason="NA functions error - likely createDataFrame or na.replace issue")
     @pytest.mark.timeout(30)
     def test_na_replace(self, spark, df_with_nulls):
         """Test replacing specific values"""
@@ -357,7 +342,6 @@ class TestNAFunctions:
 class TestUnpivot:
     """M27: Unpivot operation"""
 
-    @pytest.mark.xfail(reason="createDataFrame or unpivot issue")
     @pytest.mark.timeout(30)
     def test_unpivot_basic(self, spark):
         """Test basic unpivot (melt) operation"""
@@ -437,7 +421,6 @@ class TestSubqueryAlias:
 class TestChainedOperations:
     """Test chaining multiple operations"""
 
-    @pytest.mark.xfail(reason="Chained drop/withColumn operations fail - schema not returned")
     @pytest.mark.timeout(60)
     def test_complex_chain(self, spark, tpch_data_dir):
         """Test chaining multiple M19-M28 operations"""
