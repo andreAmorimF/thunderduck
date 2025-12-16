@@ -1,6 +1,6 @@
 # E2E Testing Gap Analysis for Thunderduck
 
-**Version:** 1.5
+**Version:** 1.8
 **Date:** 2025-12-16
 **Purpose:** Catalog E2E test failures and gaps for Thunderduck Spark Connect
 
@@ -8,13 +8,13 @@
 
 ## Executive Summary
 
-The E2E test suite (`/workspace/tests/integration/`) has ~291 tests. After the **Spark 4.0.1 upgrade** (merged PR #2) and subsequent fixes (M31), all core tests now pass.
+The E2E test suite (`/workspace/tests/integration/`) has ~291 tests. After the **Spark 4.0.1 upgrade** (merged PR #2) and subsequent fixes (M31-M38), **ALL core tests now pass**.
 
 | Test Category | Tests | Status |
 |--------------|-------|--------|
 | Simple SQL | 3 | ALL PASS |
-| TPC-H Queries | 17 | **16 PASS, 1 XFAIL** |
-| TPC-DS Queries | 102 | **100 PASS, 2 FAIL** |
+| TPC-H Queries | 17 | **ALL PASS** |
+| TPC-DS Queries | 102 | **ALL PASS** |
 | Basic DataFrame Ops | 7 | ALL PASS |
 | Temp Views | 7 | ALL PASS |
 
@@ -82,11 +82,11 @@ for table in ['customer', 'lineitem', 'nation', 'orders', 'part', 'partsupp', 'r
 
 ## Current Test Status
 
-### Passing Tests (Post Spark 4.0.1 Upgrade + M31 Fixes)
+### Passing Tests (Post Spark 4.0.1 Upgrade + M31-M38 Fixes)
 | File | Tests | Status | Notes |
 |------|-------|--------|-------|
 | `test_simple_sql.py` | 3 | ALL PASS | Direct SQL |
-| `test_tpch_queries.py` | 17 | **16 PASS, 1 XFAIL** | ALL PASS (Q3, Q5 fixed) |
+| `test_tpch_queries.py` | 17 | **ALL PASS** | Window function fixed in M38 |
 | `test_temp_views.py` | 7 | ALL PASS | create, query, replace, multiple |
 
 **Spark 4.0.1 Regression - FIXED (M31)**: Q3 and Q5 DataFrame API tests previously failed with schema inference error. Fixed by:
@@ -94,16 +94,18 @@ for table in ['customer', 'lineitem', 'nation', 'orders', 'part', 'partsupp', 'r
 2. Fixed `inferSchemaFromDuckDB()` to use correct session ID
 3. Fixed `Join.inferSchema()` to handle null child schemas gracefully
 
-**Note**: The window function test is marked `xfail` due to ORDER BY translation bug (`DESCENDING` instead of `DESC`).
+**Window Function Fix (M38)**: The window function test was previously `xfail` due to ORDER BY translation bug (`DESCENDING` instead of `DESC`). Fixed by:
+1. Removed `toString()` override in `WindowFunction.java` that output Java enum names instead of SQL keywords
+2. Implemented `dataType()` method that was returning null
 
-### TPC-DS Test Results (Retested 2025-12-13)
+### TPC-DS Test Results (Retested 2025-12-16)
 | File | Tests | Status | Notes |
 |------|-------|--------|-------|
-| `test_tpcds_batch1.py` | 102 | **100 PASS, 2 FAIL** | Q17, Q23b fail (empty result) |
+| `test_tpcds_batch1.py` | 102 | **ALL PASS** | Q17, Q23b now pass |
 
-**Failing TPC-DS Queries:**
-- Q17: `AssertionError: assert table is not None` - query returns empty result
-- Q23b: `AssertionError: assert table is not None` - query returns empty result
+**Previously Failing TPC-DS Queries (Now Fixed):**
+- Q17: Was returning empty result - now passes
+- Q23b: Was returning empty result - now passes
 
 ### Differential Test Results (Retested 2025-12-13)
 | File | Tests | Status | Notes |
@@ -207,7 +209,8 @@ python3 -m pytest test_tpch_dataframe_poc.py -v   # DataFrame operations
    - Fixed `inferSchemaFromDuckDB()` to use correct session ID
    - Fixed `Join.inferSchema()` null handling
 3. **~~Add E2E tests for M19-M28~~** - DONE (`test_dataframe_operations.py` - 13 pass, 15 xfail)
-4. **Investigate TPC-DS Q17/Q23b** - both return empty results
+4. **~~Investigate TPC-DS Q17/Q23b~~** - DONE - now pass (likely fixed by M31-M38 changes)
+5. **~~Fix window function ORDER BY bug~~** - DONE (M38) - removed bad toString() override
 
 ---
 
@@ -237,5 +240,5 @@ python3 -m pytest test_tpch_dataframe_poc.py -v   # DataFrame operations
 
 ---
 
-**Document Version:** 1.7
-**Last Updated:** 2025-12-16 (Updated after M37 - NA functions and withColumn replace fixed)
+**Document Version:** 1.8
+**Last Updated:** 2025-12-16 (Updated after M38 - All TPC-H and TPC-DS tests now pass)

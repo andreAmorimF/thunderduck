@@ -3,6 +3,8 @@ package com.thunderduck.expression;
 import com.thunderduck.expression.window.WindowFrame;
 import com.thunderduck.logical.Sort;
 import com.thunderduck.types.DataType;
+import com.thunderduck.types.DoubleType;
+import com.thunderduck.types.LongType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -175,8 +177,45 @@ public class WindowFunction extends Expression {
 
     @Override
     public DataType dataType() {
-        // Type depends on function - will be refined during implementation
-        return null;
+        // Type depends on function
+        String funcUpper = function.toUpperCase();
+        switch (funcUpper) {
+            case "ROW_NUMBER":
+            case "RANK":
+            case "DENSE_RANK":
+            case "NTILE":
+            case "COUNT":
+                return LongType.get();
+            case "LAG":
+            case "LEAD":
+            case "FIRST_VALUE":
+            case "LAST_VALUE":
+            case "NTH_VALUE":
+                // These return the type of their argument
+                if (!arguments.isEmpty()) {
+                    return arguments.get(0).dataType();
+                }
+                return LongType.get();
+            case "SUM":
+            case "AVG":
+                // Aggregate window functions - return type depends on input
+                if (!arguments.isEmpty() && arguments.get(0).dataType() != null) {
+                    return arguments.get(0).dataType();
+                }
+                return DoubleType.get();
+            case "MIN":
+            case "MAX":
+                if (!arguments.isEmpty() && arguments.get(0).dataType() != null) {
+                    return arguments.get(0).dataType();
+                }
+                return LongType.get();
+            case "PERCENT_RANK":
+            case "CUME_DIST":
+                return DoubleType.get();
+            default:
+                // Default to BIGINT for unknown window functions
+                return LongType.get();
+        }
     }
 
     @Override
@@ -280,9 +319,8 @@ public class WindowFunction extends Expression {
         return sql.toString();
     }
 
-    @Override
-    public String toString() {
-        return String.format("WindowFunction(%s, partitionBy=%s, orderBy=%s, frame=%s)",
-                           function, partitionBy, orderBy, frame);
-    }
+    // Note: toString() is intentionally NOT overridden here.
+    // The base class Expression.toString() delegates to toSQL(), which is the correct behavior.
+    // Having a debug-style toString() would cause incorrect SQL generation when WindowFunction
+    // is used in string interpolation contexts.
 }
