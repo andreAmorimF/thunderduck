@@ -525,7 +525,7 @@ thunderduck/
 │   └── pom.xml
 └── docs/                      # Documentation
     ├── Analysis_and_Design.md
-    ├── Testing_Strategy.md
+    ├── SPARK_CONNECT_GAP_ANALYSIS.md
     └── architect/             # Design documents
 ```
 
@@ -582,6 +582,55 @@ mvn verify -Pcoverage
 # View coverage report
 open tests/target/site/jacoco/index.html
 ```
+
+## Differential Testing (Spark Parity Validation)
+
+The differential testing framework compares thunderduck results against Apache Spark 4.0.1 to ensure exact compatibility. Both systems run via Spark Connect protocol for fair comparison.
+
+### Quick Start
+
+```bash
+# One-time setup (downloads Spark 4.0.1, creates Python venv)
+./tests/scripts/setup-differential-testing.sh
+
+# Run all TPC-H differential tests
+./tests/scripts/run-differential-tests-v2.sh
+```
+
+### What It Does
+
+1. **Starts fresh servers**: Apache Spark 4.0.1 (port 15003) + Thunderduck (port 15002)
+2. **Loads TPC-H data** into both systems
+3. **Executes queries on both** and compares results:
+   - Schema comparison (column names and types)
+   - Row count comparison
+   - Row-by-row data comparison with detailed diff output
+4. **Cleans up servers** on completion (even on Ctrl+C)
+
+### Running Specific Tests
+
+```bash
+# Activate venv first
+source tests/integration/.venv/bin/activate
+cd tests/integration
+
+# Run all tests
+python -m pytest test_differential_v2.py -v
+
+# Run specific query (e.g., TPC-H Q1)
+python -m pytest test_differential_v2.py::TestTPCH_Q1_Differential -v -s
+
+# Run sanity test
+python -m pytest test_differential_v2.py::TestDifferential_Sanity -v -s
+```
+
+### Test Results
+
+All 23 TPC-H tests (Q1-Q22 + sanity) pass with thunderduck consistently faster than Spark:
+- **Q1**: 5.99x faster
+- **Full suite**: 20 seconds
+
+See [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md) for details.
 
 ## End-to-End Testing (E2E)
 
@@ -814,14 +863,12 @@ All PRs must meet these criteria:
 
 ### Technical Documentation
 
-- **[Implementation Plan](IMPLEMENTATION_PLAN.md)**: 16-week development roadmap
-- **[Spark Connect Architecture](docs/architect/SPARK_CONNECT_ARCHITECTURE.md)**: Server architecture and design
-- **[Session Management](docs/architect/SESSION_MANAGEMENT_REDESIGN.md)**: Session-scoped DuckDB runtime architecture
+- **[Session Management](docs/architect/SESSION_MANAGEMENT_ARCHITECTURE.md)**: Session-scoped DuckDB runtime architecture
 - **[Arrow Streaming](docs/architect/ARROW_STREAMING_ARCHITECTURE.md)**: Zero-copy Arrow streaming from DuckDB
+- **[Differential Testing](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)**: Spark parity validation framework
 - **[Protocol Specification](docs/SPARK_CONNECT_PROTOCOL_SPEC.md)**: Spark Connect protocol details
-- **[Testing Strategy](docs/Testing_Strategy.md)**: BDD and differential testing approach
 - **[Benchmark Guide](benchmarks/README.md)**: TPC-H framework usage
-- **[Week Completion Reports](WEEK*_COMPLETION_REPORT.md)**: Progress tracking
+- **[Dev Journal](docs/dev_journal/)**: Milestone completion reports
 
 ### API Documentation
 

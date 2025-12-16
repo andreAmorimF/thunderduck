@@ -6,12 +6,49 @@ import pytest
 from pyspark.sql import SparkSession
 from pathlib import Path
 import sys
+import atexit
+import signal
+import subprocess
 
 # Add utils to path
 sys.path.insert(0, str(Path(__file__).parent / "utils"))
 
+
+# ------------------------------------------------------------------------------
+# Global cleanup functions for handling interrupts
+# ------------------------------------------------------------------------------
+
+def kill_all_servers():
+    """Kill any running Spark/Thunderduck server processes"""
+    # Kill Spark Connect server
+    subprocess.run(
+        ["pkill", "-9", "-f", "org.apache.spark.sql.connect.service.SparkConnectServer"],
+        capture_output=True
+    )
+    # Kill Thunderduck server
+    subprocess.run(
+        ["pkill", "-9", "-f", "thunderduck-connect-server"],
+        capture_output=True
+    )
+
+
+def signal_handler(signum, frame):
+    """Handle interrupt signals"""
+    print(f"\n\nReceived signal {signum}, cleaning up servers...")
+    kill_all_servers()
+    sys.exit(1)
+
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+# Register atexit handler as fallback
+atexit.register(kill_all_servers)
+
 from server_manager import ServerManager
 from result_validator import ResultValidator
+from dual_server_manager import DualServerManager
 
 
 # Server fixtures
@@ -238,6 +275,12 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "sql: mark test as using SQL"
     )
+    config.addinivalue_line(
+        "markers", "differential: mark test as differential test (Spark vs Thunderduck)"
+    )
+    config.addinivalue_line(
+        "markers", "quick: mark test as quick sanity test"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -291,3 +334,145 @@ def load_tpcds_query():
             pytest.skip(f"Query file not found: {query_file}")
         return query_file.read_text()
     return _load_query
+
+
+# ============================================================================
+# Differential Testing Fixtures (Spark Reference vs Thunderduck)
+# ============================================================================
+
+@pytest.fixture(scope="session")
+def dual_server_manager():
+    """
+    Session-scoped fixture that starts both servers for differential testing
+
+    Starts:
+    - Apache Spark Connect 4.0.1 (reference) on port 15003 (native installation)
+    - Thunderduck Connect (test) on port 15002
+
+    Both servers are started fresh and killed on teardown (even on interrupt).
+
+    Usage:
+        def test_differential(dual_server_manager, spark_reference, spark_thunderduck):
+            # Both sessions are connected and ready
+            pass
+    """
+    # Kill any existing servers first to ensure clean slate
+    kill_all_servers()
+
+    manager = DualServerManager(
+        thunderduck_port=15002,
+        spark_reference_port=15003
+    )
+
+    print("\n" + "="*80)
+    print("Starting DUAL servers for differential testing...")
+    print("="*80)
+
+    spark_ok, thunderduck_ok = manager.start_both(timeout=120)
+
+    if not (spark_ok and thunderduck_ok):
+        manager.stop_both()
+        pytest.exit("Failed to start both servers for differential testing", returncode=1)
+
+    yield manager
+
+    print("\n" + "="*80)
+    print("Stopping both servers...")
+    print("="*80)
+    manager.stop_both()
+
+
+@pytest.fixture(scope="session")
+def spark_reference(dual_server_manager):
+    """
+    Session-scoped Spark session connected to Apache Spark Connect (reference)
+
+    This is the reference implementation (official Apache Spark 4.0.1)
+    running as a native process.
+    """
+    print("\nCreating Spark Reference session...")
+
+    spark = (SparkSession.builder
+             .remote(f"sc://localhost:{dual_server_manager.spark_reference_port}")
+             .appName("SparkReference-DifferentialTests")
+             .getOrCreate())
+
+    print(f"✓ Connected to Spark Reference at localhost:{dual_server_manager.spark_reference_port}")
+    print(f"  Spark version: {spark.version}")
+
+    yield spark
+
+    print("\nStopping Spark Reference session...")
+    spark.stop()
+
+
+@pytest.fixture(scope="session")
+def spark_thunderduck(dual_server_manager):
+    """
+    Session-scoped Spark session connected to Thunderduck Connect (test)
+
+    This is the system under test (Thunderduck implementation).
+    """
+    print("\nCreating Spark Thunderduck session...")
+
+    spark = (SparkSession.builder
+             .remote(f"sc://localhost:{dual_server_manager.thunderduck_port}")
+             .appName("Thunderduck-DifferentialTests")
+             .getOrCreate())
+
+    print(f"✓ Connected to Thunderduck at localhost:{dual_server_manager.thunderduck_port}")
+
+    yield spark
+
+    print("\nStopping Spark Thunderduck session...")
+    spark.stop()
+
+
+@pytest.fixture(scope="session")
+def tpch_tables_reference(spark_reference, tpch_data_dir):
+    """
+    Load TPC-H tables into Spark Reference session
+    """
+    tables = [
+        'lineitem', 'orders', 'customer', 'part',
+        'supplier', 'partsupp', 'nation', 'region'
+    ]
+
+    print("\nLoading TPC-H tables into Spark Reference...")
+    for table in tables:
+        parquet_path = tpch_data_dir / f"{table}.parquet"
+        if not parquet_path.exists():
+            pytest.skip(f"TPC-H table not found: {parquet_path}")
+
+        df = spark_reference.read.parquet(str(parquet_path))
+        df.createOrReplaceTempView(table)
+        row_count = df.count()
+        print(f"  ✓ {table}: {row_count:,} rows")
+
+    print(f"✓ All {len(tables)} TPC-H tables loaded into Spark Reference")
+    return tables
+
+
+@pytest.fixture(scope="session")
+def tpch_tables_thunderduck(spark_thunderduck, tpch_data_dir):
+    """
+    Load TPC-H tables into Thunderduck session
+    """
+    tables = [
+        'lineitem', 'orders', 'customer', 'part',
+        'supplier', 'partsupp', 'nation', 'region'
+    ]
+
+    print("\nLoading TPC-H tables into Thunderduck...")
+    for table in tables:
+        parquet_path = tpch_data_dir / f"{table}.parquet"
+        if not parquet_path.exists():
+            pytest.skip(f"TPC-H table not found: {parquet_path}")
+
+        df = spark_thunderduck.read.parquet(str(parquet_path))
+        df.createOrReplaceTempView(table)
+        row_count = df.count()
+        print(f"  ✓ {table}: {row_count:,} rows")
+
+    print(f"✓ All {len(tables)} TPC-H tables loaded into Thunderduck")
+    return tables

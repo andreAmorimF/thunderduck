@@ -1,10 +1,24 @@
 # Thunderduck Integration Tests
 
-Pytest-based integration tests for Thunderduck Spark Connect server using real PySpark client.
+Pytest-based integration tests for Thunderduck Spark Connect server using PySpark 4.0.1 client.
 
 ## Overview
 
-This test suite validates the Spark Connect server implementation by executing TPC-H and TPC-DS queries and DataFrame operations through a real PySpark Spark Connect client. Tests cover both SQL and DataFrame API approaches.
+This test suite validates the Spark Connect server implementation by executing TPC-H queries and DataFrame operations through a real PySpark Spark Connect client. Tests cover both SQL and DataFrame API approaches.
+
+## Quick Start (Differential Tests)
+
+The recommended way to run integration tests is via the differential testing framework, which compares Thunderduck against Apache Spark 4.0.1:
+
+```bash
+# One-time setup (installs Spark 4.0.1, creates venv with all dependencies)
+./tests/scripts/setup-differential-testing.sh
+
+# Run all differential tests
+./tests/scripts/run-differential-tests-v2.sh
+```
+
+See [Differential Testing Architecture](../../docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md) for details.
 
 ## Directory Structure
 
@@ -12,47 +26,50 @@ This test suite validates the Spark Connect server implementation by executing T
 tests/integration/
 ├── README.md                       # This file
 ├── conftest.py                     # pytest configuration and fixtures
-├── test_simple_sql.py              # Basic SQL connectivity tests (3 tests)
-├── test_tpch_queries.py            # TPC-H query tests - Q1, Q3, Q5, Q6 + basic ops (17 tests)
-├── test_tpch_dataframe.py          # TPC-H DataFrame comprehensive tests
-├── test_tpch_tier2.py              # TPC-H tier 2 query tests
-├── test_tpcds_batch1.py            # TPC-DS query tests (~103 tests)
-├── test_temp_views.py              # Temp view functionality tests (6 tests)
-├── test_differential_tpch.py       # Differential tests (Spark vs Thunderduck)
-├── test_differential_simple.py     # Simple differential tests
-├── test_correctness_q1.py          # Q1 correctness validation
-├── test_value_correctness.py       # Value correctness tests (22 tests)
-├── validate_correctness.py         # Correctness validation utilities
-├── generate_spark_reference.py     # Spark reference data generator
-├── generate_new_references.py      # New reference generator
-├── utils/                          # Test utilities
-│   ├── __init__.py
-│   ├── server_manager.py           # Server lifecycle management
-│   └── result_validator.py         # Result validation utilities
-├── tpcds_dataframe/                # TPC-DS DataFrame query implementations
-├── expected_results/               # Expected query results (Parquet/JSON)
-└── logs/                           # Server logs (auto-created)
+├── .venv/                          # Python virtual environment (created by setup script)
+├── .env                            # Environment configuration
+│
+├── test_differential_v2.py         # Differential tests (Spark 4.0.1 vs Thunderduck) - 23 tests
+├── test_simple_sql.py              # Basic SQL connectivity tests
+├── test_tpch_queries.py            # TPC-H query tests
+├── test_dataframe_operations.py    # DataFrame operation tests
+├── test_temp_views.py              # Temp view functionality tests
+│
+└── utils/                          # Test utilities
+    ├── __init__.py
+    ├── server_manager.py           # Server lifecycle management
+    ├── dual_server_manager.py      # Manages both Spark + Thunderduck servers
+    ├── dataframe_diff.py           # Detailed DataFrame comparison
+    └── result_validator.py         # Result validation utilities
 ```
 
-## Quick Start
+## Setup Options
 
-### Prerequisites
+### Option 1: Differential Testing (Recommended)
 
-1. **Build the server**:
-   ```bash
-   mvn clean package -DskipTests -pl connect-server -am
-   ```
+Uses a dedicated virtual environment with all dependencies:
 
-2. **Install Python dependencies**:
-   ```bash
-   pip install pytest pytest-timeout pyspark==3.5.3 pandas
-   ```
+```bash
+# One-time setup
+./tests/scripts/setup-differential-testing.sh
 
-3. **Generate TPC-H data** (if not already done):
-   ```bash
-   # Data should be in /workspace/data/tpch_sf001/
-   # See main README for data generation instructions
-   ```
+# Run tests
+./tests/scripts/run-differential-tests-v2.sh
+```
+
+### Option 2: Manual Setup
+
+```bash
+# Build server
+mvn clean package -DskipTests
+
+# Install dependencies (in a venv is recommended)
+pip install pytest pyspark==4.0.1 pandas pyarrow grpcio grpcio-status
+
+# Run tests manually
+cd tests/integration
+python -m pytest test_differential_v2.py -v
+```
 
 ### Running Tests
 
@@ -138,12 +155,10 @@ class TestTPCHQuery1:
         # Execute both approaches and compare
 ```
 
-**Current Coverage** (17 tests total - 16 pass, 1 xfail):
-- ✅ Q1: Pricing Summary Report (scan, filter, aggregate, sort) - SQL + DataFrame + comparison
-- ✅ Q3: Shipping Priority (3-way joins, filtering, aggregation, limit) - SQL + DataFrame
-- ✅ Q5: Local Supplier Volume (6-way join) - DataFrame only
-- ✅ Q6: Forecasting Revenue Change (complex filters, aggregate) - SQL + DataFrame + comparison
-- ⚠️ Window Functions: ROW_NUMBER test (xfail - ORDER BY translation bug)
+**Current Coverage** (23 differential tests - all passing):
+- ✅ All TPC-H Q1-Q22 differential tests pass
+- ✅ Sanity test for basic validation
+- ✅ Window functions fully working (fixed in M38)
 
 ### 2. Basic DataFrame Operations
 
@@ -458,23 +473,20 @@ To run tests in CI:
 
 ## Future Enhancements
 
+- [ ] Add TPC-DS differential tests
 - [ ] Add performance regression detection
-- [ ] Implement expected result caching
-- [ ] Add more TPC-H queries (Q2, Q4, Q7-Q22)
-- [ ] Fix window function ORDER BY translation (DESCENDING -> DESC)
 - [ ] Create HTML test report generation
-- [ ] Add memory profiling
-- [ ] Implement query plan validation
-- [ ] Add E2E tests for M19-M28 DataFrame operations (drop, withColumn, sample, etc.)
+- [ ] Integrate into CI/CD pipeline
 
 ## Resources
 
 - [TPC-H Specification](http://www.tpc.org/tpch/)
 - [Spark Connect Protocol](https://github.com/apache/spark/tree/master/connector/connect)
-- [PySpark API Reference](https://spark.apache.org/docs/latest/api/python/)
+- [PySpark API Reference](https://spark.apache.org/docs/4.0.1/api/python/)
 - [pytest Documentation](https://docs.pytest.org/)
+- [Differential Testing Architecture](../../docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
 
 ---
 
-**Last Updated**: 2025-12-13
-**Version**: 1.1
+**Last Updated**: 2025-12-16
+**PySpark Version**: 4.0.1
