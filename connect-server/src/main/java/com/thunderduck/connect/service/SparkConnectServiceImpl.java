@@ -10,6 +10,7 @@ import com.thunderduck.runtime.ArrowStreamingExecutor;
 import com.thunderduck.runtime.QueryExecutor;
 import com.thunderduck.runtime.TailBatchIterator;
 import com.thunderduck.logical.Tail;
+import com.thunderduck.schema.SchemaInferrer;
 import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -53,6 +54,17 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         this.catalogHandler = new CatalogOperationHandler();
 
         logger.info("SparkConnectServiceImpl initialized with session-scoped DuckDB runtimes");
+    }
+
+    /**
+     * Create a StatisticsOperationHandler with schema inference for the session.
+     *
+     * @param session the session providing the DuckDB connection
+     * @return a StatisticsOperationHandler instance
+     */
+    private StatisticsOperationHandler createStatisticsHandler(Session session) {
+        SchemaInferrer schemaInferrer = new SchemaInferrer(session.getRuntime().getConnection());
+        return new StatisticsOperationHandler(schemaInferrer);
     }
 
     /**
@@ -158,6 +170,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                 } else if (root.hasCatalog()) {
                     // Handle catalog operations (dropTempView, etc.)
                     executeCatalogOperation(root.getCatalog(), session, responseObserver);
+                    return;
+                } else if (isStatisticsRelation(root)) {
+                    // Handle statistics operations (cov, corr, describe, etc.)
+                    executeStatisticsOperation(root, session, responseObserver);
                     return;
                 }
             } else if (plan.hasCommand() && plan.getCommand().hasSqlCommand()) {
@@ -370,6 +386,192 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
     }
 
     /**
+     * Check if a relation is a statistics operation.
+     *
+     * @param relation the relation to check
+     * @return true if it's a statistics operation
+     */
+    private boolean isStatisticsRelation(Relation relation) {
+        switch (relation.getRelTypeCase()) {
+            case COV:
+            case CORR:
+            case APPROX_QUANTILE:
+            case DESCRIBE:
+            case SUMMARY:
+            case CROSSTAB:
+            case FREQ_ITEMS:
+            case SAMPLE_BY:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Execute a Statistics operation (cov, corr, describe, etc.).
+     *
+     * Delegates to StatisticsOperationHandler which handles:
+     * - StatCov (df.stat.cov)
+     * - StatCorr (df.stat.corr)
+     * - StatApproxQuantile (df.stat.approxQuantile)
+     * - StatDescribe (df.describe)
+     * - StatSummary (df.summary)
+     * - StatCrosstab (df.stat.crosstab)
+     * - StatFreqItems (df.stat.freqItems)
+     * - StatSampleBy (df.stat.sampleBy)
+     *
+     * @param relation The statistics relation to execute
+     * @param session Session object
+     * @param responseObserver Stream observer for responses
+     */
+    private void executeStatisticsOperation(Relation relation, Session session,
+                                           StreamObserver<ExecutePlanResponse> responseObserver) {
+        try {
+            StatisticsOperationHandler statsHandler = createStatisticsHandler(session);
+
+            // Get the input SQL for the operation
+            String inputSql = null;
+            Relation input = null;
+
+            switch (relation.getRelTypeCase()) {
+                case COV:
+                    input = relation.getCov().getInput();
+                    inputSql = generateInputSql(input, session);
+                    statsHandler.handleCov(relation.getCov(), inputSql, session, responseObserver);
+                    break;
+
+                case CORR:
+                    input = relation.getCorr().getInput();
+                    inputSql = generateInputSql(input, session);
+                    statsHandler.handleCorr(relation.getCorr(), inputSql, session, responseObserver);
+                    break;
+
+                case APPROX_QUANTILE:
+                    input = relation.getApproxQuantile().getInput();
+                    inputSql = generateInputSql(input, session);
+                    statsHandler.handleApproxQuantile(relation.getApproxQuantile(), inputSql, session, responseObserver);
+                    break;
+
+                case DESCRIBE:
+                    input = relation.getDescribe().getInput();
+                    inputSql = generateInputSql(input, session);
+                    statsHandler.handleDescribe(relation.getDescribe(), inputSql, session, responseObserver);
+                    break;
+
+                case SUMMARY:
+                    input = relation.getSummary().getInput();
+                    inputSql = generateInputSql(input, session);
+                    statsHandler.handleSummary(relation.getSummary(), inputSql, session, responseObserver);
+                    break;
+
+                case CROSSTAB:
+                    input = relation.getCrosstab().getInput();
+                    inputSql = generateInputSql(input, session);
+                    statsHandler.handleCrosstab(relation.getCrosstab(), inputSql, session, responseObserver);
+                    break;
+
+                case FREQ_ITEMS:
+                    input = relation.getFreqItems().getInput();
+                    inputSql = generateInputSql(input, session);
+                    statsHandler.handleFreqItems(relation.getFreqItems(), inputSql, session, responseObserver);
+                    break;
+
+                case SAMPLE_BY:
+                    input = relation.getSampleBy().getInput();
+                    inputSql = generateInputSql(input, session);
+                    // Get the column expression SQL
+                    String colExpr = convertExpressionToSql(relation.getSampleBy().getCol(), session);
+                    statsHandler.handleSampleBy(relation.getSampleBy(), inputSql, colExpr, session, responseObserver);
+                    break;
+
+                default:
+                    responseObserver.onError(Status.UNIMPLEMENTED
+                        .withDescription("Unsupported statistics operation: " + relation.getRelTypeCase())
+                        .asRuntimeException());
+            }
+
+        } catch (Exception e) {
+            logger.error("Statistics operation failed", e);
+            responseObserver.onError(Status.INTERNAL
+                .withDescription("Statistics operation failed: " + e.getMessage())
+                .withCause(e)
+                .asRuntimeException());
+        }
+    }
+
+    /**
+     * Generate SQL for an input relation.
+     */
+    private String generateInputSql(Relation input, Session session) {
+        LogicalPlan logicalPlan = createPlanConverter(session).convertRelation(input);
+        return sqlGenerator.generate(logicalPlan);
+    }
+
+    /**
+     * Convert a proto Expression to SQL string.
+     */
+    private String convertExpressionToSql(org.apache.spark.connect.proto.Expression expr, Session session) {
+        com.thunderduck.expression.Expression converted = createPlanConverter(session).convertExpression(expr);
+        return converted.toSQL();
+    }
+
+    /**
+     * Generate SQL for a statistics relation (for schema analysis).
+     * This delegates to StatisticsOperationHandler's SQL generation.
+     */
+    private String generateStatisticsSql(Relation relation, Session session) {
+        StatisticsOperationHandler statsHandler = createStatisticsHandler(session);
+        String inputSql;
+        Relation input;
+
+        switch (relation.getRelTypeCase()) {
+            case COV:
+                input = relation.getCov().getInput();
+                inputSql = generateInputSql(input, session);
+                return statsHandler.generateCovSql(relation.getCov(), inputSql);
+
+            case CORR:
+                input = relation.getCorr().getInput();
+                inputSql = generateInputSql(input, session);
+                return statsHandler.generateCorrSql(relation.getCorr(), inputSql);
+
+            case APPROX_QUANTILE:
+                input = relation.getApproxQuantile().getInput();
+                inputSql = generateInputSql(input, session);
+                return statsHandler.generateApproxQuantileSql(relation.getApproxQuantile(), inputSql);
+
+            case DESCRIBE:
+                input = relation.getDescribe().getInput();
+                inputSql = generateInputSql(input, session);
+                return statsHandler.generateDescribeSql(relation.getDescribe(), inputSql);
+
+            case SUMMARY:
+                input = relation.getSummary().getInput();
+                inputSql = generateInputSql(input, session);
+                return statsHandler.generateSummarySql(relation.getSummary(), inputSql);
+
+            case CROSSTAB:
+                input = relation.getCrosstab().getInput();
+                inputSql = generateInputSql(input, session);
+                return statsHandler.generateCrosstabSql(relation.getCrosstab(), inputSql);
+
+            case FREQ_ITEMS:
+                input = relation.getFreqItems().getInput();
+                inputSql = generateInputSql(input, session);
+                return statsHandler.generateFreqItemsSql(relation.getFreqItems(), inputSql);
+
+            case SAMPLE_BY:
+                input = relation.getSampleBy().getInput();
+                inputSql = generateInputSql(input, session);
+                String colExpr = convertExpressionToSql(relation.getSampleBy().getCol(), session);
+                return statsHandler.generateSampleBySql(relation.getSampleBy(), inputSql, colExpr);
+
+            default:
+                throw new IllegalArgumentException("Unsupported statistics relation type: " + relation.getRelTypeCase());
+        }
+    }
+
+    /**
      * Analyze a plan and return metadata (schema, execution plan, etc.).
      *
      * @param request AnalyzePlanRequest
@@ -419,6 +621,12 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         // Apply SQL preprocessing for Spark compatibility
                         sql = preprocessSQL(sql);
                         logger.debug("Analyzing SQL command schema: {}", sql.substring(0, Math.min(100, sql.length())));
+                        schema = inferSchemaFromDuckDB(sql, sessionId);
+
+                    } else if (plan.hasRoot() && isStatisticsRelation(plan.getRoot())) {
+                        // Statistics relation - generate SQL and infer schema
+                        sql = generateStatisticsSql(plan.getRoot(), session);
+                        logger.debug("Analyzing statistics relation schema: {}", sql.substring(0, Math.min(100, sql.length())));
                         schema = inferSchemaFromDuckDB(sql, sessionId);
 
                     } else {

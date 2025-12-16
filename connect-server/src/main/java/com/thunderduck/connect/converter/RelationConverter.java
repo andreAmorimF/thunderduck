@@ -128,6 +128,8 @@ public class RelationConverter {
                 return convertUnpivot(relation.getUnpivot());
             case SUBQUERY_ALIAS:
                 return convertSubqueryAlias(relation.getSubqueryAlias());
+            case SAMPLE_BY:
+                return convertSampleBy(relation.getSampleBy());
             default:
                 throw new PlanConversionException("Unsupported relation type: " + relation.getRelTypeCase());
         }
@@ -1362,6 +1364,56 @@ public class RelationConverter {
             inputSql, SQLQuoting.quoteIdentifier(alias));
 
         logger.debug("Creating SubqueryAlias SQL with alias '{}': {}", alias, sql);
+        return new SQLRelation(sql);
+    }
+
+    /**
+     * Converts a SampleBy relation to a SQL relation with stratified sampling.
+     *
+     * @param sampleBy the SampleBy proto message
+     * @return a LogicalPlan representing the sampled relation
+     */
+    private LogicalPlan convertSampleBy(StatSampleBy sampleBy) {
+        LogicalPlan input = convert(sampleBy.getInput());
+
+        java.util.List<StatSampleBy.Fraction> fractions = sampleBy.getFractionsList();
+        if (fractions.isEmpty()) {
+            // No fractions specified, return empty result
+            SQLGenerator generator = new SQLGenerator();
+            String inputSql = generator.generate(input);
+            return new SQLRelation(inputSql + " WHERE FALSE");
+        }
+
+        // Get the column expression
+        String colExpr = expressionConverter.convert(sampleBy.getCol()).toSQL();
+
+        // Build WHERE clause for stratified sampling
+        StringBuilder whereClause = new StringBuilder();
+        for (int i = 0; i < fractions.size(); i++) {
+            if (i > 0) whereClause.append(" OR ");
+
+            StatSampleBy.Fraction f = fractions.get(i);
+            String stratumValue = convertLiteralToSQL(f.getStratum());
+            double fraction = f.getFraction();
+
+            whereClause.append("(")
+                .append(colExpr)
+                .append(" = ")
+                .append(stratumValue)
+                .append(" AND RANDOM() < ")
+                .append(fraction)
+                .append(")");
+        }
+
+        SQLGenerator generator = new SQLGenerator();
+        String inputSql = generator.generate(input);
+
+        String sql = String.format(
+            "SELECT * FROM (%s) AS _sample_input WHERE %s",
+            inputSql, whereClause.toString()
+        );
+
+        logger.debug("Creating SampleBy SQL: {}", sql);
         return new SQLRelation(sql);
     }
 }

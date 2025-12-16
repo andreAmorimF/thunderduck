@@ -1,6 +1,6 @@
 # Spark Connect 4.0.x Gap Analysis for Thunderduck
 
-**Version:** 3.4
+**Version:** 3.7
 **Date:** 2025-12-16
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 **Validation:** 266 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
@@ -19,7 +19,7 @@ This document provides a detailed gap analysis between Spark Connect 4.0.x's pro
 
 | Category | Total Operators | Implemented | Partial | Coverage |
 |----------|----------------|-------------|---------|----------|
-| Relations | 40 | 28 | 0 | **70%** |
+| Relations | 40 | 36 | 0 | **90%** |
 | Expressions | 16 | 9 | 0 | **56.25%** |
 | Commands | 10 | 2 | 1 | **25-30%** |
 | Catalog | 26 | 26 | 0 | **100%** |
@@ -27,6 +27,8 @@ This document provides a detailed gap analysis between Spark Connect 4.0.x's pro
 *Partial implementations*: WriteOperation (local paths only, S3/cloud needs httpfs extension)
 
 *Catalog Note*: All 26 catalog operations implemented (M41-M44). CREATE_TABLE and CREATE_EXTERNAL_TABLE both support internal and external tables (CSV/Parquet/JSON as VIEWs). 7 operations are no-ops for DuckDB compatibility (caching, partitions). **100% catalog coverage achieved.**
+
+*Statistics Note*: All 8 statistics operations implemented (M45). df.stat.cov/corr/approxQuantile return scalars/arrays; df.describe/summary/crosstab/freqItems/sampleBy return DataFrames. **100% statistics coverage achieved.**
 
 ---
 
@@ -70,6 +72,14 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | **NAFill** | `fill_na` | ✅ Implemented | `df.na.fill(value)` - via COALESCE (M26). Schema inference for empty cols. |
 | **NAReplace** | `replace` | ✅ Implemented | `df.na.replace(old, new)` - via CASE WHEN (M26). Schema inference for empty cols. |
 | **Unpivot** | `unpivot` | ✅ Implemented | `df.unpivot()` - via DuckDB native UNPIVOT (M27). Schema inference for values=None. |
+| **StatCov** | `cov` | ✅ Implemented | `df.stat.cov(col1, col2)` - sample covariance via COVAR_SAMP (M45) |
+| **StatCorr** | `corr` | ✅ Implemented | `df.stat.corr(col1, col2)` - Pearson correlation via CORR (M45) |
+| **StatApproxQuantile** | `approx_quantile` | ✅ Implemented | `df.stat.approxQuantile()` - quantiles via QUANTILE_CONT (M45) |
+| **StatDescribe** | `describe` | ✅ Implemented | `df.describe()` - count/mean/stddev/min/max (M45) |
+| **StatSummary** | `summary` | ✅ Implemented | `df.summary()` - configurable statistics with percentiles (M45) |
+| **StatCrosstab** | `crosstab` | ✅ Implemented | `df.stat.crosstab()` - contingency table via PIVOT (M45) |
+| **StatFreqItems** | `freq_items` | ✅ Implemented | `df.stat.freqItems()` - frequent items via LIST aggregation (M45) |
+| **StatSampleBy** | `sample_by` | ✅ Implemented | `df.stat.sampleBy()` - stratified sampling with fractions (M45) |
 
 ### 1.2 Not Implemented Relations
 
@@ -78,24 +88,6 @@ Relations are the core building blocks of Spark Connect query plans. They repres
 | Relation | Proto Field | Priority | Use Case |
 |----------|-------------|----------|----------|
 | **ToSchema** | `to_schema` | 🟡 MEDIUM | Schema enforcement |
-
-#### Lower Priority (Statistics - Return DataFrames)
-
-| Relation | Proto Field | Priority | Returns | Use Case |
-|----------|-------------|----------|---------|----------|
-| **StatSummary** | `summary` | 🟢 LOW | DataFrame | `df.summary()` - stats as rows |
-| **StatDescribe** | `describe` | 🟢 LOW | DataFrame | `df.describe()` - count/mean/std/min/max |
-| **StatCrosstab** | `crosstab` | 🟢 LOW | DataFrame | `df.stat.crosstab()` - contingency table |
-| **StatFreqItems** | `freq_items` | 🟢 LOW | DataFrame | `df.stat.freqItems()` - frequent items |
-| **StatSampleBy** | `sample_by` | 🟢 LOW | DataFrame | `df.stat.sampleBy()` - stratified sample |
-
-#### Lower Priority (Statistics - Return Scalars)
-
-| Relation | Proto Field | Priority | Returns | Use Case |
-|----------|-------------|----------|---------|----------|
-| **StatCov** | `cov` | 🟢 LOW | Double | `df.stat.cov()` - covariance |
-| **StatCorr** | `corr` | 🟢 LOW | Double | `df.stat.corr()` - correlation |
-| **StatApproxQuantile** | `approx_quantile` | 🟢 LOW | Array[Double] | `df.stat.approxQuantile()` |
 
 #### Streaming / UDF (Future)
 
@@ -378,11 +370,13 @@ See [docs/architect/CATALOG_OPERATIONS.md](docs/architect/CATALOG_OPERATIONS.md)
 
 ### Phase 5: Statistical Functions (Lower Priority)
 
-1. **StatDescribe**, **StatSummary** - Basic statistics
-2. **StatCorr**, **StatCov** - Correlation/covariance
-3. **StatCrosstab**, **StatFreqItems** - Frequency analysis
+1. ~~**StatDescribe**, **StatSummary** - Basic statistics~~ ✅ Implemented (M45, 2025-12-16)
+2. ~~**StatCorr**, **StatCov** - Correlation/covariance~~ ✅ Implemented (M45, 2025-12-16)
+3. ~~**StatCrosstab**, **StatFreqItems** - Frequency analysis~~ ✅ Implemented (M45, 2025-12-16)
+4. ~~**StatApproxQuantile** - Quantile estimation~~ ✅ Implemented (M45, 2025-12-16)
+5. ~~**StatSampleBy** - Stratified sampling~~ ✅ Implemented (M45, 2025-12-16)
 
-**Estimated effort:** 1-2 weeks
+**Phase 5 COMPLETE!** All 8 statistics operations implemented with 29 E2E tests.
 
 ### Phase 6: Streaming & UDFs (Future)
 
@@ -532,6 +526,18 @@ spark.catalog.getDatabase("main")             # Get database metadata (M44)
 spark.catalog.getTable("table")               # Get table metadata (M44)
 spark.catalog.getFunction("abs")              # Get function metadata (M44)
 spark.catalog.functionExists("sum")           # Check function exists (M44)
+
+# STATISTICS operations (M45):
+df.stat.cov("col1", "col2")                   # Sample covariance (returns Double)
+df.stat.corr("col1", "col2")                  # Pearson correlation (returns Double)
+df.stat.approxQuantile("col", [0.25, 0.5, 0.75], 0.0)  # Quantiles (returns List[Double])
+df.describe()                                 # Basic stats: count/mean/stddev/min/max
+df.describe("col1", "col2")                   # Stats for specific columns
+df.summary()                                  # Extended stats with percentiles
+df.summary("count", "min", "max")             # Custom statistics list
+df.stat.crosstab("col1", "col2")              # Contingency table
+df.stat.freqItems(["col1", "col2"])           # Frequent items in columns
+df.stat.sampleBy("category", {"A": 0.5, "B": 0.2}, seed=42)  # Stratified sampling
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
@@ -544,12 +550,11 @@ df.sample(withReplacement=True, fraction=0.5) # Poisson sampling not available i
 df.write.parquet("s3://bucket/path")          # S3 writes need httpfs extension
 df.write.csv("s3://bucket/path")              # S3 writes need httpfs extension
 
-# TRANSFORMATIONS not yet implemented (return DataFrames):
-df.describe()                                 # StatDescribe - returns DataFrame!
-df.summary()                                  # StatSummary - returns DataFrame!
+# RELATIONS not yet implemented:
+df.toSchema(schema)                           # Schema enforcement
 
-# CATALOG complete (22/26 operations):
-# Remaining operations are partition-related (not applicable to DuckDB)
+# Python/Scala UDFs (Future):
+spark.udf.register(...)                       # User-defined functions not supported
 ```
 
 ## Appendix C: Actions vs Transformations
@@ -574,7 +579,7 @@ df.summary()                                  # StatSummary - returns DataFrame!
 
 ---
 
-**Document Version:** 3.6
+**Document Version:** 3.7
 **Last Updated:** 2025-12-16
 **Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 
@@ -582,6 +587,7 @@ df.summary()                                  # StatSummary - returns DataFrame!
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v3.7 | 2025-12-16 | Added all 8 statistics operations (M45): StatCov, StatCorr, StatApproxQuantile, StatDescribe, StatSummary, StatCrosstab, StatFreqItems, StatSampleBy. **Relations coverage: 90% (36/40). Statistics 100% complete.** |
 | v3.6 | 2025-12-16 | Added CreateExternalTable (delegates to CreateTable). **Catalog 100% complete (26/26 operations)**. |
 | v3.5 | 2025-12-16 | Added GetDatabase, GetTable, GetFunction, FunctionExists (M44). Catalog operations now 22/26 (85%). |
 | v3.4 | 2025-12-16 | Added ListFunctions (M43), external table support via CreateTable (CSV/Parquet/JSON as VIEWs). Documented all no-op operations as implemented. 18/26 catalog ops (69%). |

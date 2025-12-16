@@ -29,6 +29,15 @@ public class SchemaInferrer {
     }
 
     /**
+     * Returns the connection used for schema inference.
+     *
+     * @return the DuckDB connection
+     */
+    public Connection getConnection() {
+        return connection;
+    }
+
+    /**
      * Infers the schema of a SQL query by executing DESCRIBE.
      *
      * @param sql the SQL query to analyze
