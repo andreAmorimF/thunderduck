@@ -28,6 +28,7 @@ import org.apache.spark.connect.proto.IsCached;
 import org.apache.spark.connect.proto.ListCatalogs;
 import org.apache.spark.connect.proto.ListColumns;
 import org.apache.spark.connect.proto.ListDatabases;
+import org.apache.spark.connect.proto.ListFunctions;
 import org.apache.spark.connect.proto.ListTables;
 import org.apache.spark.connect.proto.RecoverPartitions;
 import org.apache.spark.connect.proto.RefreshByPath;
@@ -78,7 +79,8 @@ import static com.thunderduck.generator.SQLQuoting.quoteIdentifier;
  *   <li>CURRENT_CATALOG - Get current catalog (always "default")</li>
  *   <li>SET_CURRENT_CATALOG - Set current catalog (only "default" supported)</li>
  *   <li>LIST_CATALOGS - List catalogs (returns ["default"])</li>
- *   <li>CREATE_TABLE - Create a persistent table (internal tables only)</li>
+ *   <li>LIST_FUNCTIONS - List available functions (from duckdb_functions())</li>
+ *   <li>CREATE_TABLE - Create a persistent table (internal or external)</li>
  * </ul>
  */
 public class CatalogOperationHandler {
@@ -172,6 +174,10 @@ public class CatalogOperationHandler {
 
                 case LIST_CATALOGS:
                     handleListCatalogs(catalog.getListCatalogs(), session, responseObserver);
+                    break;
+
+                case LIST_FUNCTIONS:
+                    handleListFunctions(catalog.getListFunctions(), session, responseObserver);
                     break;
 
                 case DROP_GLOBAL_TEMP_VIEW:
@@ -545,6 +551,105 @@ public class CatalogOperationHandler {
                 resultHandler.streamArrowResult(result);
 
                 logger.info("✓ listDatabases returned {} databases", rowCount);
+            }
+        }
+    }
+
+    /**
+     * Handle LIST_FUNCTIONS operation.
+     *
+     * Returns Arrow table with columns matching Spark's Function schema:
+     * - name: string (function name)
+     * - catalog: string (always "spark_catalog")
+     * - namespace: string (JSON array of schema path)
+     * - description: string (function description, often empty)
+     * - className: string (placeholder for DuckDB functions)
+     * - isTemporary: boolean (always false for DuckDB built-ins)
+     */
+    private void handleListFunctions(ListFunctions listFunctions, Session session,
+                                     StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String dbName = listFunctions.hasDbName() ? listFunctions.getDbName() : null;
+        String pattern = listFunctions.hasPattern() ? listFunctions.getPattern() : null;
+
+        logger.info("Listing functions (db={}, pattern={})", dbName, pattern);
+
+        // Build query using duckdb_functions()
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT DISTINCT function_name, schema_name, COALESCE(description, '') as description ");
+        sql.append("FROM duckdb_functions() ");
+        sql.append("WHERE schema_name NOT IN ('information_schema', 'pg_catalog') ");
+        if (dbName != null) {
+            sql.append("AND schema_name = '").append(escapeSql(dbName)).append("' ");
+        }
+        if (pattern != null) {
+            // Convert SQL LIKE pattern (supports % and _)
+            sql.append("AND function_name ILIKE '").append(escapeSql(pattern)).append("' ");
+        }
+        sql.append("ORDER BY schema_name, function_name");
+
+        logger.debug("Executing: {}", sql);
+
+        // Execute query
+        QueryExecutor executor = new QueryExecutor(session.getRuntime());
+        try (VectorSchemaRoot queryResult = executor.executeQuery(sql.toString())) {
+
+            // Build result Arrow table with Spark catalog schema
+            try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
+                Schema schema = createListFunctionsSchema();
+                VectorSchemaRoot result = VectorSchemaRoot.create(schema, allocator);
+
+                int rowCount = queryResult.getRowCount();
+                result.setRowCount(rowCount);
+
+                // Get vectors
+                VarCharVector nameVec = (VarCharVector) result.getVector("name");
+                VarCharVector catalogVec = (VarCharVector) result.getVector("catalog");
+                VarCharVector namespaceVec = (VarCharVector) result.getVector("namespace");
+                VarCharVector descVec = (VarCharVector) result.getVector("description");
+                VarCharVector classNameVec = (VarCharVector) result.getVector("className");
+                BitVector tempVec = (BitVector) result.getVector("isTemporary");
+
+                nameVec.allocateNew(rowCount);
+                catalogVec.allocateNew(rowCount);
+                namespaceVec.allocateNew(rowCount);
+                descVec.allocateNew(rowCount);
+                classNameVec.allocateNew(rowCount);
+                tempVec.allocateNew(rowCount);
+
+                // Get source vectors
+                VarCharVector srcName = (VarCharVector) queryResult.getVector("function_name");
+                VarCharVector srcSchema = (VarCharVector) queryResult.getVector("schema_name");
+                VarCharVector srcDesc = (VarCharVector) queryResult.getVector("description");
+
+                for (int i = 0; i < rowCount; i++) {
+                    String funcName = new String(srcName.get(i), StandardCharsets.UTF_8);
+                    String schemaName = new String(srcSchema.get(i), StandardCharsets.UTF_8);
+                    String description = srcDesc.isNull(i) ? "" : new String(srcDesc.get(i), StandardCharsets.UTF_8);
+
+                    nameVec.set(i, funcName.getBytes(StandardCharsets.UTF_8));
+                    catalogVec.set(i, "spark_catalog".getBytes(StandardCharsets.UTF_8));
+                    namespaceVec.set(i, ("[\"" + schemaName + "\"]").getBytes(StandardCharsets.UTF_8));
+                    descVec.set(i, description.getBytes(StandardCharsets.UTF_8));
+                    // Use placeholder className since DuckDB functions don't have Java class names
+                    classNameVec.set(i, ("org.duckdb.builtin." + funcName).getBytes(StandardCharsets.UTF_8));
+                    // All DuckDB built-in functions are not temporary
+                    tempVec.set(i, 0);
+                }
+
+                nameVec.setValueCount(rowCount);
+                catalogVec.setValueCount(rowCount);
+                namespaceVec.setValueCount(rowCount);
+                descVec.setValueCount(rowCount);
+                classNameVec.setValueCount(rowCount);
+                tempVec.setValueCount(rowCount);
+
+                // Stream result
+                String operationId = UUID.randomUUID().toString();
+                StreamingResultHandler resultHandler = new StreamingResultHandler(
+                    responseObserver, session.getSessionId(), operationId);
+                resultHandler.streamArrowResult(result);
+
+                logger.info("✓ listFunctions returned {} functions", rowCount);
             }
         }
     }
@@ -933,46 +1038,22 @@ public class CatalogOperationHandler {
     /**
      * Handle CREATE_TABLE operation.
      *
-     * <p>Creates a persistent table in the session's DuckDB database.
-     * Internal tables (no path/source) are stored directly in DuckDB.
-     * External tables (with path/source) are not yet supported.
+     * <p>Creates a table in the session's DuckDB database.
+     * Internal tables (no path) are stored directly in DuckDB.
+     * External tables (with path) are created as VIEWs over file readers (csv, parquet, json).
      */
     private void handleCreateTable(CreateTable createTable, Session session,
                                    StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
         String tableName = createTable.getTableName();
         boolean hasPath = createTable.hasPath();
         boolean hasSource = createTable.hasSource();
+        String path = hasPath ? createTable.getPath() : null;
+        String source = hasSource ? createTable.getSource() : null;
 
         logger.info("CREATE TABLE: '{}' (path={}, source={})",
             tableName,
-            hasPath ? createTable.getPath() : "none",
-            hasSource ? createTable.getSource() : "none");
-
-        // External tables (with path or source) are not yet supported
-        if (hasPath || hasSource) {
-            responseObserver.onError(Status.UNIMPLEMENTED
-                .withDescription("External tables (with path or source) are not yet supported. " +
-                    "Use internal tables without path/source specification.")
-                .asRuntimeException());
-            return;
-        }
-
-        // Schema is required for internal tables
-        if (!createTable.hasSchema()) {
-            responseObserver.onError(Status.INVALID_ARGUMENT
-                .withDescription("CREATE TABLE requires a schema for internal tables")
-                .asRuntimeException());
-            return;
-        }
-
-        // Validate schema is a STRUCT type
-        DataType schemaType = createTable.getSchema();
-        if (schemaType.getKindCase() != DataType.KindCase.STRUCT) {
-            responseObserver.onError(Status.INVALID_ARGUMENT
-                .withDescription("Schema must be a STRUCT type, got: " + schemaType.getKindCase())
-                .asRuntimeException());
-            return;
-        }
+            hasPath ? path : "none",
+            hasSource ? source : "none");
 
         // Get current database (schema in DuckDB terms)
         String currentDb = session.getConfig("spark.catalog.currentDatabase");
@@ -980,12 +1061,50 @@ public class CatalogOperationHandler {
             currentDb = "main";
         }
 
-        // Generate CREATE TABLE DDL
-        String ddl = SparkDataTypeConverter.generateCreateTableDDL(
-            currentDb,
-            tableName,
-            schemaType.getStruct()
-        );
+        String ddl;
+
+        // External table: path specified -> create VIEW over file reader
+        if (hasPath) {
+            // Determine the file format from source or path extension
+            String format = determineFileFormat(path, source);
+            if (format == null) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                    .withDescription("Unable to determine file format. Specify 'source' (csv/parquet/json) or use file extension.")
+                    .asRuntimeException());
+                return;
+            }
+
+            // Build the DuckDB file reader function call
+            String readerFunction = buildFileReaderFunction(format, path, createTable);
+
+            // Generate CREATE VIEW DDL (external tables are implemented as VIEWs)
+            String qualifiedTableName = quoteIdentifier(currentDb) + "." + quoteIdentifier(tableName);
+            ddl = String.format("CREATE VIEW %s AS SELECT * FROM %s", qualifiedTableName, readerFunction);
+        } else {
+            // Internal table: schema required
+            if (!createTable.hasSchema()) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                    .withDescription("CREATE TABLE requires a schema for internal tables")
+                    .asRuntimeException());
+                return;
+            }
+
+            // Validate schema is a STRUCT type
+            DataType schemaType = createTable.getSchema();
+            if (schemaType.getKindCase() != DataType.KindCase.STRUCT) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                    .withDescription("Schema must be a STRUCT type, got: " + schemaType.getKindCase())
+                    .asRuntimeException());
+                return;
+            }
+
+            // Generate CREATE TABLE DDL
+            ddl = SparkDataTypeConverter.generateCreateTableDDL(
+                currentDb,
+                tableName,
+                schemaType.getStruct()
+            );
+        }
 
         logger.debug("Executing DuckDB: {}", ddl);
 
@@ -1000,6 +1119,172 @@ public class CatalogOperationHandler {
         resultHandler.streamVoidResult();
 
         logger.info("✓ Table created: '{}.{}' (session: {})", currentDb, tableName, session.getSessionId());
+    }
+
+    /**
+     * Determine the file format from source parameter or path extension.
+     *
+     * @param path the file path
+     * @param source the explicit source/format (e.g., "csv", "parquet", "json")
+     * @return normalized format string ("csv", "parquet", or "json"), or null if unknown
+     */
+    private String determineFileFormat(String path, String source) {
+        // Explicit source takes precedence
+        if (source != null && !source.isEmpty()) {
+            String normalized = source.toLowerCase();
+            if (normalized.equals("csv") || normalized.equals("parquet") ||
+                normalized.equals("json") || normalized.equals("org.apache.spark.sql.parquet") ||
+                normalized.equals("org.apache.spark.sql.json")) {
+                // Handle Spark's fully qualified format names
+                if (normalized.contains("parquet")) return "parquet";
+                if (normalized.contains("json")) return "json";
+                return normalized;
+            }
+        }
+
+        // Fall back to file extension
+        if (path != null) {
+            String lowerPath = path.toLowerCase();
+            if (lowerPath.endsWith(".csv") || lowerPath.endsWith(".csv.gz")) {
+                return "csv";
+            } else if (lowerPath.endsWith(".parquet")) {
+                return "parquet";
+            } else if (lowerPath.endsWith(".json") || lowerPath.endsWith(".json.gz")) {
+                return "json";
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Build a DuckDB file reader function call.
+     *
+     * @param format the file format ("csv", "parquet", or "json")
+     * @param path the file path
+     * @param createTable the CREATE TABLE request with options
+     * @return DuckDB function call string (e.g., "read_csv('path', ...)")
+     */
+    private String buildFileReaderFunction(String format, String path, CreateTable createTable) {
+        StringBuilder functionCall = new StringBuilder();
+
+        switch (format.toLowerCase()) {
+            case "csv":
+                functionCall.append("read_csv('").append(escapePath(path)).append("'");
+                // Add CSV options if specified
+                appendCsvOptions(functionCall, createTable);
+                functionCall.append(")");
+                break;
+
+            case "parquet":
+                functionCall.append("read_parquet('").append(escapePath(path)).append("')");
+                break;
+
+            case "json":
+                functionCall.append("read_json('").append(escapePath(path)).append("'");
+                // Add JSON options if specified
+                appendJsonOptions(functionCall, createTable);
+                functionCall.append(")");
+                break;
+
+            default:
+                throw new IllegalArgumentException("Unsupported format: " + format);
+        }
+
+        return functionCall.toString();
+    }
+
+    /**
+     * Append CSV-specific options to the reader function.
+     *
+     * @param functionCall the string builder for the function call
+     * @param createTable the CREATE TABLE request
+     */
+    private void appendCsvOptions(StringBuilder functionCall, CreateTable createTable) {
+        java.util.Map<String, String> options = createTable.getOptionsMap();
+
+        // Handle common CSV options
+        if (options.containsKey("header")) {
+            String header = options.get("header");
+            functionCall.append(", header=").append(header.equalsIgnoreCase("true") ? "true" : "false");
+        } else {
+            // Default to auto-detect header
+            functionCall.append(", AUTO_DETECT=true");
+        }
+
+        if (options.containsKey("delimiter") || options.containsKey("sep")) {
+            String delimiter = options.getOrDefault("delimiter", options.get("sep"));
+            functionCall.append(", delim='").append(escapeSingleQuote(delimiter)).append("'");
+        }
+
+        if (options.containsKey("quote")) {
+            String quote = options.get("quote");
+            functionCall.append(", quote='").append(escapeSingleQuote(quote)).append("'");
+        }
+
+        if (options.containsKey("escape")) {
+            String escape = options.get("escape");
+            functionCall.append(", escape='").append(escapeSingleQuote(escape)).append("'");
+        }
+
+        if (options.containsKey("nullValue")) {
+            String nullValue = options.get("nullValue");
+            functionCall.append(", nullstr='").append(escapeSingleQuote(nullValue)).append("'");
+        }
+
+        if (options.containsKey("compression")) {
+            String compression = options.get("compression");
+            functionCall.append(", compression='").append(escapeSingleQuote(compression)).append("'");
+        }
+    }
+
+    /**
+     * Append JSON-specific options to the reader function.
+     *
+     * @param functionCall the string builder for the function call
+     * @param createTable the CREATE TABLE request
+     */
+    private void appendJsonOptions(StringBuilder functionCall, CreateTable createTable) {
+        java.util.Map<String, String> options = createTable.getOptionsMap();
+
+        // DuckDB read_json has fewer options than CSV
+        // Most JSON options are auto-detected
+        if (options.containsKey("compression")) {
+            String compression = options.get("compression");
+            functionCall.append(", compression='").append(escapeSingleQuote(compression)).append("'");
+        }
+
+        // Handle format parameter for JSON Lines vs JSON arrays
+        if (options.containsKey("format")) {
+            String jsonFormat = options.get("format");
+            functionCall.append(", format='").append(escapeSingleQuote(jsonFormat)).append("'");
+        } else {
+            // Default to auto-detect
+            functionCall.append(", auto_detect=true");
+        }
+    }
+
+    /**
+     * Escape a file path for use in SQL string literal.
+     *
+     * @param path the file path
+     * @return escaped path
+     */
+    private String escapePath(String path) {
+        if (path == null) return "";
+        // Escape single quotes by doubling them
+        return path.replace("'", "''");
+    }
+
+    /**
+     * Escape a string for use in SQL single-quoted string.
+     *
+     * @param value the string value
+     * @return escaped value
+     */
+    private String escapeSingleQuote(String value) {
+        if (value == null) return "";
+        return value.replace("'", "''");
     }
 
     // ==================== Helper Methods ====================
@@ -1042,6 +1327,20 @@ public class CatalogOperationHandler {
             Field.nullable("catalog", ArrowType.Utf8.INSTANCE),
             Field.nullable("description", ArrowType.Utf8.INSTANCE),
             Field.nullable("locationUri", ArrowType.Utf8.INSTANCE)
+        ));
+    }
+
+    /**
+     * Create Arrow schema for listFunctions result.
+     */
+    private Schema createListFunctionsSchema() {
+        return new Schema(Arrays.asList(
+            Field.nullable("name", ArrowType.Utf8.INSTANCE),
+            Field.nullable("catalog", ArrowType.Utf8.INSTANCE),
+            Field.nullable("namespace", ArrowType.Utf8.INSTANCE),  // JSON array string
+            Field.nullable("description", ArrowType.Utf8.INSTANCE),
+            Field.nullable("className", ArrowType.Utf8.INSTANCE),
+            Field.nullable("isTemporary", ArrowType.Bool.INSTANCE)
         ));
     }
 

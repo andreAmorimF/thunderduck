@@ -1,6 +1,6 @@
 # Spark Connect 4.0.x Gap Analysis for Thunderduck
 
-**Version:** 3.3
+**Version:** 3.4
 **Date:** 2025-12-16
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 **Validation:** 266 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
@@ -22,11 +22,11 @@ This document provides a detailed gap analysis between Spark Connect 4.0.x's pro
 | Relations | 40 | 28 | 0 | **70%** |
 | Expressions | 16 | 9 | 0 | **56.25%** |
 | Commands | 10 | 2 | 1 | **25-30%** |
-| Catalog | 26 | 9 | 0 | **35%** |
+| Catalog | 26 | 18 | 0 | **69%** |
 
 *Partial implementations*: WriteOperation (local paths only, S3/cloud needs httpfs extension)
 
-*Catalog Note*: 9 high-value operations implemented (M41, M42). CREATE TABLE added with per-session persistent databases. Remaining operations are mostly no-ops for DuckDB.
+*Catalog Note*: 18 catalog operations implemented (M41-M43). CREATE TABLE supports both internal tables and external tables (CSV/Parquet/JSON via VIEWs). ListFunctions queries duckdb_functions(). 7 no-op operations for DuckDB compatibility. Remaining 8 are low-priority metadata operations.
 
 ---
 
@@ -204,41 +204,42 @@ Catalog operations allow interaction with Spark's metadata catalog.
 
 ### 4.1 Implementation Status
 
-**Implemented (M41, 2025-12-16):**
+**Implemented (M41-M43, 2025-12-16):**
 
 | Operation | Proto Message | Status | Use Case |
 |-----------|---------------|--------|----------|
 | **DropTempView** | `drop_temp_view` | ✅ Implemented | `spark.catalog.dropTempView` |
+| **DropGlobalTempView** | `drop_global_temp_view` | ✅ Implemented | Same as DropTempView |
 | **TableExists** | `table_exists` | ✅ Implemented | `spark.catalog.tableExists` |
 | **DatabaseExists** | `database_exists` | ✅ Implemented | `spark.catalog.databaseExists` |
 | **ListTables** | `list_tables` | ✅ Implemented | `spark.catalog.listTables` |
 | **ListColumns** | `list_columns` | ✅ Implemented | `spark.catalog.listColumns` |
 | **ListDatabases** | `list_databases` | ✅ Implemented | `spark.catalog.listDatabases` |
+| **ListFunctions** | `list_functions` | ✅ Implemented | `spark.catalog.listFunctions` (M43) - queries duckdb_functions() |
 | **CurrentDatabase** | `current_database` | ✅ Implemented | `spark.catalog.currentDatabase` |
 | **SetCurrentDatabase** | `set_current_database` | ✅ Implemented | `spark.catalog.setCurrentDatabase` |
-| **CreateTable** | `create_table` | ✅ Implemented | `spark.catalog.createTable` (M42) - internal tables with per-session persistent databases |
+| **CurrentCatalog** | `current_catalog` | ✅ Implemented | Returns "spark_catalog" |
+| **SetCurrentCatalog** | `set_current_catalog` | ✅ Implemented | Only "spark_catalog" supported |
+| **ListCatalogs** | `list_catalogs` | ✅ Implemented | Returns ["spark_catalog"] |
+| **CreateTable** | `create_table` | ✅ Implemented | Internal tables (M42) + external tables via path (M43) |
+| **IsCached** | `is_cached` | ✅ No-op | Always returns false |
+| **CacheTable** | `cache_table` | ✅ No-op | Logs warning, no-op |
+| **UncacheTable** | `uncache_table` | ✅ No-op | Logs warning, no-op |
+| **ClearCache** | `clear_cache` | ✅ No-op | Logs warning, no-op |
+| **RefreshTable** | `refresh_table` | ✅ No-op | Logs info, no-op |
+| **RefreshByPath** | `refresh_by_path` | ✅ No-op | Logs info, no-op |
+| **RecoverPartitions** | `recover_partitions` | ✅ No-op | Logs info, no-op |
+
+*Note*: CreateExternalTable is internally forwarded to CreateTable - external tables are created as VIEWs over file readers (csv, parquet, json).
 
 **Not Implemented:**
 
 | Operation | Proto Message | Priority | Use Case |
 |-----------|---------------|----------|----------|
-| **ListFunctions** | `list_functions` | 🟢 LOW | `spark.catalog.listFunctions` |
 | **GetDatabase** | `get_database` | 🟢 LOW | `spark.catalog.getDatabase` |
 | **GetTable** | `get_table` | 🟢 LOW | `spark.catalog.getTable` |
 | **GetFunction** | `get_function` | 🟢 LOW | `spark.catalog.getFunction` |
 | **FunctionExists** | `function_exists` | 🟢 LOW | `spark.catalog.functionExists` |
-| **CreateExternalTable** | `create_external_table` | 🟡 MEDIUM | `spark.catalog.createExternalTable` |
-| **DropGlobalTempView** | `drop_global_temp_view` | 🟡 MEDIUM | `spark.catalog.dropGlobalTempView` |
-| **RecoverPartitions** | `recover_partitions` | 🟢 LOW | No-op in DuckDB |
-| **IsCached** | `is_cached` | 🟢 LOW | No-op (always false) |
-| **CacheTable** | `cache_table` | 🟢 LOW | No-op in DuckDB |
-| **UncacheTable** | `uncache_table` | 🟢 LOW | No-op in DuckDB |
-| **ClearCache** | `clear_cache` | 🟢 LOW | No-op in DuckDB |
-| **RefreshTable** | `refresh_table` | 🟢 LOW | No-op in DuckDB |
-| **RefreshByPath** | `refresh_by_path` | 🟢 LOW | No-op in DuckDB |
-| **CurrentCatalog** | `current_catalog` | 🟢 LOW | Returns "default" |
-| **SetCurrentCatalog** | `set_current_catalog` | 🟢 LOW | Only "default" supported |
-| **ListCatalogs** | `list_catalogs` | 🟢 LOW | Returns ["default"] |
 
 ---
 
@@ -571,7 +572,7 @@ spark.catalog.listFunctions()                 # Function listing not yet support
 
 ---
 
-**Document Version:** 3.3
+**Document Version:** 3.4
 **Last Updated:** 2025-12-16
 **Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 
@@ -579,6 +580,7 @@ spark.catalog.listFunctions()                 # Function listing not yet support
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v3.4 | 2025-12-16 | Added ListFunctions (M43), external table support via CreateTable (CSV/Parquet/JSON as VIEWs). Documented all no-op operations as implemented. 18/26 catalog ops (69%). |
 | v3.3 | 2025-12-16 | Added CREATE TABLE (M42) with per-session persistent databases. 9/26 catalog ops (35%). |
 | v3.2 | 2025-12-16 | Added differential test validation (266 tests). Expanded function support with validated functions (57 tests), window functions (35 tests), multi-dim aggregations (21 tests). |
 | v3.0 | 2025-12-15 | Added SubqueryAlias (M28). Phase 2 complete! 28/40 relations (70%) |

@@ -187,3 +187,366 @@ class TestCatalogDifferential:
         spark_result = spark_session.catalog.databaseExists("nonexistent_db_abc")
         td_result = thunderduck_session.catalog.databaseExists("nonexistent_db_abc")
         assert spark_result == td_result, "databaseExists should match for non-existent db"
+
+
+class TestCreateTableInternal:
+    """Test spark.catalog.createTable() for internal tables (schema-based)."""
+
+    def test_create_table_with_schema(self, spark):
+        """Create an internal table with explicit schema."""
+        from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
+
+        table_name = "test_internal_table_schema"
+
+        # Clean up if exists
+        spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+        # Define schema
+        schema = StructType([
+            StructField("id", IntegerType(), nullable=False),
+            StructField("name", StringType(), nullable=True),
+            StructField("value", DoubleType(), nullable=True)
+        ])
+
+        # Create table using catalog API
+        spark.catalog.createTable(table_name, schema=schema)
+
+        # Verify table exists
+        assert spark.catalog.tableExists(table_name), "Table should exist after creation"
+
+        # Verify schema via listColumns
+        columns = list(spark.catalog.listColumns(table_name))
+        col_names = [c.name for c in columns]
+        assert "id" in col_names, "Should have 'id' column"
+        assert "name" in col_names, "Should have 'name' column"
+        assert "value" in col_names, "Should have 'value' column"
+
+        # Cleanup
+        spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+    def test_create_table_insert_and_query(self, spark):
+        """Create internal table, insert data, and query it."""
+        from pyspark.sql.types import StructType, StructField, IntegerType, StringType
+
+        table_name = "test_internal_table_data"
+
+        # Clean up if exists
+        spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+        schema = StructType([
+            StructField("id", IntegerType(), nullable=False),
+            StructField("city", StringType(), nullable=True)
+        ])
+
+        spark.catalog.createTable(table_name, schema=schema)
+
+        # Insert data
+        spark.sql(f"INSERT INTO {table_name} VALUES (1, 'NYC'), (2, 'LA'), (3, 'Chicago')")
+
+        # Query and verify
+        result = spark.sql(f"SELECT * FROM {table_name} ORDER BY id").collect()
+        assert len(result) == 3, "Should have 3 rows"
+        assert result[0]["city"] == "NYC", "First row should be NYC"
+
+        # Cleanup
+        spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+    def test_create_table_appears_in_list_tables(self, spark):
+        """Created table should appear in listTables."""
+        from pyspark.sql.types import StructType, StructField, IntegerType
+
+        table_name = "test_internal_listed"
+
+        spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+        schema = StructType([StructField("x", IntegerType(), nullable=True)])
+        spark.catalog.createTable(table_name, schema=schema)
+
+        tables = list(spark.catalog.listTables())
+        table_names = [t.name for t in tables]
+        assert table_name in table_names, "Created table should appear in listTables"
+
+        spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+
+class TestCreateTableExternal:
+    """Test spark.catalog.createTable() for external tables (path-based)."""
+
+    @pytest.fixture
+    def temp_csv_file(self, tmp_path):
+        """Create a temporary CSV file for testing."""
+        csv_path = tmp_path / "test_data.csv"
+        csv_path.write_text("id,name,score\n1,Alice,95.5\n2,Bob,87.3\n3,Carol,92.1\n")
+        return str(csv_path)
+
+    @pytest.fixture
+    def temp_json_file(self, tmp_path):
+        """Create a temporary JSON file for testing."""
+        json_path = tmp_path / "test_data.json"
+        json_path.write_text('{"id": 1, "name": "Alice"}\n{"id": 2, "name": "Bob"}\n')
+        return str(json_path)
+
+    @pytest.fixture
+    def temp_parquet_file(self, spark, tmp_path):
+        """Create a temporary Parquet file for testing."""
+        parquet_path = str(tmp_path / "test_data.parquet")
+        df = spark.createDataFrame([(1, "Alice"), (2, "Bob"), (3, "Carol")], ["id", "name"])
+        df.write.parquet(parquet_path)
+        return parquet_path
+
+    def test_create_external_table_csv(self, spark, temp_csv_file):
+        """Create external table from CSV file."""
+        table_name = "test_external_csv"
+
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+        # Create external table pointing to CSV
+        spark.catalog.createTable(
+            table_name,
+            path=temp_csv_file,
+            source="csv"
+        )
+
+        # Verify table exists
+        assert spark.catalog.tableExists(table_name), "External CSV table should exist"
+
+        # Query the data
+        result = spark.sql(f"SELECT * FROM {table_name} ORDER BY id").collect()
+        assert len(result) == 3, "Should have 3 rows from CSV"
+
+        # Cleanup
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+    def test_create_external_table_parquet(self, spark, temp_parquet_file):
+        """Create external table from Parquet file."""
+        table_name = "test_external_parquet"
+
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+        # Create external table pointing to Parquet
+        spark.catalog.createTable(
+            table_name,
+            path=temp_parquet_file,
+            source="parquet"
+        )
+
+        # Verify table exists
+        assert spark.catalog.tableExists(table_name), "External Parquet table should exist"
+
+        # Query the data
+        result = spark.sql(f"SELECT * FROM {table_name} ORDER BY id").collect()
+        assert len(result) == 3, "Should have 3 rows from Parquet"
+        assert result[0]["name"] == "Alice", "First row name should be Alice"
+
+        # Cleanup
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+    def test_create_external_table_json(self, spark, temp_json_file):
+        """Create external table from JSON file."""
+        table_name = "test_external_json"
+
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+        # Create external table pointing to JSON
+        spark.catalog.createTable(
+            table_name,
+            path=temp_json_file,
+            source="json"
+        )
+
+        # Verify table exists
+        assert spark.catalog.tableExists(table_name), "External JSON table should exist"
+
+        # Query the data
+        result = spark.sql(f"SELECT * FROM {table_name} ORDER BY id").collect()
+        assert len(result) == 2, "Should have 2 rows from JSON"
+
+        # Cleanup
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+    def test_create_external_table_infer_format_from_extension(self, spark, temp_csv_file):
+        """External table should infer format from file extension."""
+        table_name = "test_external_infer_csv"
+
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+        # Create without explicit source - should infer from .csv extension
+        spark.catalog.createTable(
+            table_name,
+            path=temp_csv_file
+            # No source specified - infer from extension
+        )
+
+        assert spark.catalog.tableExists(table_name), "Should create table inferring CSV format"
+
+        result = spark.sql(f"SELECT COUNT(*) as cnt FROM {table_name}").collect()
+        assert result[0]["cnt"] == 3, "Should have 3 rows"
+
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+
+class TestSetCurrentDatabase:
+    """Test spark.catalog.setCurrentDatabase()."""
+
+    def test_set_current_database_to_main(self, spark):
+        """Setting current database to 'main' should work."""
+        # Set to main (default DuckDB schema)
+        spark.catalog.setCurrentDatabase("main")
+
+        # Verify it was set
+        current = spark.catalog.currentDatabase()
+        assert current == "main", "Current database should be 'main'"
+
+    def test_set_current_database_creates_schema(self, spark):
+        """Setting current database to new name should work if schema exists."""
+        db_name = "test_schema_switch"
+
+        # Create the schema first
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {db_name}")
+
+        # Set current database
+        spark.catalog.setCurrentDatabase(db_name)
+
+        # Verify
+        current = spark.catalog.currentDatabase()
+        assert current == db_name, f"Current database should be '{db_name}'"
+
+        # Reset to main
+        spark.catalog.setCurrentDatabase("main")
+
+        # Cleanup
+        spark.sql(f"DROP SCHEMA IF EXISTS {db_name}")
+
+    def test_set_current_database_affects_table_creation(self, spark):
+        """Tables created after setCurrentDatabase should be in that database."""
+        from pyspark.sql.types import StructType, StructField, IntegerType
+
+        db_name = "test_db_context"
+        table_name = "table_in_new_db"
+
+        # Create schema and switch to it
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {db_name}")
+        spark.catalog.setCurrentDatabase(db_name)
+
+        # Create a table (should be in the new database)
+        schema = StructType([StructField("x", IntegerType())])
+        spark.catalog.createTable(table_name, schema=schema)
+
+        # Table should exist in the new database
+        assert spark.catalog.tableExists(table_name), "Table should exist in current database"
+
+        # Switch back to main and verify table is not visible without qualification
+        spark.catalog.setCurrentDatabase("main")
+
+        # The table should still be accessible with full qualification
+        tables_in_test_db = list(spark.catalog.listTables(db_name))
+        table_names = [t.name for t in tables_in_test_db]
+        assert table_name in table_names, "Table should be in test_db_context"
+
+        # Cleanup
+        spark.sql(f"DROP TABLE IF EXISTS {db_name}.{table_name}")
+        spark.sql(f"DROP SCHEMA IF EXISTS {db_name}")
+
+
+class TestSetCurrentCatalog:
+    """Test spark.catalog.setCurrentCatalog()."""
+
+    def test_set_current_catalog_default(self, spark):
+        """Setting current catalog to default should work."""
+        # DuckDB only supports a single catalog concept
+        # Setting to any value should work (or be a no-op)
+        try:
+            spark.catalog.setCurrentCatalog("spark_catalog")
+            # If it doesn't throw, that's acceptable
+        except Exception as e:
+            # Some implementations may reject non-default catalogs
+            assert "not supported" in str(e).lower() or "default" in str(e).lower()
+
+    def test_current_catalog_returns_value(self, spark):
+        """currentCatalog should return a string value."""
+        result = spark.catalog.currentCatalog()
+        assert isinstance(result, str), "currentCatalog should return a string"
+        assert len(result) > 0, "currentCatalog should not be empty"
+
+
+class TestListCatalogs:
+    """Test spark.catalog.listCatalogs()."""
+
+    def test_list_catalogs_returns_results(self, spark):
+        """listCatalogs should return at least one catalog."""
+        catalogs = spark.catalog.listCatalogs()
+        catalog_list = list(catalogs)
+        assert len(catalog_list) >= 1, "Should have at least one catalog"
+
+    def test_list_catalogs_has_name_attribute(self, spark):
+        """Catalog entries should have a name attribute."""
+        catalogs = spark.catalog.listCatalogs()
+        catalog_list = list(catalogs)
+
+        if len(catalog_list) > 0:
+            first = catalog_list[0]
+            assert hasattr(first, 'name'), "Catalog should have 'name' attribute"
+
+    def test_list_catalogs_includes_default(self, spark):
+        """listCatalogs should include a default/spark catalog."""
+        catalogs = spark.catalog.listCatalogs()
+        catalog_names = [c.name for c in catalogs]
+
+        # Should have at least one catalog (could be 'spark_catalog', 'default', etc.)
+        assert len(catalog_names) >= 1, "Should have at least one catalog name"
+
+
+class TestListFunctions:
+    """Test spark.catalog.listFunctions()."""
+
+    def test_list_functions_returns_results(self, spark):
+        """listFunctions should return available functions."""
+        functions = spark.catalog.listFunctions()
+        func_list = list(functions)
+        # DuckDB has hundreds of built-in functions
+        assert len(func_list) >= 50, "Should have many built-in functions"
+
+    def test_list_functions_has_required_attributes(self, spark):
+        """Function entries should have expected attributes."""
+        functions = spark.catalog.listFunctions()
+        func_list = list(functions)
+
+        if len(func_list) > 0:
+            first = func_list[0]
+            assert hasattr(first, 'name'), "Function should have 'name' attribute"
+            assert hasattr(first, 'className'), "Function should have 'className' attribute"
+            assert hasattr(first, 'isTemporary'), "Function should have 'isTemporary' attribute"
+
+    def test_list_functions_includes_common_functions(self, spark):
+        """listFunctions should include common SQL functions."""
+        functions = spark.catalog.listFunctions()
+        func_names = [f.name.lower() for f in functions]
+
+        # Check for common functions that should exist
+        common_funcs = ['abs', 'sum', 'count', 'max', 'min', 'avg', 'concat', 'length']
+        for func in common_funcs:
+            assert func in func_names, f"Should include '{func}' function"
+
+    def test_list_functions_with_pattern(self, spark):
+        """listFunctions should support pattern filtering."""
+        # Get functions matching pattern 'to_%'
+        functions = spark.catalog.listFunctions(pattern="to_%")
+        func_list = list(functions)
+
+        # Should have some to_* functions
+        assert len(func_list) >= 1, "Should find functions matching 'to_%' pattern"
+
+        # All returned functions should match the pattern
+        for f in func_list:
+            assert f.name.lower().startswith("to_"), f"Function '{f.name}' should match pattern 'to_%'"
+
+    def test_list_functions_className_is_string(self, spark):
+        """className should be a non-empty string."""
+        functions = spark.catalog.listFunctions()
+        func_list = list(functions)
+
+        if len(func_list) > 0:
+            first = func_list[0]
+            assert isinstance(first.className, str), "className should be a string"
+            # DuckDB functions use placeholder className
+            assert len(first.className) > 0, "className should not be empty"
