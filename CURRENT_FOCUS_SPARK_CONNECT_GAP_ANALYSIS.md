@@ -22,11 +22,11 @@ This document provides a detailed gap analysis between Spark Connect 4.0.x's pro
 | Relations | 40 | 28 | 0 | **70%** |
 | Expressions | 16 | 9 | 0 | **56.25%** |
 | Commands | 10 | 2 | 1 | **25-30%** |
-| Catalog | 26 | 18 | 0 | **69%** |
+| Catalog | 26 | 22 | 0 | **85%** |
 
 *Partial implementations*: WriteOperation (local paths only, S3/cloud needs httpfs extension)
 
-*Catalog Note*: 18 catalog operations implemented (M41-M43). CREATE TABLE supports both internal tables and external tables (CSV/Parquet/JSON via VIEWs). ListFunctions queries duckdb_functions(). 7 no-op operations for DuckDB compatibility. Remaining 8 are low-priority metadata operations.
+*Catalog Note*: 22 catalog operations implemented (M41-M44). CREATE TABLE supports both internal tables and external tables (CSV/Parquet/JSON via VIEWs). ListFunctions queries duckdb_functions(). GetDatabase/GetTable/GetFunction/FunctionExists completed in M44. 7 no-op operations for DuckDB compatibility. Remaining 4 are streaming/partition-related operations.
 
 ---
 
@@ -204,7 +204,7 @@ Catalog operations allow interaction with Spark's metadata catalog.
 
 ### 4.1 Implementation Status
 
-**Implemented (M41-M43, 2025-12-16):**
+**Implemented (M41-M44, 2025-12-16):**
 
 | Operation | Proto Message | Status | Use Case |
 |-----------|---------------|--------|----------|
@@ -229,17 +229,21 @@ Catalog operations allow interaction with Spark's metadata catalog.
 | **RefreshTable** | `refresh_table` | ✅ No-op | Logs info, no-op |
 | **RefreshByPath** | `refresh_by_path` | ✅ No-op | Logs info, no-op |
 | **RecoverPartitions** | `recover_partitions` | ✅ No-op | Logs info, no-op |
+| **GetDatabase** | `get_database` | ✅ Implemented | `spark.catalog.getDatabase` (M44) - throws NOT_FOUND if missing |
+| **GetTable** | `get_table` | ✅ Implemented | `spark.catalog.getTable` (M44) - returns table metadata |
+| **GetFunction** | `get_function` | ✅ Implemented | `spark.catalog.getFunction` (M44) - queries duckdb_functions() |
+| **FunctionExists** | `function_exists` | ✅ Implemented | `spark.catalog.functionExists` (M44) - boolean check |
 
 *Note*: CreateExternalTable is internally forwarded to CreateTable - external tables are created as VIEWs over file readers (csv, parquet, json).
 
-**Not Implemented:**
+**Not Implemented (Low priority):**
 
 | Operation | Proto Message | Priority | Use Case |
 |-----------|---------------|----------|----------|
-| **GetDatabase** | `get_database` | 🟢 LOW | `spark.catalog.getDatabase` |
-| **GetTable** | `get_table` | 🟢 LOW | `spark.catalog.getTable` |
-| **GetFunction** | `get_function` | 🟢 LOW | `spark.catalog.getFunction` |
-| **FunctionExists** | `function_exists` | 🟢 LOW | `spark.catalog.functionExists` |
+| **CreateExternalTable** | `create_external_table` | 🟢 LOW | Forwarded to CreateTable internally |
+| **CreatePartitionedTable** | `create_partitioned_table` | 🟢 LOW | Partitioning not applicable to DuckDB |
+| **DropPartition** | `drop_partition` | 🟢 LOW | Partitioning not applicable to DuckDB |
+| **AddPartition** | `add_partition` | 🟢 LOW | Partitioning not applicable to DuckDB |
 
 ---
 
@@ -519,16 +523,21 @@ df.write.parquet("/local/path")               # WriteOperation (M24) - local pat
 df.write.csv("/local/path")                   # WriteOperation (M24) - local paths only
 df.write.json("/local/path")                  # WriteOperation (M24) - local paths only
 
-# CATALOG operations (M41, M42):
+# CATALOG operations (M41-M44):
 spark.catalog.tableExists("table")            # Check table/view exists
 spark.catalog.databaseExists("db")            # Check database exists
 spark.catalog.listTables()                    # List tables in current database
 spark.catalog.listDatabases()                 # List all databases
 spark.catalog.listColumns("table")            # List columns in table
+spark.catalog.listFunctions()                 # List available functions (M43)
 spark.catalog.currentDatabase()               # Get current database name
 spark.catalog.setCurrentDatabase("db")        # Set current database
 spark.catalog.dropTempView("view")            # Drop temp view
 spark.catalog.createTable("t", schema=schema) # Create persistent table (M42)
+spark.catalog.getDatabase("main")             # Get database metadata (M44)
+spark.catalog.getTable("table")               # Get table metadata (M44)
+spark.catalog.getFunction("abs")              # Get function metadata (M44)
+spark.catalog.functionExists("sum")           # Check function exists (M44)
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
@@ -545,9 +554,8 @@ df.write.csv("s3://bucket/path")              # S3 writes need httpfs extension
 df.describe()                                 # StatDescribe - returns DataFrame!
 df.summary()                                  # StatSummary - returns DataFrame!
 
-# CATALOG partially implemented:
-spark.catalog.createExternalTable(...)        # External tables not yet supported
-spark.catalog.listFunctions()                 # Function listing not yet supported
+# CATALOG complete (22/26 operations):
+# Remaining operations are partition-related (not applicable to DuckDB)
 ```
 
 ## Appendix C: Actions vs Transformations
@@ -572,7 +580,7 @@ spark.catalog.listFunctions()                 # Function listing not yet support
 
 ---
 
-**Document Version:** 3.4
+**Document Version:** 3.5
 **Last Updated:** 2025-12-16
 **Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 
@@ -580,6 +588,7 @@ spark.catalog.listFunctions()                 # Function listing not yet support
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v3.5 | 2025-12-16 | Added GetDatabase, GetTable, GetFunction, FunctionExists (M44). Catalog operations now 22/26 (85%). |
 | v3.4 | 2025-12-16 | Added ListFunctions (M43), external table support via CreateTable (CSV/Parquet/JSON as VIEWs). Documented all no-op operations as implemented. 18/26 catalog ops (69%). |
 | v3.3 | 2025-12-16 | Added CREATE TABLE (M42) with per-session persistent databases. 9/26 catalog ops (35%). |
 | v3.2 | 2025-12-16 | Added differential test validation (266 tests). Expanded function support with validated functions (57 tests), window functions (35 tests), multi-dim aggregations (21 tests). |

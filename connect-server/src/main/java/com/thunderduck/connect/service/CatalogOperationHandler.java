@@ -21,6 +21,10 @@ import org.apache.spark.connect.proto.CurrentCatalog;
 import org.apache.spark.connect.proto.CurrentDatabase;
 import org.apache.spark.connect.proto.DataType;
 import org.apache.spark.connect.proto.DatabaseExists;
+import org.apache.spark.connect.proto.FunctionExists;
+import org.apache.spark.connect.proto.GetDatabase;
+import org.apache.spark.connect.proto.GetFunction;
+import org.apache.spark.connect.proto.GetTable;
 import org.apache.spark.connect.proto.DropGlobalTempView;
 import org.apache.spark.connect.proto.DropTempView;
 import org.apache.spark.connect.proto.ExecutePlanResponse;
@@ -80,6 +84,10 @@ import static com.thunderduck.generator.SQLQuoting.quoteIdentifier;
  *   <li>SET_CURRENT_CATALOG - Set current catalog (only "default" supported)</li>
  *   <li>LIST_CATALOGS - List catalogs (returns ["default"])</li>
  *   <li>LIST_FUNCTIONS - List available functions (from duckdb_functions())</li>
+ *   <li>GET_DATABASE - Get metadata for a specific database/schema</li>
+ *   <li>GET_TABLE - Get metadata for a specific table</li>
+ *   <li>GET_FUNCTION - Get metadata for a specific function</li>
+ *   <li>FUNCTION_EXISTS - Check if a function exists</li>
  *   <li>CREATE_TABLE - Create a persistent table (internal or external)</li>
  * </ul>
  */
@@ -126,6 +134,22 @@ public class CatalogOperationHandler {
 
                 case DATABASE_EXISTS:
                     handleDatabaseExists(catalog.getDatabaseExists(), session, responseObserver);
+                    break;
+
+                case GET_DATABASE:
+                    handleGetDatabase(catalog.getGetDatabase(), session, responseObserver);
+                    break;
+
+                case GET_TABLE:
+                    handleGetTable(catalog.getGetTable(), session, responseObserver);
+                    break;
+
+                case GET_FUNCTION:
+                    handleGetFunction(catalog.getGetFunction(), session, responseObserver);
+                    break;
+
+                case FUNCTION_EXISTS:
+                    handleFunctionExists(catalog.getFunctionExists(), session, responseObserver);
                     break;
 
                 case CURRENT_DATABASE:
@@ -686,6 +710,298 @@ public class CatalogOperationHandler {
             resultHandler.streamBooleanResult(exists);
 
             logger.info("✓ databaseExists('{}') = {}", dbName, exists);
+        }
+    }
+
+    /**
+     * Handle GET_DATABASE operation.
+     *
+     * Returns Arrow table with single row containing database metadata:
+     * - name: string
+     * - catalog: string
+     * - description: string
+     * - locationUri: string
+     */
+    private void handleGetDatabase(GetDatabase getDatabase, Session session,
+                                   StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String dbName = getDatabase.getDbName();
+
+        logger.info("Getting database: '{}'", dbName);
+
+        // Query for the database (schema in DuckDB)
+        String sql = "SELECT schema_name FROM information_schema.schemata " +
+                    "WHERE schema_name = '" + escapeSql(dbName) + "' " +
+                    "AND schema_name NOT IN ('information_schema', 'pg_catalog')";
+
+        logger.debug("Executing: {}", sql);
+
+        QueryExecutor executor = new QueryExecutor(session.getRuntime());
+        try (VectorSchemaRoot queryResult = executor.executeQuery(sql)) {
+            if (queryResult.getRowCount() == 0) {
+                responseObserver.onError(Status.NOT_FOUND
+                    .withDescription("Database '" + dbName + "' not found")
+                    .asRuntimeException());
+                return;
+            }
+
+            // Build result with database metadata
+            try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
+                Schema schema = createListDatabasesSchema();
+                VectorSchemaRoot result = VectorSchemaRoot.create(schema, allocator);
+                result.setRowCount(1);
+
+                VarCharVector nameVec = (VarCharVector) result.getVector("name");
+                VarCharVector catalogVec = (VarCharVector) result.getVector("catalog");
+                VarCharVector descVec = (VarCharVector) result.getVector("description");
+                VarCharVector locVec = (VarCharVector) result.getVector("locationUri");
+
+                nameVec.allocateNew(1);
+                catalogVec.allocateNew(1);
+                descVec.allocateNew(1);
+                locVec.allocateNew(1);
+
+                nameVec.set(0, dbName.getBytes(StandardCharsets.UTF_8));
+                catalogVec.set(0, "spark_catalog".getBytes(StandardCharsets.UTF_8));
+                descVec.set(0, "".getBytes(StandardCharsets.UTF_8));
+                locVec.set(0, "".getBytes(StandardCharsets.UTF_8));
+
+                nameVec.setValueCount(1);
+                catalogVec.setValueCount(1);
+                descVec.setValueCount(1);
+                locVec.setValueCount(1);
+
+                String operationId = UUID.randomUUID().toString();
+                StreamingResultHandler resultHandler = new StreamingResultHandler(
+                    responseObserver, session.getSessionId(), operationId);
+                resultHandler.streamArrowResult(result);
+
+                logger.info("✓ getDatabase('{}') returned metadata", dbName);
+            }
+        }
+    }
+
+    /**
+     * Handle GET_TABLE operation.
+     *
+     * Returns Arrow table with single row containing table metadata:
+     * - name: string
+     * - catalog: string
+     * - namespace: string (JSON array)
+     * - description: string
+     * - tableType: string
+     * - isTemporary: boolean
+     */
+    private void handleGetTable(GetTable getTable, Session session,
+                                StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String tableName = getTable.getTableName();
+        String dbName = getTable.hasDbName() ? getTable.getDbName() : null;
+
+        logger.info("Getting table: '{}' (db={})", tableName, dbName);
+
+        // Build query
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT table_name, table_schema, table_type FROM information_schema.tables ");
+        sql.append("WHERE table_name = '").append(escapeSql(tableName)).append("' ");
+        sql.append("AND ").append(SCHEMA_FILTER);
+        if (dbName != null) {
+            sql.append(" AND table_schema = '").append(escapeSql(dbName)).append("'");
+        }
+
+        logger.debug("Executing: {}", sql);
+
+        QueryExecutor executor = new QueryExecutor(session.getRuntime());
+        try (VectorSchemaRoot queryResult = executor.executeQuery(sql.toString())) {
+            if (queryResult.getRowCount() == 0) {
+                responseObserver.onError(Status.NOT_FOUND
+                    .withDescription("Table '" + tableName + "' not found")
+                    .asRuntimeException());
+                return;
+            }
+
+            // Get first result
+            VarCharVector srcName = (VarCharVector) queryResult.getVector("table_name");
+            VarCharVector srcSchema = (VarCharVector) queryResult.getVector("table_schema");
+            VarCharVector srcType = (VarCharVector) queryResult.getVector("table_type");
+
+            String name = new String(srcName.get(0), StandardCharsets.UTF_8);
+            String schemaName = new String(srcSchema.get(0), StandardCharsets.UTF_8);
+            String tableType = new String(srcType.get(0), StandardCharsets.UTF_8);
+
+            // Build result
+            try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
+                Schema schema = createListTablesSchema();
+                VectorSchemaRoot result = VectorSchemaRoot.create(schema, allocator);
+                result.setRowCount(1);
+
+                VarCharVector nameVec = (VarCharVector) result.getVector("name");
+                VarCharVector catalogVec = (VarCharVector) result.getVector("catalog");
+                VarCharVector namespaceVec = (VarCharVector) result.getVector("namespace");
+                VarCharVector descVec = (VarCharVector) result.getVector("description");
+                VarCharVector typeVec = (VarCharVector) result.getVector("tableType");
+                BitVector tempVec = (BitVector) result.getVector("isTemporary");
+
+                nameVec.allocateNew(1);
+                catalogVec.allocateNew(1);
+                namespaceVec.allocateNew(1);
+                descVec.allocateNew(1);
+                typeVec.allocateNew(1);
+                tempVec.allocateNew(1);
+
+                nameVec.set(0, name.getBytes(StandardCharsets.UTF_8));
+                catalogVec.set(0, "spark_catalog".getBytes(StandardCharsets.UTF_8));
+                namespaceVec.set(0, ("[\"" + schemaName + "\"]").getBytes(StandardCharsets.UTF_8));
+                descVec.set(0, "".getBytes(StandardCharsets.UTF_8));
+                typeVec.set(0, mapTableType(tableType).getBytes(StandardCharsets.UTF_8));
+                tempVec.set(0, session.getTempView(name).isPresent() ? 1 : 0);
+
+                nameVec.setValueCount(1);
+                catalogVec.setValueCount(1);
+                namespaceVec.setValueCount(1);
+                descVec.setValueCount(1);
+                typeVec.setValueCount(1);
+                tempVec.setValueCount(1);
+
+                String operationId = UUID.randomUUID().toString();
+                StreamingResultHandler resultHandler = new StreamingResultHandler(
+                    responseObserver, session.getSessionId(), operationId);
+                resultHandler.streamArrowResult(result);
+
+                logger.info("✓ getTable('{}') returned metadata", tableName);
+            }
+        }
+    }
+
+    /**
+     * Handle GET_FUNCTION operation.
+     *
+     * Returns Arrow table with single row containing function metadata:
+     * - name: string
+     * - catalog: string
+     * - namespace: string (JSON array)
+     * - description: string
+     * - className: string
+     * - isTemporary: boolean
+     */
+    private void handleGetFunction(GetFunction getFunction, Session session,
+                                   StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String functionName = getFunction.getFunctionName();
+        String dbName = getFunction.hasDbName() ? getFunction.getDbName() : null;
+
+        logger.info("Getting function: '{}' (db={})", functionName, dbName);
+
+        // Query duckdb_functions()
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT DISTINCT function_name, schema_name, COALESCE(description, '') as description ");
+        sql.append("FROM duckdb_functions() ");
+        sql.append("WHERE function_name = '").append(escapeSql(functionName)).append("' ");
+        sql.append("AND schema_name NOT IN ('information_schema', 'pg_catalog') ");
+        if (dbName != null) {
+            sql.append("AND schema_name = '").append(escapeSql(dbName)).append("' ");
+        }
+        sql.append("LIMIT 1");
+
+        logger.debug("Executing: {}", sql);
+
+        QueryExecutor executor = new QueryExecutor(session.getRuntime());
+        try (VectorSchemaRoot queryResult = executor.executeQuery(sql.toString())) {
+            if (queryResult.getRowCount() == 0) {
+                responseObserver.onError(Status.NOT_FOUND
+                    .withDescription("Function '" + functionName + "' not found")
+                    .asRuntimeException());
+                return;
+            }
+
+            // Get first result
+            VarCharVector srcName = (VarCharVector) queryResult.getVector("function_name");
+            VarCharVector srcSchema = (VarCharVector) queryResult.getVector("schema_name");
+            VarCharVector srcDesc = (VarCharVector) queryResult.getVector("description");
+
+            String name = new String(srcName.get(0), StandardCharsets.UTF_8);
+            String schemaName = new String(srcSchema.get(0), StandardCharsets.UTF_8);
+            String description = srcDesc.isNull(0) ? "" : new String(srcDesc.get(0), StandardCharsets.UTF_8);
+
+            // Build result
+            try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
+                Schema schema = createListFunctionsSchema();
+                VectorSchemaRoot result = VectorSchemaRoot.create(schema, allocator);
+                result.setRowCount(1);
+
+                VarCharVector nameVec = (VarCharVector) result.getVector("name");
+                VarCharVector catalogVec = (VarCharVector) result.getVector("catalog");
+                VarCharVector namespaceVec = (VarCharVector) result.getVector("namespace");
+                VarCharVector descVec = (VarCharVector) result.getVector("description");
+                VarCharVector classNameVec = (VarCharVector) result.getVector("className");
+                BitVector tempVec = (BitVector) result.getVector("isTemporary");
+
+                nameVec.allocateNew(1);
+                catalogVec.allocateNew(1);
+                namespaceVec.allocateNew(1);
+                descVec.allocateNew(1);
+                classNameVec.allocateNew(1);
+                tempVec.allocateNew(1);
+
+                nameVec.set(0, name.getBytes(StandardCharsets.UTF_8));
+                catalogVec.set(0, "spark_catalog".getBytes(StandardCharsets.UTF_8));
+                namespaceVec.set(0, ("[\"" + schemaName + "\"]").getBytes(StandardCharsets.UTF_8));
+                descVec.set(0, description.getBytes(StandardCharsets.UTF_8));
+                classNameVec.set(0, ("org.duckdb.builtin." + name).getBytes(StandardCharsets.UTF_8));
+                tempVec.set(0, 0);
+
+                nameVec.setValueCount(1);
+                catalogVec.setValueCount(1);
+                namespaceVec.setValueCount(1);
+                descVec.setValueCount(1);
+                classNameVec.setValueCount(1);
+                tempVec.setValueCount(1);
+
+                String operationId = UUID.randomUUID().toString();
+                StreamingResultHandler resultHandler = new StreamingResultHandler(
+                    responseObserver, session.getSessionId(), operationId);
+                resultHandler.streamArrowResult(result);
+
+                logger.info("✓ getFunction('{}') returned metadata", functionName);
+            }
+        }
+    }
+
+    /**
+     * Handle FUNCTION_EXISTS operation.
+     *
+     * Returns boolean indicating if function exists.
+     */
+    private void handleFunctionExists(FunctionExists functionExists, Session session,
+                                      StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String functionName = functionExists.getFunctionName();
+        String dbName = functionExists.hasDbName() ? functionExists.getDbName() : null;
+
+        logger.info("Checking function exists: '{}' (db={})", functionName, dbName);
+
+        // Query duckdb_functions()
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT EXISTS(SELECT 1 FROM duckdb_functions() ");
+        sql.append("WHERE function_name = '").append(escapeSql(functionName)).append("' ");
+        sql.append("AND schema_name NOT IN ('information_schema', 'pg_catalog') ");
+        if (dbName != null) {
+            sql.append("AND schema_name = '").append(escapeSql(dbName)).append("' ");
+        }
+        sql.append(") AS result");
+
+        logger.debug("Executing: {}", sql);
+
+        QueryExecutor executor = new QueryExecutor(session.getRuntime());
+        try (VectorSchemaRoot result = executor.executeQuery(sql.toString())) {
+            boolean exists = false;
+            if (result.getRowCount() > 0) {
+                BitVector vec = (BitVector) result.getVector(0);
+                exists = vec.get(0) == 1;
+            }
+
+            String operationId = UUID.randomUUID().toString();
+            StreamingResultHandler resultHandler = new StreamingResultHandler(
+                responseObserver, session.getSessionId(), operationId);
+            resultHandler.streamBooleanResult(exists);
+
+            logger.info("✓ functionExists('{}') = {}", functionName, exists);
         }
     }
 

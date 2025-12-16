@@ -550,3 +550,107 @@ class TestListFunctions:
             assert isinstance(first.className, str), "className should be a string"
             # DuckDB functions use placeholder className
             assert len(first.className) > 0, "className should not be empty"
+
+
+class TestGetDatabase:
+    """Test spark.catalog.getDatabase()."""
+
+    def test_get_database_main(self, spark):
+        """getDatabase should return metadata for 'main' database."""
+        db = spark.catalog.getDatabase("main")
+        assert db is not None, "Should return database object"
+        assert db.name == "main", "Database name should be 'main'"
+
+    def test_get_database_has_attributes(self, spark):
+        """Database object should have expected attributes."""
+        db = spark.catalog.getDatabase("main")
+        assert hasattr(db, 'name'), "Should have 'name' attribute"
+        assert hasattr(db, 'catalog'), "Should have 'catalog' attribute"
+        assert hasattr(db, 'description'), "Should have 'description' attribute"
+
+    def test_get_database_not_found(self, spark):
+        """getDatabase should raise error for non-existent database."""
+        try:
+            spark.catalog.getDatabase("nonexistent_db_xyz")
+            assert False, "Should raise exception for non-existent database"
+        except Exception as e:
+            # Should get some kind of error
+            assert "not found" in str(e).lower() or "does not exist" in str(e).lower()
+
+
+class TestGetTable:
+    """Test spark.catalog.getTable()."""
+
+    def test_get_table_exists(self, spark, setup_test_tables):
+        """getTable should return metadata for existing table."""
+        table = spark.catalog.getTable("test_catalog_table")
+        assert table is not None, "Should return table object"
+        assert table.name == "test_catalog_table", "Table name should match"
+
+    def test_get_table_has_attributes(self, spark, setup_test_tables):
+        """Table object should have expected attributes."""
+        table = spark.catalog.getTable("test_catalog_table")
+        assert hasattr(table, 'name'), "Should have 'name' attribute"
+        assert hasattr(table, 'tableType'), "Should have 'tableType' attribute"
+        assert hasattr(table, 'isTemporary'), "Should have 'isTemporary' attribute"
+
+    def test_get_table_view(self, spark, setup_test_tables):
+        """getTable should work for views."""
+        table = spark.catalog.getTable("test_catalog_view")
+        assert table is not None, "Should return view object"
+        assert table.tableType == "VIEW", "View should have tableType 'VIEW'"
+
+    def test_get_table_not_found(self, spark):
+        """getTable should raise error for non-existent table."""
+        try:
+            spark.catalog.getTable("nonexistent_table_xyz")
+            assert False, "Should raise exception for non-existent table"
+        except Exception as e:
+            assert "not found" in str(e).lower() or "does not exist" in str(e).lower()
+
+
+class TestGetFunction:
+    """Test spark.catalog.getFunction()."""
+
+    def test_get_function_exists(self, spark):
+        """getFunction should return metadata for existing function."""
+        func = spark.catalog.getFunction("abs")
+        assert func is not None, "Should return function object"
+        assert func.name == "abs", "Function name should be 'abs'"
+
+    def test_get_function_has_attributes(self, spark):
+        """Function object should have expected attributes."""
+        func = spark.catalog.getFunction("sum")
+        assert hasattr(func, 'name'), "Should have 'name' attribute"
+        assert hasattr(func, 'className'), "Should have 'className' attribute"
+        assert hasattr(func, 'isTemporary'), "Should have 'isTemporary' attribute"
+
+    def test_get_function_not_found(self, spark):
+        """getFunction should raise error for non-existent function."""
+        try:
+            spark.catalog.getFunction("nonexistent_function_xyz")
+            assert False, "Should raise exception for non-existent function"
+        except Exception as e:
+            assert "not found" in str(e).lower() or "does not exist" in str(e).lower()
+
+
+class TestFunctionExists:
+    """Test spark.catalog.functionExists()."""
+
+    def test_function_exists_true(self, spark):
+        """functionExists should return True for existing functions."""
+        # 'abs' is a common SQL function that should exist
+        result = spark.catalog.functionExists("abs")
+        assert result is True, "functionExists should return True for 'abs'"
+
+    def test_function_exists_false(self, spark):
+        """functionExists should return False for non-existent functions."""
+        result = spark.catalog.functionExists("nonexistent_function_xyz")
+        assert result is False, "functionExists should return False for non-existent function"
+
+    def test_function_exists_common_functions(self, spark):
+        """functionExists should return True for common SQL functions."""
+        common_funcs = ['sum', 'count', 'max', 'min', 'avg', 'concat']
+        for func in common_funcs:
+            result = spark.catalog.functionExists(func)
+            assert result is True, f"functionExists should return True for '{func}'"
