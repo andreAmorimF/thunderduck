@@ -16,6 +16,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.spark.connect.proto.CacheTable;
 import org.apache.spark.connect.proto.Catalog;
 import org.apache.spark.connect.proto.ClearCache;
+import org.apache.spark.connect.proto.CreateExternalTable;
 import org.apache.spark.connect.proto.CreateTable;
 import org.apache.spark.connect.proto.CurrentCatalog;
 import org.apache.spark.connect.proto.CurrentDatabase;
@@ -89,6 +90,7 @@ import static com.thunderduck.generator.SQLQuoting.quoteIdentifier;
  *   <li>GET_FUNCTION - Get metadata for a specific function</li>
  *   <li>FUNCTION_EXISTS - Check if a function exists</li>
  *   <li>CREATE_TABLE - Create a persistent table (internal or external)</li>
+ *   <li>CREATE_EXTERNAL_TABLE - Create external table (delegates to CREATE_TABLE)</li>
  * </ul>
  */
 public class CatalogOperationHandler {
@@ -210,6 +212,12 @@ public class CatalogOperationHandler {
 
                 case CREATE_TABLE:
                     handleCreateTable(catalog.getCreateTable(), session, responseObserver);
+                    break;
+
+                case CREATE_EXTERNAL_TABLE:
+                    // Forward CREATE_EXTERNAL_TABLE to handleCreateTable
+                    // CreateExternalTable is essentially CreateTable with a path
+                    handleCreateExternalTable(catalog.getCreateExternalTable(), session, responseObserver);
                     break;
 
                 default:
@@ -1601,6 +1609,39 @@ public class CatalogOperationHandler {
     private String escapeSingleQuote(String value) {
         if (value == null) return "";
         return value.replace("'", "''");
+    }
+
+    /**
+     * Handle CREATE_EXTERNAL_TABLE operation by delegating to handleCreateTable.
+     * CreateExternalTable is essentially the same as CreateTable with a path specified.
+     *
+     * @param createExternalTable the request
+     * @param session the session
+     * @param responseObserver the response observer
+     */
+    private void handleCreateExternalTable(CreateExternalTable createExternalTable, Session session,
+                                           StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        logger.info("CREATE_EXTERNAL_TABLE: '{}' (delegating to CreateTable)", createExternalTable.getTableName());
+
+        // Convert CreateExternalTable to CreateTable
+        // CreateExternalTable has: tableName, path, source, schema, options
+        // CreateTable has: tableName, path, source, description, schema, options
+        CreateTable.Builder builder = CreateTable.newBuilder()
+            .setTableName(createExternalTable.getTableName());
+
+        if (createExternalTable.hasPath()) {
+            builder.setPath(createExternalTable.getPath());
+        }
+        if (createExternalTable.hasSource()) {
+            builder.setSource(createExternalTable.getSource());
+        }
+        if (createExternalTable.hasSchema()) {
+            builder.setSchema(createExternalTable.getSchema());
+        }
+        builder.putAllOptions(createExternalTable.getOptionsMap());
+
+        // Delegate to handleCreateTable
+        handleCreateTable(builder.build(), session, responseObserver);
     }
 
     // ==================== Helper Methods ====================

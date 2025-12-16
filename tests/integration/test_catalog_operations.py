@@ -385,6 +385,64 @@ class TestCreateTableExternal:
         spark.sql(f"DROP VIEW IF EXISTS {table_name}")
 
 
+class TestCreateExternalTable:
+    """Test spark.catalog.createExternalTable() API (delegates to createTable internally)."""
+
+    @pytest.fixture
+    def temp_csv_file(self, tmp_path):
+        """Create a temporary CSV file for testing."""
+        csv_path = tmp_path / "external_test.csv"
+        csv_path.write_text("id,value\n1,alpha\n2,beta\n3,gamma\n")
+        return str(csv_path)
+
+    def test_create_external_table_csv(self, spark, temp_csv_file):
+        """createExternalTable should create external table from CSV."""
+        table_name = "test_create_external_api"
+
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+        # Use the createExternalTable API (not createTable)
+        spark.catalog.createExternalTable(
+            table_name,
+            path=temp_csv_file,
+            source="csv"
+        )
+
+        # Verify table exists
+        assert spark.catalog.tableExists(table_name), "External table should exist"
+
+        # Query the data
+        result = spark.sql(f"SELECT * FROM {table_name} ORDER BY id").collect()
+        assert len(result) == 3, "Should have 3 rows"
+        assert result[0]["value"] == "alpha", "First row value should be alpha"
+
+        # Cleanup
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+    def test_create_external_table_with_options(self, spark, tmp_path):
+        """createExternalTable should pass options to the reader."""
+        # Create CSV with custom delimiter
+        csv_path = tmp_path / "delim_test.csv"
+        csv_path.write_text("id|name\n1|Alice\n2|Bob\n")
+
+        table_name = "test_external_options"
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+        spark.catalog.createExternalTable(
+            table_name,
+            path=str(csv_path),
+            source="csv",
+            delimiter="|"
+        )
+
+        assert spark.catalog.tableExists(table_name), "External table should exist"
+
+        result = spark.sql(f"SELECT * FROM {table_name} ORDER BY id").collect()
+        assert len(result) == 2, "Should have 2 rows"
+
+        spark.sql(f"DROP VIEW IF EXISTS {table_name}")
+
+
 class TestSetCurrentDatabase:
     """Test spark.catalog.setCurrentDatabase()."""
 
