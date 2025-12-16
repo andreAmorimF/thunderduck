@@ -626,7 +626,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         if (root == null || root.getRowCount() == 0) {
             // Empty relation - generate a VALUES clause that returns no rows
-            sql.append(generateEmptyValues());
+            // Use schema string if available to preserve column names
+            sql.append(generateEmptyValues(plan.getSchemaString()));
         } else if (root.getRowCount() <= 100) {
             // Small dataset - use VALUES clause
             sql.append(generateValuesClause(root));
@@ -637,13 +638,265 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
-     * Generates an empty VALUES clause that returns no rows.
-     * Example: SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE
+     * Generates an empty VALUES clause that returns no rows, preserving schema.
+     * Example with schema: SELECT CAST(NULL AS INT) AS "id", CAST(NULL AS STRING) AS "name" WHERE FALSE
+     * Example without schema: SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE
      *
-     * @return SQL for empty values
+     * @param schemaStr optional DDL schema string (e.g., "id INT, name STRING")
+     * @return SQL for empty values with proper column names
      */
-    public String generateEmptyValues() {
-        return "SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE";
+    public String generateEmptyValues(String schemaStr) {
+        if (schemaStr == null || schemaStr.isEmpty()) {
+            return "SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE";
+        }
+
+        // Try JSON format first (used by PySpark 4.0+)
+        List<String[]> columns = null;
+        if (schemaStr.trim().startsWith("{")) {
+            columns = parseJSONSchema(schemaStr);
+        }
+
+        // Fall back to DDL format like "id INT, name STRING"
+        if (columns == null || columns.isEmpty()) {
+            columns = parseDDLSchema(schemaStr);
+        }
+
+        if (columns == null || columns.isEmpty()) {
+            return "SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE";
+        }
+
+        StringBuilder result = new StringBuilder("SELECT ");
+        for (int i = 0; i < columns.size(); i++) {
+            if (i > 0) {
+                result.append(", ");
+            }
+            String colName = columns.get(i)[0];
+            String colType = columns.get(i)[1];
+            // Generate CAST(NULL AS type) AS "colName" for each column
+            result.append("CAST(NULL AS ").append(mapSparkTypeToDuckDB(colType))
+                  .append(") AS ").append(quoteIdentifier(colName));
+        }
+        result.append(" WHERE FALSE");
+        return result.toString();
+    }
+
+    /**
+     * Parses a JSON schema string into column name/type pairs.
+     * Handles format like: {"fields":[{"name":"id","type":"integer"},{"name":"name","type":"string"}],"type":"struct"}
+     *
+     * @param schemaStr the JSON schema string
+     * @return list of [name, type] arrays, or null if parsing fails
+     */
+    private List<String[]> parseJSONSchema(String schemaStr) {
+        List<String[]> columns = new ArrayList<>();
+        try {
+            // Simple JSON parsing without external library
+            // Look for "fields" array
+            int fieldsIdx = schemaStr.indexOf("\"fields\"");
+            if (fieldsIdx < 0) {
+                return null;
+            }
+
+            // Find the fields array start
+            int arrayStart = schemaStr.indexOf('[', fieldsIdx);
+            if (arrayStart < 0) {
+                return null;
+            }
+
+            // Find matching end bracket
+            int depth = 1;
+            int arrayEnd = arrayStart + 1;
+            while (arrayEnd < schemaStr.length() && depth > 0) {
+                char c = schemaStr.charAt(arrayEnd);
+                if (c == '[') depth++;
+                else if (c == ']') depth--;
+                arrayEnd++;
+            }
+
+            String fieldsArray = schemaStr.substring(arrayStart + 1, arrayEnd - 1);
+
+            // Parse each field object - handle nested braces
+            int objStart = 0;
+            while ((objStart = fieldsArray.indexOf('{', objStart)) >= 0) {
+                // Find matching close brace (accounting for nested objects)
+                int braceDepth = 1;
+                int objEnd = objStart + 1;
+                while (objEnd < fieldsArray.length() && braceDepth > 0) {
+                    char c = fieldsArray.charAt(objEnd);
+                    if (c == '{') braceDepth++;
+                    else if (c == '}') braceDepth--;
+                    objEnd++;
+                }
+                if (braceDepth != 0) break; // Unbalanced braces
+
+                String fieldObj = fieldsArray.substring(objStart, objEnd);
+
+                // Extract name
+                String name = extractJSONValue(fieldObj, "name");
+                // Extract type
+                String type = extractJSONValue(fieldObj, "type");
+
+                if (name != null && type != null) {
+                    columns.add(new String[]{name, type});
+                }
+
+                objStart = objEnd;
+            }
+
+            return columns.isEmpty() ? null : columns;
+        } catch (Exception e) {
+            // Parsing failed, return null to fall back to DDL parsing
+            return null;
+        }
+    }
+
+    /**
+     * Extracts a string value from a JSON object.
+     */
+    private String extractJSONValue(String json, String key) {
+        String searchKey = "\"" + key + "\"";
+        int keyIdx = json.indexOf(searchKey);
+        if (keyIdx < 0) return null;
+
+        int colonIdx = json.indexOf(':', keyIdx);
+        if (colonIdx < 0) return null;
+
+        // Skip whitespace
+        int valueStart = colonIdx + 1;
+        while (valueStart < json.length() && Character.isWhitespace(json.charAt(valueStart))) {
+            valueStart++;
+        }
+
+        if (valueStart >= json.length()) return null;
+
+        char startChar = json.charAt(valueStart);
+        if (startChar == '"') {
+            // String value
+            int valueEnd = json.indexOf('"', valueStart + 1);
+            if (valueEnd < 0) return null;
+            return json.substring(valueStart + 1, valueEnd);
+        } else {
+            // Non-string value (shouldn't happen for name/type)
+            return null;
+        }
+    }
+
+    /**
+     * Parses a DDL schema string into column name/type pairs.
+     * Handles formats like "id INT, name STRING" or "id INT NOT NULL, name STRING"
+     *
+     * @param schemaStr the DDL schema string
+     * @return list of [name, type] arrays
+     */
+    private List<String[]> parseDDLSchema(String schemaStr) {
+        List<String[]> columns = new ArrayList<>();
+        if (schemaStr == null || schemaStr.isEmpty()) {
+            return columns;
+        }
+
+        // Split by comma, but handle nested types like STRUCT<...> or ARRAY<...>
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i <= schemaStr.length(); i++) {
+            char c = (i < schemaStr.length()) ? schemaStr.charAt(i) : ',';
+            if (c == '<' || c == '(') {
+                depth++;
+            } else if (c == '>' || c == ')') {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                String part = schemaStr.substring(start, i).trim();
+                String[] parsed = parseColumnDef(part);
+                if (parsed != null) {
+                    columns.add(parsed);
+                }
+                start = i + 1;
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * Parses a single column definition like "id INT" or "name STRING NOT NULL"
+     *
+     * @param colDef the column definition
+     * @return [name, type] array or null if unparseable
+     */
+    private String[] parseColumnDef(String colDef) {
+        if (colDef == null || colDef.isEmpty()) {
+            return null;
+        }
+
+        // Handle backtick-quoted names like `my column`
+        String name;
+        String rest;
+        if (colDef.startsWith("`")) {
+            int endQuote = colDef.indexOf('`', 1);
+            if (endQuote < 0) {
+                return null;
+            }
+            name = colDef.substring(1, endQuote);
+            rest = colDef.substring(endQuote + 1).trim();
+        } else {
+            // Split on first whitespace
+            int spaceIdx = colDef.indexOf(' ');
+            if (spaceIdx < 0) {
+                return null;
+            }
+            name = colDef.substring(0, spaceIdx);
+            rest = colDef.substring(spaceIdx + 1).trim();
+        }
+
+        // Extract type (remove NOT NULL if present)
+        String type = rest.replaceAll("(?i)\\s+NOT\\s+NULL\\s*$", "").trim();
+        if (type.isEmpty()) {
+            return null;
+        }
+
+        return new String[]{name, type};
+    }
+
+    /**
+     * Maps Spark SQL types to DuckDB types.
+     *
+     * @param sparkType the Spark type string
+     * @return DuckDB-compatible type string
+     */
+    private String mapSparkTypeToDuckDB(String sparkType) {
+        if (sparkType == null) {
+            return "VARCHAR";
+        }
+        String upper = sparkType.toUpperCase().trim();
+        switch (upper) {
+            case "STRING":
+                return "VARCHAR";
+            case "INTEGER":
+            case "INT":
+                return "INTEGER";
+            case "LONG":
+            case "BIGINT":
+                return "BIGINT";
+            case "SHORT":
+            case "SMALLINT":
+                return "SMALLINT";
+            case "BYTE":
+            case "TINYINT":
+                return "TINYINT";
+            case "FLOAT":
+                return "FLOAT";
+            case "DOUBLE":
+                return "DOUBLE";
+            case "BOOLEAN":
+                return "BOOLEAN";
+            case "DATE":
+                return "DATE";
+            case "TIMESTAMP":
+                return "TIMESTAMP";
+            case "BINARY":
+                return "BLOB";
+            default:
+                // For complex types or unknown types, return as-is
+                return sparkType;
+        }
     }
 
     /**
@@ -655,7 +908,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      */
     public String generateValuesClause(org.apache.arrow.vector.VectorSchemaRoot root) {
         if (root == null || root.getRowCount() == 0) {
-            return generateEmptyValues();
+            return generateEmptyValues(null);
         }
 
         StringBuilder values = new StringBuilder("SELECT * FROM (VALUES ");
