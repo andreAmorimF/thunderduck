@@ -134,6 +134,22 @@ public class DuckDBRuntime implements AutoCloseable {
     }
 
     /**
+     * Create a new DuckDBRuntime with a persistent on-disk database.
+     *
+     * <p>The database file will be created if it doesn't exist.
+     * Data persists across runtime restarts.
+     *
+     * @param dbPath path to the DuckDB database file (e.g., "/path/to/database.duckdb")
+     * @return new DuckDBRuntime instance
+     * @throws RuntimeException if connection fails
+     */
+    public static DuckDBRuntime createPersistent(String dbPath) {
+        String jdbcUrl = "jdbc:duckdb:" + dbPath;
+        logger.info("Creating persistent DuckDB runtime at: {}", dbPath);
+        return create(jdbcUrl);
+    }
+
+    /**
      * Get the underlying DuckDB connection.
      *
      * <p>The connection is managed by the runtime - callers should NOT close it.

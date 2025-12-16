@@ -338,4 +338,54 @@ public class StreamingResultHandler {
         // Send completion marker
         sendResultComplete();
     }
+
+    /**
+     * Stream an empty/void result to the client.
+     *
+     * <p>This is used for catalog operations that return void (e.g., cacheTable, uncacheTable).
+     * These operations need to send an empty Arrow batch with a minimal schema to satisfy
+     * PySpark's expectations.
+     *
+     * @throws IOException if serialization fails
+     */
+    public void streamVoidResult() throws IOException {
+        // Create Arrow schema with empty record batch
+        Schema schema = new Schema(java.util.Collections.emptyList());
+
+        try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
+
+            root.setRowCount(0);
+
+            // Serialize to Arrow IPC format
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try (ArrowStreamWriter writer = new ArrowStreamWriter(
+                    root, null, Channels.newChannel(out))) {
+                writer.start();
+                writer.writeBatch();
+                writer.end();
+            }
+
+            byte[] arrowData = out.toByteArray();
+
+            // Build gRPC response with Arrow batch
+            ExecutePlanResponse response = ExecutePlanResponse.newBuilder()
+                .setSessionId(sessionId)
+                .setOperationId(operationId)
+                .setResponseId(UUID.randomUUID().toString())
+                .setArrowBatch(ExecutePlanResponse.ArrowBatch.newBuilder()
+                    .setRowCount(0)
+                    .setData(ByteString.copyFrom(arrowData))
+                    .build())
+                .build();
+
+            responseObserver.onNext(response);
+            batchIndex++;
+
+            logger.debug("[{}] Sent void result", operationId);
+        }
+
+        // Send completion marker
+        sendResultComplete();
+    }
 }

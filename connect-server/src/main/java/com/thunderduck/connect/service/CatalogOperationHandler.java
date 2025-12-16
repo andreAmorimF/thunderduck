@@ -13,16 +13,31 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.spark.connect.proto.CacheTable;
 import org.apache.spark.connect.proto.Catalog;
+import org.apache.spark.connect.proto.ClearCache;
+import org.apache.spark.connect.proto.CreateTable;
+import org.apache.spark.connect.proto.CurrentCatalog;
 import org.apache.spark.connect.proto.CurrentDatabase;
+import org.apache.spark.connect.proto.DataType;
 import org.apache.spark.connect.proto.DatabaseExists;
+import org.apache.spark.connect.proto.DropGlobalTempView;
 import org.apache.spark.connect.proto.DropTempView;
 import org.apache.spark.connect.proto.ExecutePlanResponse;
+import org.apache.spark.connect.proto.IsCached;
+import org.apache.spark.connect.proto.ListCatalogs;
 import org.apache.spark.connect.proto.ListColumns;
 import org.apache.spark.connect.proto.ListDatabases;
 import org.apache.spark.connect.proto.ListTables;
+import org.apache.spark.connect.proto.RecoverPartitions;
+import org.apache.spark.connect.proto.RefreshByPath;
+import org.apache.spark.connect.proto.RefreshTable;
+import org.apache.spark.connect.proto.SetCurrentCatalog;
 import org.apache.spark.connect.proto.SetCurrentDatabase;
 import org.apache.spark.connect.proto.TableExists;
+import org.apache.spark.connect.proto.UncacheTable;
+
+import com.thunderduck.connect.converter.SparkDataTypeConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,11 +60,25 @@ import static com.thunderduck.generator.SQLQuoting.quoteIdentifier;
  * <p>Implemented operations:
  * <ul>
  *   <li>DROP_TEMP_VIEW - Drop a temporary view</li>
+ *   <li>DROP_GLOBAL_TEMP_VIEW - Drop a global temporary view (same as DROP_TEMP_VIEW)</li>
  *   <li>TABLE_EXISTS - Check if table/view exists</li>
  *   <li>LIST_TABLES - List all tables/views</li>
  *   <li>LIST_COLUMNS - List columns for a table</li>
  *   <li>LIST_DATABASES - List all schemas</li>
  *   <li>DATABASE_EXISTS - Check if schema exists</li>
+ *   <li>CURRENT_DATABASE - Get current schema</li>
+ *   <li>SET_CURRENT_DATABASE - Set current schema</li>
+ *   <li>IS_CACHED - Check if table is cached (always false)</li>
+ *   <li>CACHE_TABLE - Cache table (no-op)</li>
+ *   <li>UNCACHE_TABLE - Uncache table (no-op)</li>
+ *   <li>CLEAR_CACHE - Clear cache (no-op)</li>
+ *   <li>REFRESH_TABLE - Refresh table metadata (no-op)</li>
+ *   <li>REFRESH_BY_PATH - Refresh by path (no-op)</li>
+ *   <li>RECOVER_PARTITIONS - Recover partitions (no-op)</li>
+ *   <li>CURRENT_CATALOG - Get current catalog (always "default")</li>
+ *   <li>SET_CURRENT_CATALOG - Set current catalog (only "default" supported)</li>
+ *   <li>LIST_CATALOGS - List catalogs (returns ["default"])</li>
+ *   <li>CREATE_TABLE - Create a persistent table (internal tables only)</li>
  * </ul>
  */
 public class CatalogOperationHandler {
@@ -103,6 +132,54 @@ public class CatalogOperationHandler {
 
                 case SET_CURRENT_DATABASE:
                     handleSetCurrentDatabase(catalog.getSetCurrentDatabase(), session, responseObserver);
+                    break;
+
+                case IS_CACHED:
+                    handleIsCached(catalog.getIsCached(), session, responseObserver);
+                    break;
+
+                case CACHE_TABLE:
+                    handleCacheTable(catalog.getCacheTable(), session, responseObserver);
+                    break;
+
+                case UNCACHE_TABLE:
+                    handleUncacheTable(catalog.getUncacheTable(), session, responseObserver);
+                    break;
+
+                case CLEAR_CACHE:
+                    handleClearCache(session, responseObserver);
+                    break;
+
+                case REFRESH_TABLE:
+                    handleRefreshTable(catalog.getRefreshTable(), session, responseObserver);
+                    break;
+
+                case REFRESH_BY_PATH:
+                    handleRefreshByPath(catalog.getRefreshByPath(), session, responseObserver);
+                    break;
+
+                case RECOVER_PARTITIONS:
+                    handleRecoverPartitions(catalog.getRecoverPartitions(), session, responseObserver);
+                    break;
+
+                case CURRENT_CATALOG:
+                    handleCurrentCatalog(session, responseObserver);
+                    break;
+
+                case SET_CURRENT_CATALOG:
+                    handleSetCurrentCatalog(catalog.getSetCurrentCatalog(), session, responseObserver);
+                    break;
+
+                case LIST_CATALOGS:
+                    handleListCatalogs(catalog.getListCatalogs(), session, responseObserver);
+                    break;
+
+                case DROP_GLOBAL_TEMP_VIEW:
+                    handleDropGlobalTempView(catalog.getDropGlobalTempView(), session, responseObserver);
+                    break;
+
+                case CREATE_TABLE:
+                    handleCreateTable(catalog.getCreateTable(), session, responseObserver);
                     break;
 
                 default:
@@ -588,6 +665,341 @@ public class CatalogOperationHandler {
         responseObserver.onCompleted();
 
         logger.info("✓ setCurrentDatabase('{}') completed", dbName);
+    }
+
+    /**
+     * Handle IS_CACHED operation.
+     * DuckDB doesn't have Spark-like caching, so always return false.
+     */
+    private void handleIsCached(IsCached isCached, Session session,
+                                StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String tableName = isCached.getTableName();
+        logger.info("isCached('{}') - DuckDB has no caching, returning false", tableName);
+
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamBooleanResult(false);
+
+        logger.info("✓ isCached('{}') = false", tableName);
+    }
+
+    /**
+     * Handle CACHE_TABLE operation.
+     * DuckDB doesn't have Spark-like caching, so this is a no-op.
+     */
+    private void handleCacheTable(CacheTable cacheTable, Session session,
+                                  StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String tableName = cacheTable.getTableName();
+        logger.warn("cacheTable('{}') - DuckDB has no caching, operation ignored", tableName);
+
+        // Return void result (empty Arrow batch)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ cacheTable('{}') completed (no-op)", tableName);
+    }
+
+    /**
+     * Handle UNCACHE_TABLE operation.
+     * DuckDB doesn't have Spark-like caching, so this is a no-op.
+     */
+    private void handleUncacheTable(UncacheTable uncacheTable, Session session,
+                                    StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String tableName = uncacheTable.getTableName();
+        logger.warn("uncacheTable('{}') - DuckDB has no caching, operation ignored", tableName);
+
+        // Return void result (empty Arrow batch)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ uncacheTable('{}') completed (no-op)", tableName);
+    }
+
+    /**
+     * Handle CLEAR_CACHE operation.
+     * DuckDB doesn't have Spark-like caching, so this is a no-op.
+     */
+    private void handleClearCache(Session session,
+                                  StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        logger.warn("clearCache() - DuckDB has no caching, operation ignored");
+
+        // Return void result (empty Arrow batch)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ clearCache() completed (no-op)");
+    }
+
+    /**
+     * Handle REFRESH_TABLE operation.
+     * DuckDB doesn't require table refresh, so this is a no-op.
+     */
+    private void handleRefreshTable(RefreshTable refreshTable, Session session,
+                                    StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String tableName = refreshTable.getTableName();
+        logger.info("refreshTable('{}') - no-op for DuckDB", tableName);
+
+        // Return void result (empty Arrow batch)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ refreshTable('{}') completed (no-op)", tableName);
+    }
+
+    /**
+     * Handle REFRESH_BY_PATH operation.
+     * DuckDB doesn't require path-based refresh, so this is a no-op.
+     */
+    private void handleRefreshByPath(RefreshByPath refreshByPath, Session session,
+                                     StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String path = refreshByPath.getPath();
+        logger.info("refreshByPath('{}') - no-op for DuckDB", path);
+
+        // Return void result (empty Arrow batch)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ refreshByPath('{}') completed (no-op)", path);
+    }
+
+    /**
+     * Handle RECOVER_PARTITIONS operation.
+     * DuckDB doesn't have Hive-style partitions, so this is a no-op.
+     */
+    private void handleRecoverPartitions(RecoverPartitions recoverPartitions, Session session,
+                                         StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String tableName = recoverPartitions.getTableName();
+        logger.info("recoverPartitions('{}') - no-op for DuckDB", tableName);
+
+        // Return void result (empty Arrow batch)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ recoverPartitions('{}') completed (no-op)", tableName);
+    }
+
+    /**
+     * Handle CURRENT_CATALOG operation.
+     * DuckDB doesn't have multiple catalogs, so always return "default".
+     */
+    private void handleCurrentCatalog(Session session,
+                                      StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String currentCatalog = "default";
+        logger.info("Current catalog: '{}'", currentCatalog);
+
+        // Return as single-row Arrow table with "value" column
+        try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
+            Schema schema = new Schema(Arrays.asList(
+                Field.nullable("value", ArrowType.Utf8.INSTANCE)
+            ));
+            VectorSchemaRoot result = VectorSchemaRoot.create(schema, allocator);
+            result.setRowCount(1);
+
+            VarCharVector vec = (VarCharVector) result.getVector("value");
+            vec.allocateNew(1);
+            vec.set(0, currentCatalog.getBytes(StandardCharsets.UTF_8));
+            vec.setValueCount(1);
+
+            String operationId = UUID.randomUUID().toString();
+            StreamingResultHandler resultHandler = new StreamingResultHandler(
+                responseObserver, session.getSessionId(), operationId);
+            resultHandler.streamArrowResult(result);
+
+            logger.info("✓ currentCatalog() = '{}'", currentCatalog);
+        }
+    }
+
+    /**
+     * Handle SET_CURRENT_CATALOG operation.
+     * DuckDB doesn't have multiple catalogs, so only accept "default".
+     */
+    private void handleSetCurrentCatalog(SetCurrentCatalog setCurrentCatalog, Session session,
+                                         StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String catalogName = setCurrentCatalog.getCatalogName();
+        logger.info("Setting current catalog to: '{}'", catalogName);
+
+        // Only accept "default"
+        if (!"default".equalsIgnoreCase(catalogName)) {
+            responseObserver.onError(Status.NOT_FOUND
+                .withDescription("Catalog not found: " + catalogName + " (only 'default' is supported)")
+                .asRuntimeException());
+            return;
+        }
+
+        // Store in session config (for consistency)
+        session.setConfig("spark.catalog.currentCatalog", catalogName);
+
+        // Return void result (empty Arrow batch)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ setCurrentCatalog('{}') completed", catalogName);
+    }
+
+    /**
+     * Handle LIST_CATALOGS operation.
+     * DuckDB doesn't have multiple catalogs, so return single row with "default".
+     *
+     * Returns Arrow table with columns:
+     * - name: string
+     * - description: string (empty)
+     */
+    private void handleListCatalogs(ListCatalogs listCatalogs, Session session,
+                                    StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String pattern = listCatalogs.hasPattern() ? listCatalogs.getPattern() : null;
+        logger.info("Listing catalogs (pattern={})", pattern);
+
+        // Check if pattern matches "default"
+        boolean includeDefault = pattern == null || "default".matches(pattern.replace("%", ".*"));
+
+        try (BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
+            Schema schema = new Schema(Arrays.asList(
+                Field.nullable("name", ArrowType.Utf8.INSTANCE),
+                Field.nullable("description", ArrowType.Utf8.INSTANCE)
+            ));
+            VectorSchemaRoot result = VectorSchemaRoot.create(schema, allocator);
+
+            int rowCount = includeDefault ? 1 : 0;
+            result.setRowCount(rowCount);
+
+            VarCharVector nameVec = (VarCharVector) result.getVector("name");
+            VarCharVector descVec = (VarCharVector) result.getVector("description");
+
+            nameVec.allocateNew(rowCount);
+            descVec.allocateNew(rowCount);
+
+            if (includeDefault) {
+                nameVec.set(0, "default".getBytes(StandardCharsets.UTF_8));
+                descVec.set(0, "".getBytes(StandardCharsets.UTF_8));
+            }
+
+            nameVec.setValueCount(rowCount);
+            descVec.setValueCount(rowCount);
+
+            // Stream result
+            String operationId = UUID.randomUUID().toString();
+            StreamingResultHandler resultHandler = new StreamingResultHandler(
+                responseObserver, session.getSessionId(), operationId);
+            resultHandler.streamArrowResult(result);
+
+            logger.info("✓ listCatalogs returned {} catalogs", rowCount);
+        }
+    }
+
+    /**
+     * Handle DROP_GLOBAL_TEMP_VIEW operation.
+     * DuckDB doesn't have global temp views, so treat this the same as DROP_TEMP_VIEW.
+     */
+    private void handleDropGlobalTempView(DropGlobalTempView dropGlobalTempView, Session session,
+                                          StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String viewName = dropGlobalTempView.getViewName();
+        logger.info("Dropping global temp view: '{}' (treating as regular temp view)", viewName);
+
+        // Remove from session's temp view registry
+        boolean existed = session.dropTempView(viewName);
+
+        // Drop the view from DuckDB
+        String dropViewSQL = String.format("DROP VIEW IF EXISTS %s", quoteIdentifier(viewName));
+        logger.debug("Executing DuckDB: {}", dropViewSQL);
+
+        QueryExecutor executor = new QueryExecutor(session.getRuntime());
+        executor.execute(dropViewSQL);
+
+        // Return boolean result
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamBooleanResult(existed);
+
+        logger.info("✓ Global temp view dropped from DuckDB: '{}' (existed={}, session: {})",
+            viewName, existed, session.getSessionId());
+    }
+
+    /**
+     * Handle CREATE_TABLE operation.
+     *
+     * <p>Creates a persistent table in the session's DuckDB database.
+     * Internal tables (no path/source) are stored directly in DuckDB.
+     * External tables (with path/source) are not yet supported.
+     */
+    private void handleCreateTable(CreateTable createTable, Session session,
+                                   StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
+        String tableName = createTable.getTableName();
+        boolean hasPath = createTable.hasPath();
+        boolean hasSource = createTable.hasSource();
+
+        logger.info("CREATE TABLE: '{}' (path={}, source={})",
+            tableName,
+            hasPath ? createTable.getPath() : "none",
+            hasSource ? createTable.getSource() : "none");
+
+        // External tables (with path or source) are not yet supported
+        if (hasPath || hasSource) {
+            responseObserver.onError(Status.UNIMPLEMENTED
+                .withDescription("External tables (with path or source) are not yet supported. " +
+                    "Use internal tables without path/source specification.")
+                .asRuntimeException());
+            return;
+        }
+
+        // Schema is required for internal tables
+        if (!createTable.hasSchema()) {
+            responseObserver.onError(Status.INVALID_ARGUMENT
+                .withDescription("CREATE TABLE requires a schema for internal tables")
+                .asRuntimeException());
+            return;
+        }
+
+        // Validate schema is a STRUCT type
+        DataType schemaType = createTable.getSchema();
+        if (schemaType.getKindCase() != DataType.KindCase.STRUCT) {
+            responseObserver.onError(Status.INVALID_ARGUMENT
+                .withDescription("Schema must be a STRUCT type, got: " + schemaType.getKindCase())
+                .asRuntimeException());
+            return;
+        }
+
+        // Get current database (schema in DuckDB terms)
+        String currentDb = session.getConfig("spark.catalog.currentDatabase");
+        if (currentDb == null || currentDb.isEmpty()) {
+            currentDb = "main";
+        }
+
+        // Generate CREATE TABLE DDL
+        String ddl = SparkDataTypeConverter.generateCreateTableDDL(
+            currentDb,
+            tableName,
+            schemaType.getStruct()
+        );
+
+        logger.debug("Executing DuckDB: {}", ddl);
+
+        // Execute the DDL
+        QueryExecutor executor = new QueryExecutor(session.getRuntime());
+        executor.execute(ddl);
+
+        // Return void result (Spark's createTable returns void)
+        String operationId = UUID.randomUUID().toString();
+        StreamingResultHandler resultHandler = new StreamingResultHandler(
+            responseObserver, session.getSessionId(), operationId);
+        resultHandler.streamVoidResult();
+
+        logger.info("✓ Table created: '{}.{}' (session: {})", currentDb, tableName, session.getSessionId());
     }
 
     // ==================== Helper Methods ====================

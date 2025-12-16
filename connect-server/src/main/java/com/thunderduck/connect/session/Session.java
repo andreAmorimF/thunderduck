@@ -2,7 +2,12 @@ package com.thunderduck.connect.session;
 
 import com.thunderduck.logical.LogicalPlan;
 import com.thunderduck.runtime.DuckDBRuntime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -26,22 +31,52 @@ import java.util.concurrent.ConcurrentHashMap;
  * isolation between sessions.
  */
 public class Session implements AutoCloseable {
+    private static final Logger logger = LoggerFactory.getLogger(Session.class);
+
     private final String sessionId;
     private final DuckDBRuntime runtime;
+    private final Path databasePath;  // null for in-memory databases
     private final long createdAt;
     private final Map<String, String> config;
     private final Map<String, LogicalPlan> tempViews;
     private volatile boolean closed = false;
 
     /**
-     * Create a new session with the given ID and its own DuckDB runtime.
+     * Create a new session with the given ID and an in-memory DuckDB database.
      *
      * <p>Creates a new in-memory DuckDB database named after the session ID.
+     * Data does not persist after session close.
      *
      * @param sessionId Unique session identifier (typically UUID from client)
      */
     public Session(String sessionId) {
-        this(sessionId, DuckDBRuntime.create("jdbc:duckdb::memory:" + sanitizeSessionId(sessionId)));
+        this(sessionId, DuckDBRuntime.create("jdbc:duckdb::memory:" + sanitizeSessionId(sessionId)), null);
+    }
+
+    /**
+     * Create a new session with a persistent on-disk DuckDB database.
+     *
+     * <p>Creates a new DuckDB database file in the sessions directory.
+     * Data persists across session reconnects with the same session ID.
+     * The database file is deleted when {@link #cleanup()} is called.
+     *
+     * @param sessionId Unique session identifier
+     * @param sessionsDir Directory where session database files are stored
+     */
+    public Session(String sessionId, Path sessionsDir) {
+        this.sessionId = sessionId;
+        this.databasePath = sessionsDir.resolve(sanitizeSessionId(sessionId) + ".duckdb");
+        this.runtime = DuckDBRuntime.createPersistent(databasePath.toString());
+        this.createdAt = System.currentTimeMillis();
+        this.config = new HashMap<>();
+        this.tempViews = new ConcurrentHashMap<>();
+
+        // Set default configuration
+        config.putAll(SparkDefaults.getDefaults());
+        config.put("spark.app.name", "thunderduck-connect");
+        config.put("spark.sql.dialect", "spark");
+
+        logger.info("Created persistent session {} with database at {}", sessionId, databasePath);
     }
 
     /**
@@ -51,10 +86,12 @@ public class Session implements AutoCloseable {
      *
      * @param sessionId Unique session identifier
      * @param runtime DuckDB runtime for this session
+     * @param databasePath Path to database file (null for in-memory)
      */
-    public Session(String sessionId, DuckDBRuntime runtime) {
+    public Session(String sessionId, DuckDBRuntime runtime, Path databasePath) {
         this.sessionId = sessionId;
         this.runtime = runtime;
+        this.databasePath = databasePath;
         this.createdAt = System.currentTimeMillis();
         this.config = new HashMap<>();
         this.tempViews = new ConcurrentHashMap<>();
@@ -195,9 +232,28 @@ public class Session implements AutoCloseable {
     }
 
     /**
+     * Get the database path for persistent sessions.
+     *
+     * @return Path to database file, or null for in-memory sessions
+     */
+    public Path getDatabasePath() {
+        return databasePath;
+    }
+
+    /**
+     * Check if this session uses a persistent database.
+     *
+     * @return true if session uses an on-disk database
+     */
+    public boolean isPersistent() {
+        return databasePath != null;
+    }
+
+    /**
      * Close the session and release all resources.
      *
      * <p>Closes the DuckDB runtime and clears all temp views.
+     * For persistent sessions, call {@link #cleanup()} to also delete database files.
      */
     @Override
     public void close() {
@@ -212,6 +268,41 @@ public class Session implements AutoCloseable {
         // Close DuckDB runtime
         if (runtime != null) {
             runtime.close();
+        }
+    }
+
+    /**
+     * Close the session and delete persistent database files.
+     *
+     * <p>This method should be called when the session is being permanently removed
+     * (e.g., on expiry). It closes the session and deletes the database file and
+     * any associated files (WAL, etc.).
+     *
+     * <p>For in-memory sessions, this is equivalent to {@link #close()}.
+     */
+    public void cleanup() {
+        // First close the session and runtime
+        close();
+
+        // Then delete database files if persistent
+        if (databasePath != null) {
+            try {
+                // Delete main database file
+                Files.deleteIfExists(databasePath);
+                logger.info("Deleted session database: {}", databasePath);
+
+                // Delete WAL file if exists
+                Path walPath = databasePath.resolveSibling(databasePath.getFileName() + ".wal");
+                Files.deleteIfExists(walPath);
+
+                // Delete any other DuckDB temp files
+                Path tmpPath = databasePath.resolveSibling(databasePath.getFileName() + ".tmp");
+                Files.deleteIfExists(tmpPath);
+
+            } catch (IOException e) {
+                logger.warn("Failed to delete session database files for {}: {}",
+                    sessionId, e.getMessage());
+            }
         }
     }
 
