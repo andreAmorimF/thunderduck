@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The E2E test suite has comprehensive coverage with **153 differential tests** comparing Thunderduck against Apache Spark 4.0.1. **ALL TESTS PASS**.
+The E2E test suite has comprehensive coverage with **210 differential tests** comparing Thunderduck against Apache Spark 4.0.1. **ALL TESTS PASS**.
 
 | Test Category | Tests | Status |
 |--------------|-------|--------|
@@ -16,7 +16,8 @@ The E2E test suite has comprehensive coverage with **153 differential tests** co
 | TPC-H DataFrame API (Differential) | 4 | ✅ ALL PASS |
 | TPC-DS SQL (Differential) | 102 | ✅ ALL PASS |
 | TPC-DS DataFrame API (Differential) | 24 | ✅ ALL PASS |
-| **Total Differential Tests** | **153** | ✅ **ALL PASS** |
+| DataFrame Function Parity (Differential) | 57 | ✅ ALL PASS |
+| **Total Differential Tests** | **210** | ✅ **ALL PASS** |
 
 **Spark Version:** 4.0.1
 **Test Framework:** Differential testing (Spark 4.0.1 Reference vs Thunderduck)
@@ -109,6 +110,9 @@ python -m pytest test_tpcds_differential.py::TestTPCDS_DataFrame_Differential -v
 
 # All DataFrame tests
 python -m pytest -k "dataframe" -v
+
+# DataFrame function parity tests (57 tests)
+python -m pytest test_dataframe_functions.py -v
 ```
 
 ---
@@ -146,6 +150,7 @@ tests/
 │   ├── conftest.py                       # Pytest fixtures
 │   ├── test_differential_v2.py           # TPC-H differential tests
 │   ├── test_tpcds_differential.py        # TPC-DS differential tests
+│   ├── test_dataframe_functions.py       # DataFrame function parity tests (57 tests)
 │   └── utils/
 │       ├── dual_server_manager.py        # Server orchestration
 │       └── dataframe_diff.py             # Row-by-row comparison
@@ -191,7 +196,7 @@ Based on research of public Spark test suites, these areas would improve coverag
 | P1 | Complex Data Types | `explode`, `collect_list`, `array_contains`, `flatten`, nested structs, maps | TODO |
 | P2 | Window Functions | `rank`, `dense_rank`, `row_number`, `lag`, `lead`, `first`, `last`, frame specs | TODO |
 | P2 | Multi-dimensional Aggregations | `pivot`, `unpivot`, `cube`, `rollup` | TODO |
-| P3 | Apache Spark DataFrameFunctionsSuite | Official function parity tests | TODO |
+| P3 | Apache Spark DataFrameFunctionsSuite | Official function parity tests | ✅ DONE (57 tests) |
 
 **Details:**
 
@@ -213,9 +218,14 @@ Based on research of public Spark test suites, these areas would improve coverag
    - `cube()` - All combinations of grouping columns
    - `rollup()` - Hierarchical aggregations with subtotals
 
-4. **DataFrameFunctionsSuite** (P3)
+4. **DataFrameFunctionsSuite** (P3) - ✅ IMPLEMENTED
    - Source: `github.com/apache/spark/blob/master/sql/core/src/test/scala/org/apache/spark/sql/DataFrameFunctionsSuite.scala`
-   - Comprehensive function parity tests from Apache Spark
+   - Implemented in `test_dataframe_functions.py` with 57 differential tests:
+     - **TestArrayFunctions** (17 tests): `array_contains`, `array_size`, `sort_array`, `array_distinct`, `array_union`, `array_intersect`, `array_except`, `arrays_overlap`, `array_position`, `element_at`, `explode`, `explode_outer`, `flatten`, `reverse`, `slice`, `array_join`
+     - **TestMapFunctions** (7 tests): `map_keys`, `map_values`, `map_entries`, `size`, `element_at`, `map_from_arrays`, `explode` on maps
+     - **TestNullFunctions** (8 tests): `coalesce`, `isnull`, `isnotnull`, `ifnull`, `nvl`, `nvl2`, `nullif`, `nanvl`
+     - **TestStringFunctions** (14 tests): `concat`, `concat_ws`, `upper`, `lower`, `trim`, `ltrim`, `rtrim`, `length`, `substring`, `instr`, `locate`, `lpad`, `rpad`, `repeat`, `reverse`, `split`, `replace`, `initcap`
+     - **TestMathFunctions** (11 tests): `abs`, `ceil`, `floor`, `round`, `sqrt`, `pow`, `mod`, `pmod`, `greatest`, `least`, `log`, `exp`, `sign`
 
 **Resources:**
 - [spark-fast-tests](https://github.com/mrpowers-io/spark-fast-tests) - Community testing library
@@ -232,5 +242,5 @@ Based on research of public Spark test suites, these areas would improve coverag
 
 ---
 
-**Document Version:** 2.2
-**Last Updated:** 2025-12-16 (153 differential tests, organized future test suite TODOs)
+**Document Version:** 2.3
+**Last Updated:** 2025-12-16 (210 differential tests, P3 DataFrameFunctionsSuite implemented with 57 tests)

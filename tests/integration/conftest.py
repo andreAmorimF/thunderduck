@@ -284,6 +284,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "quick: mark test as quick sanity test"
     )
+    config.addinivalue_line(
+        "markers", "functions: mark test as DataFrame function parity test"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
