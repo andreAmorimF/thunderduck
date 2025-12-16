@@ -49,11 +49,13 @@ export SPARK_SUBMIT_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED"
 # Start Spark Connect server
 "$SPARK_HOME/sbin/start-connect-server.sh" \
     --master "local[*]" \
+    --driver-memory 4g \
     --conf spark.driver.host=localhost \
     --conf spark.driver.bindAddress=127.0.0.1 \
     --conf spark.connect.grpc.binding.port=${SPARK_PORT} \
     --conf spark.sql.shuffle.partitions=4 \
     --conf spark.sql.adaptive.enabled=false \
+    --conf spark.sql.autoBroadcastJoinThreshold=-1 \
     --conf spark.ui.enabled=true \
     --conf spark.ui.port=4041 \
     2>&1 | tee "${SPARK_LOG_DIR}/start.log" &

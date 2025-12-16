@@ -267,6 +267,9 @@ def pytest_configure(config):
         "markers", "tpch: mark test as TPC-H benchmark test"
     )
     config.addinivalue_line(
+        "markers", "tpcds: mark test as TPC-DS benchmark test"
+    )
+    config.addinivalue_line(
         "markers", "slow: mark test as slow running"
     )
     config.addinivalue_line(
@@ -311,6 +314,15 @@ def tpcds_data_dir():
 
 
 @pytest.fixture(scope="session")
+def tpcds_queries_dir(workspace_dir):
+    """Path to TPC-DS queries directory"""
+    queries_dir = workspace_dir / "benchmarks" / "tpcds_queries"
+    if not queries_dir.exists():
+        pytest.skip(f"TPC-DS queries not found at {queries_dir}")
+    return queries_dir
+
+
+@pytest.fixture(scope="session")
 def tpcds_tables(spark_session, tpcds_data_dir):
     """Load all TPC-DS tables as temp views"""
     tables = sorted([f.stem for f in tpcds_data_dir.glob("*.parquet")])
@@ -326,10 +338,16 @@ def tpcds_tables(spark_session, tpcds_data_dir):
 
 
 @pytest.fixture
-def load_tpcds_query():
-    """Load TPC-DS query by number"""
+def load_tpcds_query(tpcds_queries_dir):
+    """Load TPC-DS query by number or variant name"""
     def _load_query(qnum):
-        query_file = Path(f"/workspace/benchmarks/tpcds_queries/q{qnum}.sql")
+        """
+        Load a TPC-DS query.
+
+        Args:
+            qnum: Query number (1-99) or variant string ('14a', '14b', '23a', etc.)
+        """
+        query_file = tpcds_queries_dir / f"q{qnum}.sql"
         if not query_file.exists():
             pytest.skip(f"Query file not found: {query_file}")
         return query_file.read_text()
@@ -476,3 +494,53 @@ def tpch_tables_thunderduck(spark_thunderduck, tpch_data_dir):
 
     print(f"✓ All {len(tables)} TPC-H tables loaded into Thunderduck")
     return tables
+
+
+# ============================================================================
+# TPC-DS Differential Testing Fixtures
+# ============================================================================
+
+# List of all TPC-DS tables
+TPCDS_TABLES = [
+    'call_center', 'catalog_page', 'catalog_returns', 'catalog_sales',
+    'customer', 'customer_address', 'customer_demographics', 'date_dim',
+    'household_demographics', 'income_band', 'inventory', 'item',
+    'promotion', 'reason', 'ship_mode', 'store', 'store_returns', 'store_sales',
+    'time_dim', 'warehouse', 'web_page', 'web_returns', 'web_sales', 'web_site'
+]
+
+
+@pytest.fixture(scope="session")
+def tpcds_tables_reference(spark_reference, tpcds_data_dir):
+    """
+    Load TPC-DS tables into Spark Reference session
+    """
+    print(f"\nLoading {len(TPCDS_TABLES)} TPC-DS tables into Spark Reference...")
+    for table in TPCDS_TABLES:
+        parquet_path = tpcds_data_dir / f"{table}.parquet"
+        if not parquet_path.exists():
+            pytest.skip(f"TPC-DS table not found: {parquet_path}")
+
+        df = spark_reference.read.parquet(str(parquet_path))
+        df.createOrReplaceTempView(table)
+
+    print(f"✓ All {len(TPCDS_TABLES)} TPC-DS tables loaded into Spark Reference")
+    return TPCDS_TABLES
+
+
+@pytest.fixture(scope="session")
+def tpcds_tables_thunderduck(spark_thunderduck, tpcds_data_dir):
+    """
+    Load TPC-DS tables into Thunderduck session
+    """
+    print(f"\nLoading {len(TPCDS_TABLES)} TPC-DS tables into Thunderduck...")
+    for table in TPCDS_TABLES:
+        parquet_path = tpcds_data_dir / f"{table}.parquet"
+        if not parquet_path.exists():
+            pytest.skip(f"TPC-DS table not found: {parquet_path}")
+
+        df = spark_thunderduck.read.parquet(str(parquet_path))
+        df.createOrReplaceTempView(table)
+
+    print(f"✓ All {len(TPCDS_TABLES)} TPC-DS tables loaded into Thunderduck")
+    return TPCDS_TABLES

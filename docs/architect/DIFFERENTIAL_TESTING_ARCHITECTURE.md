@@ -7,6 +7,11 @@
 
 The differential testing framework compares Thunderduck against Apache Spark 4.0.1 to ensure exact compatibility. Both systems run via Spark Connect protocol for fair comparison.
 
+**Test Coverage:**
+- **TPC-H**: 23 differential tests (Q1-Q22 + sanity test) - ALL PASSING
+- **TPC-DS**: 102 differential tests (94 standard queries + 8 variants) - ALL PASSING
+- **Total**: 125+ differential tests validating Spark parity
+
 ## Architecture
 
 ```
@@ -156,12 +161,17 @@ tests/
 │   ├── .venv/                            # Python virtual environment
 │   ├── .env                              # Environment config
 │   ├── conftest.py                       # Pytest fixtures
-│   ├── test_differential_v2.py           # Test suite
+│   ├── test_differential_v2.py           # TPC-H differential tests (23 tests)
+│   ├── test_tpcds_differential.py        # TPC-DS differential tests (102 tests)
 │   └── utils/
 │       ├── dual_server_manager.py        # Server orchestration
 │       ├── dataframe_diff.py             # Comparison utility
 │       ├── server_manager.py             # Single server manager
 │       └── result_validator.py           # Legacy validator
+
+benchmarks/
+├── tpch_queries/                         # TPC-H SQL queries (Q1-Q22)
+└── tpcds_queries/                        # TPC-DS SQL queries (Q1-Q99 + variants)
 ```
 
 ## Usage
@@ -183,14 +193,21 @@ tests/
 source tests/integration/.venv/bin/activate
 cd tests/integration
 
-# Run all tests
+# Run all TPC-H tests (~20 seconds)
 python -m pytest test_differential_v2.py -v
 
-# Run specific query
+# Run all TPC-DS tests (~5 minutes)
+python -m pytest test_tpcds_differential.py -k "Batch" -v
+
+# Run specific TPC-H query
 python -m pytest test_differential_v2.py::TestTPCH_Q1_Differential -v -s
 
-# Run sanity test
+# Run specific TPC-DS batch
+python -m pytest test_tpcds_differential.py::TestTPCDS_Batch1 -v
+
+# Run sanity tests
 python -m pytest test_differential_v2.py::TestDifferential_Sanity -v -s
+python -m pytest test_tpcds_differential.py::TestTPCDS_Sanity -v -s
 ```
 
 ## Test Output
@@ -257,6 +274,7 @@ Differences:
 
 ### Required Data
 - TPC-H SF0.01 data in `data/tpch_sf001/`
+- TPC-DS SF1 data in `data/tpcds_sf1/`
 
 ## Troubleshooting
 
@@ -279,13 +297,20 @@ python -c "import pyspark; print(pyspark.__version__)"
 
 ## Future Work
 
-1. Add TPC-DS differential tests
+1. ~~Add TPC-DS differential tests~~ ✅ DONE (102 tests passing)
 2. Add performance benchmarking and reporting
 3. Integrate into CI/CD pipeline
 4. Add more detailed performance metrics collection
 
+## TPC-DS Coverage Notes
+
+TPC-DS differential tests cover 94/99 standard queries:
+- **Excluded:** Q36 (uses `GROUPING()` in window `PARTITION BY`, unsupported by DuckDB)
+- **Variants included:** Q14a/b, Q23a/b, Q24a/b, Q39a/b
+- **Total coverage:** 98/99 unique query patterns (99%)
+
 ---
 
 **See Also:**
-- [Session Management Architecture](SESSION_MANAGEMENT_REDESIGN.md)
+- [Session Management Architecture](SESSION_MANAGEMENT_ARCHITECTURE.md)
 - [Arrow Streaming Architecture](ARROW_STREAMING_ARCHITECTURE.md)

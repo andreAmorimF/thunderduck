@@ -4,7 +4,12 @@ Pytest-based integration tests for Thunderduck Spark Connect server using PySpar
 
 ## Overview
 
-This test suite validates the Spark Connect server implementation by executing TPC-H queries and DataFrame operations through a real PySpark Spark Connect client. Tests cover both SQL and DataFrame API approaches.
+This test suite validates the Spark Connect server implementation by executing TPC-H and TPC-DS queries and DataFrame operations through a real PySpark Spark Connect client. Tests cover both SQL and DataFrame API approaches.
+
+**Differential Test Coverage:**
+- **TPC-H**: 23 tests (Q1-Q22 + sanity test) - ALL PASSING
+- **TPC-DS**: 102 tests (94 standard queries + 8 variants) - ALL PASSING
+- **Total**: 125+ differential tests validating Spark 4.0.1 parity
 
 ## Quick Start (Differential Tests)
 
@@ -29,7 +34,8 @@ tests/integration/
 ├── .venv/                          # Python virtual environment (created by setup script)
 ├── .env                            # Environment configuration
 │
-├── test_differential_v2.py         # Differential tests (Spark 4.0.1 vs Thunderduck) - 23 tests
+├── test_differential_v2.py         # TPC-H Differential tests - 23 tests
+├── test_tpcds_differential.py      # TPC-DS Differential tests - 102 tests
 ├── test_simple_sql.py              # Basic SQL connectivity tests
 ├── test_tpch_queries.py            # TPC-H query tests
 ├── test_dataframe_operations.py    # DataFrame operation tests
@@ -66,9 +72,12 @@ mvn clean package -DskipTests
 # Install dependencies (in a venv is recommended)
 pip install pytest pyspark==4.0.1 pandas pyarrow grpcio grpcio-status
 
-# Run tests manually
+# Run TPC-H differential tests (~20 seconds)
 cd tests/integration
 python -m pytest test_differential_v2.py -v
+
+# Run TPC-DS differential tests (~5 minutes)
+python -m pytest test_tpcds_differential.py -k "Batch" -v
 ```
 
 ### Running Tests
@@ -155,9 +164,10 @@ class TestTPCHQuery1:
         # Execute both approaches and compare
 ```
 
-**Current Coverage** (23 differential tests - all passing):
-- ✅ All TPC-H Q1-Q22 differential tests pass
-- ✅ Sanity test for basic validation
+**Current Coverage** (125+ differential tests - all passing):
+- ✅ All TPC-H Q1-Q22 differential tests pass (23 tests)
+- ✅ All TPC-DS Q1-Q99 differential tests pass (102 tests, Q36 excluded)
+- ✅ TPC-DS variants: Q14a/b, Q23a/b, Q24a/b, Q39a/b
 - ✅ Window functions fully working (fixed in M38)
 
 ### 2. Basic DataFrame Operations
@@ -473,7 +483,7 @@ To run tests in CI:
 
 ## Future Enhancements
 
-- [ ] Add TPC-DS differential tests
+- [x] Add TPC-DS differential tests (102 tests, all passing)
 - [ ] Add performance regression detection
 - [ ] Create HTML test report generation
 - [ ] Integrate into CI/CD pipeline

@@ -256,3 +256,225 @@ class TestDifferential_Sanity:
         )
 
         print("✓ Differential framework is working correctly!")
+
+
+# ============================================================================
+# TPC-H DataFrame API Differential Tests
+# ============================================================================
+
+@pytest.mark.differential
+@pytest.mark.tpch
+@pytest.mark.dataframe
+class TestTPCH_DataFrame_Differential:
+    """
+    TPC-H queries implemented using DataFrame API for differential testing.
+
+    These tests verify that DataFrame operations (filter, groupBy, agg, join, etc.)
+    produce identical results on both Spark Reference and Thunderduck.
+    """
+
+    def test_q1_dataframe(
+        self,
+        spark_reference,
+        spark_thunderduck,
+        tpch_tables_reference,
+        tpch_tables_thunderduck,
+        tpch_data_dir
+    ):
+        """
+        TPC-H Q1 via DataFrame API: Pricing Summary Report
+        Tests: filter, groupBy, agg (sum, avg, count), orderBy
+        """
+        from pyspark.sql import functions as F
+
+        print("\n" + "=" * 80)
+        print("TPC-H Q1 DataFrame API: Pricing Summary Report")
+        print("=" * 80)
+
+        def build_q1(spark):
+            lineitem = spark.read.parquet(str(tpch_data_dir / "lineitem.parquet"))
+            return (lineitem
+                .filter(F.col("l_shipdate") <= "1998-09-02")
+                .groupBy("l_returnflag", "l_linestatus")
+                .agg(
+                    F.sum("l_quantity").alias("sum_qty"),
+                    F.sum("l_extendedprice").alias("sum_base_price"),
+                    F.sum(F.col("l_extendedprice") * (F.lit(1) - F.col("l_discount")))
+                        .alias("sum_disc_price"),
+                    F.sum(F.col("l_extendedprice") *
+                          (F.lit(1) - F.col("l_discount")) *
+                          (F.lit(1) + F.col("l_tax")))
+                        .alias("sum_charge"),
+                    F.avg("l_quantity").alias("avg_qty"),
+                    F.avg("l_extendedprice").alias("avg_price"),
+                    F.avg("l_discount").alias("avg_disc"),
+                    F.count("*").alias("count_order")
+                )
+                .orderBy("l_returnflag", "l_linestatus")
+            )
+
+        # Execute on both
+        ref_result = build_q1(spark_reference)
+        test_result = build_q1(spark_thunderduck)
+
+        # Compare
+        assert_dataframes_equal(
+            ref_result,
+            test_result,
+            query_name="TPC-H Q1 DataFrame",
+            epsilon=1e-6
+        )
+
+    def test_q3_dataframe(
+        self,
+        spark_reference,
+        spark_thunderduck,
+        tpch_tables_reference,
+        tpch_tables_thunderduck,
+        tpch_data_dir
+    ):
+        """
+        TPC-H Q3 via DataFrame API: Shipping Priority
+        Tests: multi-table join, filter, groupBy, agg, orderBy, limit
+        """
+        from pyspark.sql import functions as F
+
+        print("\n" + "=" * 80)
+        print("TPC-H Q3 DataFrame API: Shipping Priority")
+        print("=" * 80)
+
+        def build_q3(spark):
+            customer = spark.read.parquet(str(tpch_data_dir / "customer.parquet"))
+            orders = spark.read.parquet(str(tpch_data_dir / "orders.parquet"))
+            lineitem = spark.read.parquet(str(tpch_data_dir / "lineitem.parquet"))
+
+            return (lineitem
+                .join(orders, lineitem["l_orderkey"] == orders["o_orderkey"])
+                .join(customer, orders["o_custkey"] == customer["c_custkey"])
+                .filter(
+                    (F.col("c_mktsegment") == "BUILDING") &
+                    (F.col("o_orderdate") < "1995-03-15") &
+                    (F.col("l_shipdate") > "1995-03-15")
+                )
+                .groupBy("l_orderkey", "o_orderdate", "o_shippriority")
+                .agg(
+                    F.sum(F.col("l_extendedprice") * (F.lit(1) - F.col("l_discount")))
+                        .alias("revenue")
+                )
+                .orderBy(F.col("revenue").desc(), "o_orderdate")
+                .limit(10)
+            )
+
+        # Execute on both
+        ref_result = build_q3(spark_reference)
+        test_result = build_q3(spark_thunderduck)
+
+        # Compare
+        assert_dataframes_equal(
+            ref_result,
+            test_result,
+            query_name="TPC-H Q3 DataFrame",
+            epsilon=1e-6
+        )
+
+    def test_q6_dataframe(
+        self,
+        spark_reference,
+        spark_thunderduck,
+        tpch_tables_reference,
+        tpch_tables_thunderduck,
+        tpch_data_dir
+    ):
+        """
+        TPC-H Q6 via DataFrame API: Forecasting Revenue Change
+        Tests: filter with multiple conditions, agg (sum)
+        """
+        from pyspark.sql import functions as F
+
+        print("\n" + "=" * 80)
+        print("TPC-H Q6 DataFrame API: Forecasting Revenue Change")
+        print("=" * 80)
+
+        def build_q6(spark):
+            lineitem = spark.read.parquet(str(tpch_data_dir / "lineitem.parquet"))
+
+            return (lineitem
+                .filter(
+                    (F.col("l_shipdate") >= "1994-01-01") &
+                    (F.col("l_shipdate") < "1995-01-01") &
+                    (F.col("l_discount") >= 0.05) &
+                    (F.col("l_discount") <= 0.07) &
+                    (F.col("l_quantity") < 24)
+                )
+                .agg(
+                    F.sum(F.col("l_extendedprice") * F.col("l_discount"))
+                        .alias("revenue")
+                )
+            )
+
+        # Execute on both
+        ref_result = build_q6(spark_reference)
+        test_result = build_q6(spark_thunderduck)
+
+        # Compare
+        assert_dataframes_equal(
+            ref_result,
+            test_result,
+            query_name="TPC-H Q6 DataFrame",
+            epsilon=1e-6
+        )
+
+    def test_q12_dataframe(
+        self,
+        spark_reference,
+        spark_thunderduck,
+        tpch_tables_reference,
+        tpch_tables_thunderduck,
+        tpch_data_dir
+    ):
+        """
+        TPC-H Q12 via DataFrame API: Shipping Modes and Order Priority
+        Tests: join, filter with IN, conditional aggregation (when/otherwise)
+        """
+        from pyspark.sql import functions as F
+
+        print("\n" + "=" * 80)
+        print("TPC-H Q12 DataFrame API: Shipping Modes and Order Priority")
+        print("=" * 80)
+
+        def build_q12(spark):
+            orders = spark.read.parquet(str(tpch_data_dir / "orders.parquet"))
+            lineitem = spark.read.parquet(str(tpch_data_dir / "lineitem.parquet"))
+
+            return (lineitem
+                .join(orders, lineitem["l_orderkey"] == orders["o_orderkey"])
+                .filter(
+                    (F.col("l_shipmode").isin("MAIL", "SHIP")) &
+                    (F.col("l_commitdate") < F.col("l_receiptdate")) &
+                    (F.col("l_shipdate") < F.col("l_commitdate")) &
+                    (F.col("l_receiptdate") >= "1994-01-01") &
+                    (F.col("l_receiptdate") < "1995-01-01")
+                )
+                .groupBy("l_shipmode")
+                .agg(
+                    F.sum(F.when(
+                        F.col("o_orderpriority").isin("1-URGENT", "2-HIGH"), 1
+                    ).otherwise(0)).alias("high_line_count"),
+                    F.sum(F.when(
+                        ~F.col("o_orderpriority").isin("1-URGENT", "2-HIGH"), 1
+                    ).otherwise(0)).alias("low_line_count")
+                )
+                .orderBy("l_shipmode")
+            )
+
+        # Execute on both
+        ref_result = build_q12(spark_reference)
+        test_result = build_q12(spark_thunderduck)
+
+        # Compare
+        assert_dataframes_equal(
+            ref_result,
+            test_result,
+            query_name="TPC-H Q12 DataFrame",
+            epsilon=1e-6
+        )
