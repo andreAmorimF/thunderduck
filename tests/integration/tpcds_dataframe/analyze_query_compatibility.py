@@ -86,7 +86,7 @@ def is_dataframe_compatible(features: Dict[str, bool]) -> Tuple[bool, List[str]]
 
 def analyze_all_queries():
     """Analyze all TPC-DS queries for DataFrame API compatibility"""
-    query_dir = "/workspace/benchmarks/tpcds_queries"
+    query_dir = "/workspace/tests/integration/sql/tpcds_queries"
     results = {}
 
     compatible_queries = []

@@ -1,6 +1,6 @@
 # TPC-H Benchmark Guide
 
-thunderduck includes a comprehensive TPC-H benchmark framework for performance testing and SQL introspection.
+This guide covers TPC-H and TPC-DS data generation for use with thunderduck's differential testing framework.
 
 ## Data Generation
 
@@ -108,11 +108,6 @@ ls -lh data/tpch_sf001/
 # partsupp.parquet    (~32K for SF 0.01)
 # region.parquet      (~800 bytes for SF 0.01)
 # supplier.parquet    (~4.0K for SF 0.01)
-
-# Verify Parquet files are valid
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query 1 --mode explain --data ./data/tpch_sf001
 ```
 
 ### Required Directory Structure
@@ -141,169 +136,77 @@ thunderduck/
 - All 8 tables must be present for queries to execute
 - Files must be in Parquet format with `.parquet` extension
 - Directory naming: `tpch_sf<scale>` where scale is zero-padded for < 1 (e.g., `sf001` for 0.01)
-- The scale factor is automatically inferred from the directory name
 
-## Running Queries
+## Running TPC-H Queries
 
-### Command-Line Interface
+### Via Differential Tests (Recommended)
 
-The `TPCHCommandLine` tool provides a simple CLI for executing TPC-H queries with different modes:
-
-```bash
-# Build the benchmarks JAR first
-mvn clean package -pl benchmarks
-
-# Run single query with EXPLAIN
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query 1 \
-  --mode explain \
-  --data ./data/tpch_sf001
-
-# Run with EXPLAIN ANALYZE (includes execution statistics)
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query 6 \
-  --mode analyze \
-  --data ./data/tpch_sf001
-
-# Execute query and show results
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query 3 \
-  --mode execute \
-  --data ./data/tpch_sf001
-```
-
-## Command-Line Examples
-
-### 1. Query 1: Pricing Summary Report (Scan + Aggregation)
+The differential testing framework runs TPC-H queries on both Apache Spark 4.0.1 and Thunderduck, comparing results:
 
 ```bash
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query 1 \
-  --mode explain \
-  --data ./data/tpch_sf001
+# One-time setup
+./tests/scripts/setup-differential-testing.sh
+
+# Run TPC-H differential tests (27 tests)
+./tests/scripts/run-differential-tests-v2.sh tpch
 ```
 
-**Expected Output:**
-```
-============================================================
-TPC-H Query 1
-Mode: EXPLAIN
-Data Path: ./data/tpch_sf001
-Scale Factor: 0.01
-============================================================
+### Via PySpark Client
 
-============================================================
-GENERATED SQL
-============================================================
+Connect to the Thunderduck server and run queries directly:
 
-SELECT
-  l_returnflag,
-  l_linestatus,
-  SUM(l_quantity) AS sum_qty,
-  SUM(l_extendedprice) AS sum_base_price,
-  ...
-FROM read_parquet('./data/tpch_sf001/lineitem.parquet')
-WHERE l_shipdate <= DATE '1998-12-01'
-GROUP BY l_returnflag, l_linestatus
-ORDER BY l_returnflag, l_linestatus
+```python
+from pyspark.sql import SparkSession
 
-============================================================
-DUCKDB EXPLAIN
-============================================================
+spark = SparkSession.builder \
+    .remote("sc://localhost:15002") \
+    .getOrCreate()
 
-┌─────────────────────────────┐
-│         QUERY PLAN          │
-└─────────────────────────────┘
-...
+# Load TPC-H tables
+lineitem = spark.read.parquet("data/tpch_sf001/lineitem.parquet")
+lineitem.createOrReplaceTempView("lineitem")
 
-============================================================
-Execution time: 15 ms
-============================================================
+# Run TPC-H Q1
+result = spark.sql("""
+    SELECT
+        l_returnflag,
+        l_linestatus,
+        SUM(l_quantity) as sum_qty,
+        SUM(l_extendedprice) as sum_base_price,
+        COUNT(*) as count_order
+    FROM lineitem
+    WHERE l_shipdate <= DATE '1998-12-01'
+    GROUP BY l_returnflag, l_linestatus
+    ORDER BY l_returnflag, l_linestatus
+""")
+result.show()
 ```
 
-### 2. Query 6: Forecasting Revenue Change (Selective Scan)
+## SQL Query Files
 
-```bash
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query 6 \
-  --mode analyze \
-  --data ./data/tpch_sf001
+TPC-H and TPC-DS SQL queries are located in `tests/integration/sql/`:
+
 ```
-
-This shows execution statistics including:
-- Row counts at each operator
-- Execution time per operator
-- Memory usage
-
-### 3. Query 3: Shipping Priority (Multi-table Join)
-
-```bash
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query 3 \
-  --mode execute \
-  --data ./data/tpch_sf001
-```
-
-Shows actual query results in tabular format.
-
-### 4. Run All Queries
-
-```bash
-java -cp benchmarks/target/benchmarks.jar \
-  com.thunderduck.tpch.TPCHCommandLine \
-  --query all \
-  --mode execute \
-  --data ./data/tpch_sf001
-```
-
-Currently executes queries 1, 3, and 6 (more queries coming soon).
-
-## Programmatic API
-
-You can also use the `TPCHClient` Java API in your code:
-
-```java
-import com.thunderduck.tpch.TPCHClient;
-import org.apache.arrow.vector.VectorSchemaRoot;
-
-// Create client
-TPCHClient client = new TPCHClient("./data/tpch_sf001", 0.01);
-
-// Execute query
-VectorSchemaRoot result = client.executeQuery(1);
-System.out.println("Rows: " + result.getRowCount());
-result.close();
-
-// Get EXPLAIN output
-String plan = client.explainQuery(1);
-System.out.println(plan);
-
-// Get EXPLAIN ANALYZE output
-String stats = client.explainAnalyzeQuery(1);
-System.out.println(stats);
-
-// Clean up
-client.close();
+tests/integration/sql/
+├── tpch_queries/     # 22 TPC-H queries (q1.sql - q22.sql)
+└── tpcds_queries/    # 99+ TPC-DS queries
 ```
 
 ## Performance Results
 
-Based on TPC-H benchmark at scale factor 10 (10GB):
+Based on differential tests at scale factor 0.01:
 
-| Query | thunderduck | Spark 4.0.x | Speedup |
+| Query | Thunderduck | Spark 4.0.1 | Speedup |
 |-------|-------------|-------------|---------|
-| Q1 (Scan + Agg) | 0.55s | 3.0s | 5.5x |
-| Q6 (Selective Scan) | 0.12s | 1.0s | 8.3x |
-| Q3 (Join + Agg) | 1.4s | 8.0s | 5.7x |
+| Q1 (Scan + Agg) | ~13ms | ~76ms | 5.9x |
+| Q6 (Selective Scan) | ~8ms | ~45ms | 5.6x |
+| Q3 (Join + Agg) | ~15ms | ~85ms | 5.7x |
+
+Performance varies by scale factor and hardware. The differential tests report timing for each query.
 
 ---
 
 **See Also:**
 - [Main README](../README.md)
 - [Differential Testing Architecture](architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
+- [Integration Tests README](../tests/integration/README.md)

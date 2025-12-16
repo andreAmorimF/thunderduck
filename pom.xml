@@ -10,7 +10,6 @@
     <modules>
         <module>core</module>
         <module>tests</module>
-        <module>benchmarks</module>
         <module>connect-server</module>
     </modules>
     <properties>

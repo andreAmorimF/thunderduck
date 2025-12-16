@@ -31,7 +31,7 @@ class TpcdsDataFrameQueries11_50:
         Complex CTE with two-year comparison
         """
         # Due to complex CTEs with year-over-year logic, use SQL
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q11.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q11.sql").read())
 
     @staticmethod
     def q12(spark: SparkSession) -> DataFrame:
@@ -40,7 +40,7 @@ class TpcdsDataFrameQueries11_50:
         Complex window function with revenue ratio
         """
         # Use SQL due to complex window function ratio calculation
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q12.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q12.sql").read())
 
     @staticmethod
     def q13(spark: SparkSession) -> DataFrame:
@@ -49,7 +49,7 @@ class TpcdsDataFrameQueries11_50:
         """
         # Complex query with multiple conditions on customer demographics
         # Use SQL for accuracy
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q13.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q13.sql").read())
 
     @staticmethod
     def q14(spark: SparkSession) -> DataFrame:
@@ -58,7 +58,7 @@ class TpcdsDataFrameQueries11_50:
         Complex query with multiple CTEs and CASE statements
         """
         # This is one of the most complex TPC-DS queries
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q14.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q14.sql").read())
 
     @staticmethod
     def q15(spark: SparkSession) -> DataFrame:
@@ -66,7 +66,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 15: Catalog sales by zip code
         """
         # Use SQL due to complex OR conditions
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q15.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q15.sql").read())
 
     @staticmethod
     def q16(spark: SparkSession) -> DataFrame:
@@ -74,7 +74,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 16: Count distinct orders by channel
         """
         # Complex COUNT(DISTINCT) with multiple tables
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q16.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q16.sql").read())
 
     @staticmethod
     def q17(spark: SparkSession) -> DataFrame:
@@ -82,7 +82,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 17: Store/catalog/web sales promotional analysis
         """
         # Complex multi-channel join query
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q17.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q17.sql").read())
 
     @staticmethod
     def q18(spark: SparkSession) -> DataFrame:
@@ -90,7 +90,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 18: Customer demographics analysis
         """
         # Use SQL for complex aggregation
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q18.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q18.sql").read())
 
     @staticmethod
     def q19(spark: SparkSession) -> DataFrame:
@@ -98,7 +98,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 19: Store returns and net loss
         """
         # Complex join with substring operations
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q19.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q19.sql").read())
 
     @staticmethod
     def q20(spark: SparkSession) -> DataFrame:
@@ -106,7 +106,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 20: Item revenue ratio by category
         """
         # Window functions with ratio calculations
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q20.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q20.sql").read())
 
     @staticmethod
     def q21(spark: SparkSession) -> DataFrame:
@@ -114,7 +114,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 21: Inventory analysis
         """
         # Complex inventory calculations
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q21.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q21.sql").read())
 
     @staticmethod
     def q22(spark: SparkSession) -> DataFrame:
@@ -122,7 +122,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 22: Inventory rollup
         """
         # ROLLUP operation
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q22.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q22.sql").read())
 
     @staticmethod
     def q23(spark: SparkSession) -> DataFrame:
@@ -131,7 +131,7 @@ class TpcdsDataFrameQueries11_50:
         Complex query with multiple CTEs and UNION ALL
         """
         # One of the most complex TPC-DS queries
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q23.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q23.sql").read())
 
     @staticmethod
     def q24(spark: SparkSession) -> DataFrame:
@@ -139,7 +139,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 24: Store sales by customer
         """
         # Complex filtering and aggregation
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q24.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q24.sql").read())
 
     @staticmethod
     def q25(spark: SparkSession) -> DataFrame:
@@ -147,7 +147,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 25: Store/catalog/web returns
         """
         # Multi-channel returns analysis
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q25.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q25.sql").read())
 
     @staticmethod
     def q26(spark: SparkSession) -> DataFrame:
@@ -155,7 +155,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 26: Promotional item analysis
         """
         # Use SQL for accuracy
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q26.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q26.sql").read())
 
     @staticmethod
     def q27(spark: SparkSession) -> DataFrame:
@@ -163,7 +163,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 27: Store sales by demographics and location
         """
         # GROUPING SETS operation
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q27.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q27.sql").read())
 
     @staticmethod
     def q28(spark: SparkSession) -> DataFrame:
@@ -171,7 +171,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 28: Store sales bucket analysis
         """
         # Complex CASE statements for bucketing
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q28.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q28.sql").read())
 
     @staticmethod
     def q29(spark: SparkSession) -> DataFrame:
@@ -179,7 +179,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 29: Store/catalog/web sales by customer demographics
         """
         # Multi-channel sales with demographics
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q29.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q29.sql").read())
 
     @staticmethod
     def q30(spark: SparkSession) -> DataFrame:
@@ -187,7 +187,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 30: Customer returns trend
         """
         # CTE with year comparison
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q30.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q30.sql").read())
 
     @staticmethod
     def q31(spark: SparkSession) -> DataFrame:
@@ -195,14 +195,14 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 31: County sales growth
         """
         # Complex CTEs with growth calculations
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q31.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q31.sql").read())
 
     @staticmethod
     def q32(spark: SparkSession) -> DataFrame:
         """
         TPC-DS Query 32: Excess discount analysis
         """
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q32.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q32.sql").read())
 
     @staticmethod
     def q33(spark: SparkSession) -> DataFrame:
@@ -210,7 +210,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 33: Multi-channel sales by manufacturing
         """
         # UNION ALL of three channels
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q33.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q33.sql").read())
 
     @staticmethod
     def q34(spark: SparkSession) -> DataFrame:
@@ -218,7 +218,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 34: Store sales by customer with filters
         """
         # Complex customer filtering
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q34.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q34.sql").read())
 
     @staticmethod
     def q35(spark: SparkSession) -> DataFrame:
@@ -226,7 +226,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 35: Customer demographics multi-channel
         """
         # EXISTS/NOT EXISTS patterns
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q35.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q35.sql").read())
 
     @staticmethod
     def q36(spark: SparkSession) -> DataFrame:
@@ -234,7 +234,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 36: Store sales GROUPING SETS
         """
         # GROUPING SETS with GROUPING() function
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q36.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q36.sql").read())
 
     @staticmethod
     def q37(spark: SparkSession) -> DataFrame:
@@ -242,7 +242,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 37: Inventory and sales analysis
         """
         # JOIN between inventory and catalog sales
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q37.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q37.sql").read())
 
     @staticmethod
     def q38(spark: SparkSession) -> DataFrame:
@@ -250,7 +250,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 38: Customer count by demographics
         """
         # COUNT(DISTINCT) with INTERSECT
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q38.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q38.sql").read())
 
     @staticmethod
     def q39(spark: SparkSession) -> DataFrame:
@@ -258,14 +258,14 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 39: Inventory variance analysis
         """
         # Complex CTE with variance calculations
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q39.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q39.sql").read())
 
     @staticmethod
     def q40(spark: SparkSession) -> DataFrame:
         """
         TPC-DS Query 40: Store sales and returns
         """
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q40.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q40.sql").read())
 
     @staticmethod
     def q41(spark: SparkSession) -> DataFrame:
@@ -273,7 +273,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 41: Product popularity
         """
         # Complex item filtering
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q41.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q41.sql").read())
 
     @staticmethod
     def q42(spark: SparkSession) -> DataFrame:
@@ -317,7 +317,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 43: Store gmt offset analysis
         """
         # Date and time calculations
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q43.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q43.sql").read())
 
     @staticmethod
     def q44(spark: SparkSession) -> DataFrame:
@@ -325,7 +325,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 44: Store sales ranking
         """
         # RANK() window function
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q44.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q44.sql").read())
 
     @staticmethod
     def q45(spark: SparkSession) -> DataFrame:
@@ -333,7 +333,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 45: Web sales by customer location
         """
         # Complex location filtering
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q45.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q45.sql").read())
 
     @staticmethod
     def q46(spark: SparkSession) -> DataFrame:
@@ -396,7 +396,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 47: Store sales window analysis
         """
         # Complex window functions
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q47.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q47.sql").read())
 
     @staticmethod
     def q48(spark: SparkSession) -> DataFrame:
@@ -462,7 +462,7 @@ class TpcdsDataFrameQueries11_50:
         TPC-DS Query 49: Web/catalog/store returns ranking
         """
         # Complex RANK() with multiple channels
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q49.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q49.sql").read())
 
     @staticmethod
     def q50(spark: SparkSession) -> DataFrame:

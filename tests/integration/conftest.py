@@ -132,9 +132,9 @@ def tpch_data_dir(workspace_dir):
 
 
 @pytest.fixture(scope="session")
-def tpch_queries_dir(workspace_dir):
+def tpch_queries_dir():
     """Path to TPC-H queries directory"""
-    queries_dir = workspace_dir / "benchmarks" / "tpch_queries"
+    queries_dir = Path(__file__).parent / "sql" / "tpch_queries"
     if not queries_dir.exists():
         pytest.skip(f"TPC-H queries not found at {queries_dir}")
     return queries_dir
@@ -323,9 +323,9 @@ def tpcds_data_dir():
 
 
 @pytest.fixture(scope="session")
-def tpcds_queries_dir(workspace_dir):
+def tpcds_queries_dir():
     """Path to TPC-DS queries directory"""
-    queries_dir = workspace_dir / "benchmarks" / "tpcds_queries"
+    queries_dir = Path(__file__).parent / "sql" / "tpcds_queries"
     if not queries_dir.exists():
         pytest.skip(f"TPC-DS queries not found at {queries_dir}")
     return queries_dir

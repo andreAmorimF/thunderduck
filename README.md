@@ -192,8 +192,8 @@ mvn clean verify -Pcoverage
 # Core module only
 mvn clean install -pl core
 
-# Benchmarks module
-mvn clean install -pl benchmarks
+# Connect server module
+mvn clean install -pl connect-server
 
 # Tests module
 mvn clean install -pl tests
@@ -204,12 +204,11 @@ mvn clean install -pl tests
 ```bash
 # Check that JARs are created
 ls -lh core/target/*.jar
-ls -lh benchmarks/target/*.jar
+ls -lh connect-server/target/*.jar
 
 # Expected output:
 # core/target/thunderduck-core-0.1.0-SNAPSHOT.jar
-# benchmarks/target/thunderduck-benchmarks-0.1.0-SNAPSHOT.jar
-# benchmarks/target/benchmarks.jar
+# connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar
 ```
 
 ## Project Structure
@@ -229,19 +228,16 @@ thunderduck/
 │   │   ├── logging/           # Structured query logging
 │   │   └── exception/         # Exception types
 │   └── pom.xml
-├── benchmarks/                # TPC-H/TPC-DS benchmarks
-│   ├── src/main/java/com/thunderduck/
-│   │   └── tpch/              # TPC-H queries and utilities
-│   │       ├── TPCHClient.java         # Programmatic API
-│   │       └── TPCHCommandLine.java    # CLI tool
-│   ├── README.md
+├── connect-server/            # Spark Connect server
+│   ├── src/main/java/com/thunderduck/connect/
+│   │   ├── server/            # gRPC server implementation
+│   │   ├── service/           # Spark Connect service handlers
+│   │   └── session/           # Session management
 │   └── pom.xml
 ├── tests/                     # Comprehensive test suite
-│   ├── src/test/java/com/thunderduck/
-│   │   ├── differential/      # Spark comparison tests (200+)
-│   │   ├── integration/       # Integration tests
-│   │   ├── logging/           # Logging system tests
-│   │   └── introspection/     # EXPLAIN statement tests
+│   ├── src/test/java/         # Java unit tests
+│   ├── integration/           # Python differential tests (266 tests)
+│   │   └── sql/               # TPC-H and TPC-DS SQL queries
 │   └── pom.xml
 └── docs/                      # Documentation
     ├── TPC_H_BENCHMARK.md     # TPC-H benchmark guide

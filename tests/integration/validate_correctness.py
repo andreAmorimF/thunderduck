@@ -41,7 +41,7 @@ def validate_query(qnum, spark_session):
         reference = json.load(f)
 
     # Execute on Thunderduck
-    query_file = Path(f"/workspace/benchmarks/tpch_queries/q{qnum}.sql")
+    query_file = Path(f"/workspace/tests/integration/sql/tpch_queries/q{qnum}.sql")
     sql = query_file.read_text()
 
     result = spark_session.sql(sql)

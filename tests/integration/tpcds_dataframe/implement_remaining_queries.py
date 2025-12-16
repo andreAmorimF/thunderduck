@@ -11,7 +11,7 @@ REMAINING_QUERIES = [25, 26, 29, 32, 37, 40, 41, 42, 43, 45, 48, 50, 52, 55, 62,
 
 def read_sql_file(query_num: int) -> str:
     """Read SQL file for a query"""
-    with open(f'/workspace/benchmarks/tpcds_queries/q{query_num}.sql', 'r') as f:
+    with open(f'/workspace/tests/integration/sql/tpcds_queries/q{query_num}.sql', 'r') as f:
         return f.read()
 
 def generate_dataframe_implementation(query_num: int) -> str:

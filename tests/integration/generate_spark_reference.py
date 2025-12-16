@@ -40,7 +40,7 @@ def generate_reference_results():
 
     print("\nGenerating reference results...")
     for qnum in queries:
-        query_file = Path(f"/workspace/benchmarks/tpch_queries/q{qnum}.sql")
+        query_file = Path(f"/workspace/tests/integration/sql/tpch_queries/q{qnum}.sql")
 
         if not query_file.exists():
             print(f"  ✗ Q{qnum}: Query file not found")

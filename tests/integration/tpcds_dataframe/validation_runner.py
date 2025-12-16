@@ -33,7 +33,7 @@ class TpcdsValidationRunner:
         self.spark = spark
         self.data_path = data_path
         self.comparator = DataFrameComparator(float_tolerance=1e-6, debug=True)
-        self.sql_query_path = "/workspace/benchmarks/tpcds_queries"
+        self.sql_query_path = "/workspace/tests/integration/sql/tpcds_queries"
 
         # Register all TPC-DS tables
         self._register_tables()

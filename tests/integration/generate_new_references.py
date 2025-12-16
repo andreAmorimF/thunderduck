@@ -34,7 +34,7 @@ def convert_row_to_json(row):
 
 def generate_reference(spark, query_num):
     """Generate reference data for a single query"""
-    queries_dir = Path("/workspace/benchmarks/tpch_queries")
+    queries_dir = Path("/workspace/tests/integration/sql/tpch_queries")
     data_dir = Path("/workspace/data/tpch_sf001")
     output_dir = Path("/workspace/tests/integration/expected_results")
 

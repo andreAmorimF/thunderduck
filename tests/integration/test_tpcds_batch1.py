@@ -20,7 +20,7 @@ class TestTPCDSBatch1:
 
     def load_query(self, qnum):
         """Load TPC-DS query SQL"""
-        query_file = Path(f"/workspace/benchmarks/tpcds_queries/q{qnum}.sql")
+        query_file = Path(f"/workspace/tests/integration/sql/tpcds_queries/q{qnum}.sql")
         return query_file.read_text()
 
     def compare_values(self, spark_val, td_val, epsilon=0.01):

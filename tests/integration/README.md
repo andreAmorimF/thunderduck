@@ -178,7 +178,7 @@ Each TPC-H query has multiple test methods:
 class TestTPCHQuery1:
     def test_q1_sql(self, spark, load_tpch_query, validator):
         """Execute Q1 via SQL"""
-        sql = load_tpch_query(1)  # Loads benchmarks/tpch_queries/q1.sql
+        sql = load_tpch_query(1)  # Loads sql/tpch_queries/q1.sql
         result = spark.sql(sql)
         # Validate results...
 

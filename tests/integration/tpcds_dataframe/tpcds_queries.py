@@ -88,7 +88,7 @@ class TpcdsDataFrameQueries:
 
         # Note: This query needs careful implementation of the week-over-week logic
         # Placeholder for now - will complete after analyzing SQL structure
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q2.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q2.sql").read())
 
     @staticmethod
     def q3(spark: SparkSession) -> DataFrame:
@@ -98,7 +98,7 @@ class TpcdsDataFrameQueries:
         """
         # For now, use SQL directly as the query has complex logic
         # TODO: Implement full DataFrame version after understanding the exact SQL logic
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q3.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q3.sql").read())
 
     @staticmethod
     def q4(spark: SparkSession) -> DataFrame:
@@ -109,7 +109,7 @@ class TpcdsDataFrameQueries:
         # This is one of the most complex TPC-DS queries with multiple CTEs
         # For initial implementation, we'll use SQL directly
         # TODO: Convert to pure DataFrame API
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q4.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q4.sql").read())
 
     @staticmethod
     def q5(spark: SparkSession) -> DataFrame:
@@ -119,7 +119,7 @@ class TpcdsDataFrameQueries:
         # This query involves UNION ALL of sales from different channels
         # with ROLLUP operations
         # TODO: Implement full DataFrame version
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q5.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q5.sql").read())
 
     @staticmethod
     def q6(spark: SparkSession) -> DataFrame:
@@ -130,7 +130,7 @@ class TpcdsDataFrameQueries:
         """
         # For now, use SQL directly as the query has complex subquery logic
         # TODO: Implement full DataFrame version after analyzing the exact SQL pattern
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q6.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q6.sql").read())
 
     @staticmethod
     def q7(spark: SparkSession) -> DataFrame:
@@ -140,7 +140,7 @@ class TpcdsDataFrameQueries:
         """
         # For now, use SQL directly as the query has specific requirements
         # TODO: Implement full DataFrame version after analyzing exact SQL behavior
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q7.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q7.sql").read())
 
     @staticmethod
     def q8(spark: SparkSession) -> DataFrame:
@@ -150,7 +150,7 @@ class TpcdsDataFrameQueries:
         """
         # For now, use SQL directly as the query has specific filtering requirements
         # TODO: Implement full DataFrame version after fixing the zip code logic
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q8.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q8.sql").read())
 
     @staticmethod
     def q9(spark: SparkSession) -> DataFrame:
@@ -160,7 +160,7 @@ class TpcdsDataFrameQueries:
         """
         # This query uses complex CASE statements for creating buckets
         # Will need careful implementation
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q9.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q9.sql").read())
 
     @staticmethod
     def q10(spark: SparkSession) -> DataFrame:
@@ -170,7 +170,7 @@ class TpcdsDataFrameQueries:
         """
         # For now, use SQL directly as this query has complex EXISTS/NOT EXISTS patterns
         # TODO: Convert to pure DataFrame API after validating simpler queries
-        return spark.sql(open("/workspace/benchmarks/tpcds_queries/q10.sql").read())
+        return spark.sql(open("/workspace/tests/integration/sql/tpcds_queries/q10.sql").read())
 
 
 # Import queries 11-50 and 51-100

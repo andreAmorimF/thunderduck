@@ -54,7 +54,7 @@ class TpcdsDataFrameValidationRunner:
 
     def run_sql_query(self, query_num: int) -> DataFrame:
         """Run SQL version of query for comparison"""
-        sql_file = f"/workspace/benchmarks/tpcds_queries/q{query_num}.sql"
+        sql_file = f"/workspace/tests/integration/sql/tpcds_queries/q{query_num}.sql"
         try:
             with open(sql_file, 'r') as f:
                 sql_content = f.read()
