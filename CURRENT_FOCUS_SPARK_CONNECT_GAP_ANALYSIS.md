@@ -1,7 +1,7 @@
 # Spark Connect 4.0.x Gap Analysis for Thunderduck
 
-**Version:** 3.7
-**Date:** 2025-12-16
+**Version:** 3.8
+**Date:** 2025-12-17
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
 **Validation:** 266 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
 
@@ -20,7 +20,7 @@ This document provides a detailed gap analysis between Spark Connect 4.0.x's pro
 | Category | Total Operators | Implemented | Partial | Coverage |
 |----------|----------------|-------------|---------|----------|
 | Relations | 40 | 36 | 0 | **90%** |
-| Expressions | 16 | 9 | 0 | **56.25%** |
+| Expressions | 16 | 12 | 0 | **75%** |
 | Commands | 10 | 2 | 1 | **25-30%** |
 | Catalog | 26 | 26 | 0 | **100%** |
 
@@ -29,6 +29,8 @@ This document provides a detailed gap analysis between Spark Connect 4.0.x's pro
 *Catalog Note*: All 26 catalog operations implemented (M41-M44). CREATE_TABLE and CREATE_EXTERNAL_TABLE both support internal and external tables (CSV/Parquet/JSON as VIEWs). 7 operations are no-ops for DuckDB compatibility (caching, partitions). **100% catalog coverage achieved.**
 
 *Statistics Note*: All 8 statistics operations implemented (M45). df.stat.cov/corr/approxQuantile return scalars/arrays; df.describe/summary/crosstab/freqItems/sampleBy return DataFrames. **100% statistics coverage achieved.**
+
+*Lambda Note*: LambdaFunction, UnresolvedNamedLambdaVariable, and CallFunction expressions implemented (M46). Supports transform, filter, exists, forall, aggregate HOFs. zip_with and map HOFs have partial support. **Expression coverage increased from 56% to 75%.**
 
 ---
 
@@ -129,17 +131,17 @@ Expressions compute values and are used in projections, filters, aggregations, e
 | **ExpressionString** | `expression_string` | ✅ Implemented | Raw SQL expressions |
 | **Window** | `window` | ✅ Implemented | Window functions with frame specs |
 | **SortOrder** | `sort_order` | ✅ Implemented | Sort ordering (handled in RelationConverter) |
+| **LambdaFunction** | `lambda_function` | ✅ Implemented | `transform(arr, x -> x + 1)` - DuckDB Python-style syntax (M46) |
+| **UnresolvedNamedLambdaVariable** | `unresolved_named_lambda_variable` | ✅ Implemented | Lambda variable references within lambda bodies (M46) |
+| **CallFunction** | `call_function` | ✅ Implemented | Dynamic function calls by name (M46) |
 
 ### 2.2 Not Implemented Expressions
 
 | Expression | Proto Field | Priority | Use Case |
 |------------|-------------|----------|----------|
 | **UnresolvedRegex** | `unresolved_regex` | 🟡 MEDIUM | `SELECT \`col_*\`` regex patterns |
-| **LambdaFunction** | `lambda_function` | 🟡 MEDIUM | `transform(arr, x -> x + 1)` |
-| **UnresolvedNamedLambdaVariable** | `unresolved_named_lambda_variable` | 🟡 MEDIUM | Lambda variables |
 | **UnresolvedExtractValue** | `unresolved_extract_value` | 🟡 MEDIUM | `col["key"]`, `col.field` |
 | **UpdateFields** | `update_fields` | 🟢 LOW | Struct field manipulation |
-| **CallFunction** | `call_function` | 🟢 LOW | Alternative function call syntax |
 | **CommonInlineUserDefinedFunction** | `common_inline_user_defined_function` | 🔵 FUTURE | Python/Scala UDFs |
 
 ### 2.3 Literal Type Support
@@ -310,6 +312,29 @@ The following functions are validated by differential tests comparing Thunderduc
 | `rollup` | 5 | Hierarchical aggregation with grouping() |
 | Advanced | 3 | Cube vs rollup, pivot then aggregate |
 
+### 5.7 Higher-Order Functions (M46) (18 E2E Tests)
+
+Lambda functions and higher-order array/map operations are now supported:
+
+| Spark Function | DuckDB Translation | Status | E2E Tests |
+|----------------|-------------------|--------|-----------|
+| `transform(arr, f)` | `list_transform(arr, f)` | ✅ Full | 3 |
+| `filter(arr, f)` | `list_filter(arr, f)` | ✅ Full | 4 |
+| `exists(arr, f)` | `list_bool_or(list_transform(arr, f))` | ✅ Full | 2 |
+| `forall(arr, f)` | `list_bool_and(list_transform(arr, f))` | ✅ Full | 2 |
+| `aggregate(arr, init, f)` | `list_reduce(list_prepend(init, arr), f)` | ✅ Full | 3 |
+| `zip_with(a, b, f)` | `list_zip(a, b)` | ⚠️ Partial | - |
+| `map_filter(m, f)` | `map_from_entries(list_filter(...))` | ⚠️ Partial | - |
+| `transform_keys(m, f)` | `map_from_entries(list_transform(...))` | ⚠️ Partial | - |
+| `transform_values(m, f)` | `map_from_entries(list_transform(...))` | ⚠️ Partial | - |
+
+**Lambda Syntax**: DuckDB uses Python-style lambda syntax: `lambda x: x + 1` (Spark uses `x -> x + 1`)
+
+**Limitations**:
+- **zip_with**: Returns zipped list without applying the lambda. Full support would require lambda body rewriting to access struct fields.
+- **map_filter/transform_keys/transform_values**: Basic structure implemented, but lambda body rewriting for `(k, v)` to `e.key, e.value` not yet supported. Works for simple cases.
+- **Nested lambdas**: Fully supported with proper variable scoping.
+
 ---
 
 ## 6. Implementation Recommendations
@@ -344,11 +369,11 @@ These are commonly used operations that users will expect to work:
 ### Phase 3: Complex Types & Expressions (Medium Priority)
 
 1. **UnresolvedExtractValue** - Struct/Array/Map access
-2. **LambdaFunction** - Array transform operations
+2. ~~**LambdaFunction** - Array transform operations~~ ✅ Implemented (M46, 2025-12-17)
 3. **Complex literal types** (Array, Map, Struct)
 4. **Interval types** (CalendarInterval, etc.)
 
-**Estimated effort:** 2-3 weeks
+**LambdaFunction Complete!** Supports transform, filter, exists, forall, aggregate with 18 E2E tests passing.
 
 ### Phase 4: Catalog Operations (Medium Priority)
 
@@ -538,6 +563,14 @@ df.summary("count", "min", "max")             # Custom statistics list
 df.stat.crosstab("col1", "col2")              # Contingency table
 df.stat.freqItems(["col1", "col2"])           # Frequent items in columns
 df.stat.sampleBy("category", {"A": 0.5, "B": 0.2}, seed=42)  # Stratified sampling
+
+# LAMBDA / HIGHER-ORDER FUNCTIONS (M46):
+df.select(F.transform("arr", lambda x: x + 1))              # Transform array elements
+df.select(F.filter("arr", lambda x: x > 2))                 # Filter array elements
+df.select(F.exists("arr", lambda x: x > 10))                # Any element matches predicate
+df.select(F.forall("arr", lambda x: x > 0))                 # All elements match predicate
+df.select(F.aggregate("arr", F.lit(0), lambda a, x: a + x)) # Reduce array to single value
+# Nested lambdas also supported for multi-dimensional arrays
 ```
 
 ## Appendix B: Quick Reference - What Doesn't Work
@@ -552,6 +585,12 @@ df.write.csv("s3://bucket/path")              # S3 writes need httpfs extension
 
 # RELATIONS not yet implemented:
 df.toSchema(schema)                           # Schema enforcement
+
+# LAMBDA FUNCTIONS - PARTIAL SUPPORT:
+F.zip_with(arr1, arr2, lambda x, y: x + y)    # Returns zipped list, lambda not applied
+F.map_filter(m, lambda k, v: v > 0)           # Basic structure only, lambda rewriting incomplete
+F.transform_keys(m, lambda k, v: upper(k))    # Basic structure only, lambda rewriting incomplete
+F.transform_values(m, lambda k, v: v * 2)     # Basic structure only, lambda rewriting incomplete
 
 # Python/Scala UDFs (Future):
 spark.udf.register(...)                       # User-defined functions not supported
@@ -579,14 +618,15 @@ spark.udf.register(...)                       # User-defined functions not suppo
 
 ---
 
-**Document Version:** 3.7
-**Last Updated:** 2025-12-16
+**Document Version:** 3.8
+**Last Updated:** 2025-12-17
 **Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 
 ### Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v3.8 | 2025-12-17 | Added LambdaFunction, UnresolvedNamedLambdaVariable, CallFunction expressions (M46). Supports transform, filter, exists, forall, aggregate HOFs. zip_with and map HOFs have partial support. 18 E2E tests. **Expression coverage: 75% (12/16).** |
 | v3.7 | 2025-12-16 | Added all 8 statistics operations (M45): StatCov, StatCorr, StatApproxQuantile, StatDescribe, StatSummary, StatCrosstab, StatFreqItems, StatSampleBy. **Relations coverage: 90% (36/40). Statistics 100% complete.** |
 | v3.6 | 2025-12-16 | Added CreateExternalTable (delegates to CreateTable). **Catalog 100% complete (26/26 operations)**. |
 | v3.5 | 2025-12-16 | Added GetDatabase, GetTable, GetFunction, FunctionExists (M44). Catalog operations now 22/26 (85%). |

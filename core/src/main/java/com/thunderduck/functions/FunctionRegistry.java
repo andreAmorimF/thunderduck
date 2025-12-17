@@ -319,6 +319,13 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("array_union", "list_union");
         DIRECT_MAPPINGS.put("array_intersect", "list_intersect");
         DIRECT_MAPPINGS.put("array_except", "list_except");
+
+        // Higher-order array functions (lambda-based)
+        DIRECT_MAPPINGS.put("transform", "list_transform");
+        DIRECT_MAPPINGS.put("filter", "list_filter");
+        DIRECT_MAPPINGS.put("aggregate", "list_reduce");
+        // Note: exists, forall require special handling in ExpressionConverter
+        // as they need to wrap list_transform with list_any/list_all
     }
 
     // ==================== Conditional Functions ====================
@@ -349,5 +356,22 @@ public class FunctionRegistry {
      */
     public static int registeredFunctionCount() {
         return DIRECT_MAPPINGS.size() + CUSTOM_TRANSLATORS.size();
+    }
+
+    /**
+     * Maps a Spark function name to DuckDB equivalent.
+     *
+     * <p>Returns the mapped DuckDB function name if a direct mapping exists,
+     * otherwise returns the original name unchanged.
+     *
+     * @param sparkFunctionName the Spark function name
+     * @return the DuckDB function name (or original if no mapping)
+     */
+    public static String mapFunctionName(String sparkFunctionName) {
+        if (sparkFunctionName == null) {
+            return null;
+        }
+        String normalizedName = sparkFunctionName.toLowerCase();
+        return DIRECT_MAPPINGS.getOrDefault(normalizedName, sparkFunctionName);
     }
 }
