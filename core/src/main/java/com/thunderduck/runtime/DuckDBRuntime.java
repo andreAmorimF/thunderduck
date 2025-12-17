@@ -83,6 +83,16 @@ public class DuckDBRuntime implements AutoCloseable {
 
     /**
      * Configure connection for optimal performance.
+     *
+     * <p>Configuration includes:
+     * <ul>
+     *   <li>Memory limit based on hardware profile</li>
+     *   <li>Thread count based on available cores</li>
+     *   <li>jemalloc background threads for 8+ core machines (Linux only)</li>
+     *   <li>Spark-compatible NULL ordering</li>
+     * </ul>
+     *
+     * @see <a href="https://duckdb.org/docs/stable/core_extensions/jemalloc">DuckDB jemalloc docs</a>
      */
     private void configureConnection() throws SQLException {
         try (Statement stmt = connection.createStatement()) {
@@ -94,18 +104,40 @@ public class DuckDBRuntime implements AutoCloseable {
             stmt.execute(String.format("SET threads=%d",
                 hardware.recommendedThreadCount()));
 
+            // Enable jemalloc background threads on 8+ core Linux machines
+            // This improves allocation performance by allowing background threads
+            // to handle memory purging without blocking foreground operations.
+            // jemalloc is enabled by default on Linux; this setting enables its
+            // background thread feature for asynchronous memory management.
+            // See: https://duckdb.org/docs/stable/core_extensions/jemalloc#configuration
+            if (hardware.cpuCores() >= 8 && isLinux()) {
+                stmt.execute("SET allocator_background_threads=true");
+                logger.debug("Enabled jemalloc background threads (8+ cores on Linux)");
+            }
+
             // Enable progress bar for long queries
             stmt.execute("SET enable_progress_bar=false");
 
-            // Enable parallel CSV/Parquet reading
-            stmt.execute("SET preserve_insertion_order=false");
+            // Ensure insertion order is preserved
+            stmt.execute("SET preserve_insertion_order=true");
 
             // Set NULL ordering to match Spark SQL
             stmt.execute("SET default_null_order='NULLS FIRST'");
 
-            logger.debug("DuckDB configured: memory={}, threads={}",
-                hardware.recommendedMemoryLimit(), hardware.recommendedThreadCount());
+            logger.debug("DuckDB configured: memory={}, threads={}, cores={}",
+                hardware.recommendedMemoryLimit(), hardware.recommendedThreadCount(),
+                hardware.cpuCores());
         }
+    }
+
+    /**
+     * Check if running on Linux (where jemalloc is available by default).
+     *
+     * @return true if the OS is Linux
+     */
+    private boolean isLinux() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        return os.contains("linux");
     }
 
     /**
