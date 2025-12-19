@@ -60,22 +60,40 @@ NC='\033[0m'
 get_test_files() {
     case "$1" in
         tpch)
-            echo "test_differential_v2.py"
+            echo "differential/test_differential_v2.py"
             ;;
         tpcds)
-            echo "test_tpcds_differential.py"
+            echo "differential/test_tpcds_differential.py"
             ;;
         functions)
-            echo "test_dataframe_functions.py"
+            echo "differential/test_dataframe_functions.py"
             ;;
         aggregations)
-            echo "test_multidim_aggregations.py"
+            echo "differential/test_multidim_aggregations.py"
             ;;
         window)
-            echo "test_window_functions.py"
+            echo "differential/test_window_functions.py"
+            ;;
+        operations)
+            echo "differential/test_dataframe_ops_differential.py"
+            ;;
+        lambda)
+            echo "differential/test_lambda_differential.py"
+            ;;
+        joins)
+            echo "differential/test_using_joins_differential.py"
+            ;;
+        statistics)
+            echo "differential/test_statistics_differential.py"
+            ;;
+        types)
+            echo "differential/test_complex_types_differential.py differential/test_type_literals_differential.py"
+            ;;
+        schema)
+            echo "differential/test_to_schema_differential.py"
             ;;
         all)
-            echo "test_differential_v2.py test_tpcds_differential.py test_dataframe_functions.py test_multidim_aggregations.py test_window_functions.py"
+            echo "differential/"
             ;;
         *)
             echo ""
@@ -99,6 +117,24 @@ get_test_description() {
             ;;
         window)
             echo "Window function tests"
+            ;;
+        operations)
+            echo "DataFrame operations tests"
+            ;;
+        lambda)
+            echo "Lambda/HOF function tests"
+            ;;
+        joins)
+            echo "USING join tests"
+            ;;
+        statistics)
+            echo "Statistics operations (cov, corr, describe)"
+            ;;
+        types)
+            echo "Complex types and type literals"
+            ;;
+        schema)
+            echo "ToSchema df.to(schema) tests"
             ;;
         all)
             echo "All differential tests"
@@ -176,9 +212,9 @@ fi
 echo -e "${GREEN}  Spark found at: $SPARK_HOME${NC}"
 
 # Check TPC-H data
-if [ ! -d "$WORKSPACE_DIR/data/tpch_sf001" ]; then
-    echo -e "${RED}ERROR: TPC-H data not found at $WORKSPACE_DIR/data/tpch_sf001${NC}"
-    echo "Please generate TPC-H data first"
+if [ ! -d "$WORKSPACE_DIR/tests/integration/tpch_sf001" ]; then
+    echo -e "${RED}ERROR: TPC-H data not found at $WORKSPACE_DIR/tests/integration/tpch_sf001${NC}"
+    echo "Please ensure TPC-H data files exist in tests/integration/tpch_sf001/"
     exit 1
 fi
 echo -e "${GREEN}  TPC-H data found${NC}"

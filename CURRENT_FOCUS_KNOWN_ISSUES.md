@@ -57,25 +57,26 @@ This document tracks known issues discovered during testing that need to be addr
 
 ---
 
-## 4. TPC-H Tests Require Data Setup
+## 4. ~~TPC-H Tests Require Data Setup~~ RESOLVED
 
-**Tests**: All `test_tpch.py::TestTPCH::*` tests (44 tests)
+**Status**: Fixed - Test infrastructure consolidated
 
-**Error**:
+**Solution**: Consolidated TPC-H test infrastructure:
+- Moved test data to `/workspace/tests/integration/tpch_sf001/` (co-located with tests)
+- Eliminated standalone test files (duplicates of differential tests)
+- All TPC-H testing now uses differential tests comparing against real Apache Spark 4.0.1
+- Removed static `expected_results/` directory in favor of live Spark comparison
+
+**Changes**:
+- Deleted: `test_tpch_queries.py`, `test_tpch_dataframe.py`, `test_tpch_tier2.py`
+- Deleted: `expected_results/` directory and generator scripts
+- Updated: `conftest.py` data path, `run-differential-tests-v2.sh` data check
+- Added: Q5 DataFrame + basic operations to `test_differential_v2.py`
+
+**Test Execution**:
+```bash
+./tests/scripts/run-differential-tests-v2.sh tpch  # Run TPC-H differential tests
 ```
-SQL error: Catalog Error: Table with name lineitem does not exist!
-```
-
-**Root Cause**: TPC-H tests require the TPC-H benchmark tables to be pre-loaded into DuckDB.
-
-**Status**: Not a bug - requires test environment setup.
-
-**Fix Options**:
-1. Add TPC-H data generation as part of test setup
-2. Mark TPC-H tests as requiring external data
-3. Use DuckDB's built-in TPC-H extension to generate data
-
-**Priority**: Low - Test infrastructure, not a bug
 
 ---
 
@@ -86,7 +87,7 @@ SQL error: Catalog Error: Table with name lineitem does not exist!
 | ~~COUNT_DISTINCT~~ | test_distinct_operations | Medium | **RESOLVED** |
 | ~~Empty DataFrame~~ | test_count_on_empty_dataframe | Medium | **RESOLVED** |
 | ~~Natural/Using Join~~ | test_join_local_dataframes | High | **RESOLVED** |
-| TPC-H Data | test_tpch.py | Low | Test setup |
+| ~~TPC-H Data~~ | test_differential_v2.py | Low | **RESOLVED** |
 
 ---
 

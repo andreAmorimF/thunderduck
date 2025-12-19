@@ -123,11 +123,11 @@ def workspace_dir():
 
 
 @pytest.fixture(scope="session")
-def tpch_data_dir(workspace_dir):
-    """Path to TPC-H data directory"""
-    data_dir = workspace_dir / "data" / "tpch_sf001"
+def tpch_data_dir():
+    """Path to TPC-H data directory (co-located with integration tests)"""
+    data_dir = Path(__file__).parent / "tpch_sf001"
     if not data_dir.exists():
-        pytest.skip(f"TPC-H data not found at {data_dir}. Please generate data first.")
+        pytest.skip(f"TPC-H data not found at {data_dir}. Please ensure data files exist.")
     return data_dir
 
 

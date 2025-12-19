@@ -4,534 +4,131 @@ Pytest-based integration tests for Thunderduck Spark Connect server using PySpar
 
 ## Overview
 
-This test suite validates the Spark Connect server implementation by executing TPC-H and TPC-DS queries, DataFrame operations, and function parity tests through a real PySpark Spark Connect client. Tests compare Thunderduck results against Apache Spark 4.0.1 reference.
-
-**Differential Test Coverage (266 tests - ALL PASSING):**
-
-| Test Suite | Tests | Description |
-|------------|-------|-------------|
-| TPC-H SQL | 23 | Q1-Q22 + sanity test |
-| TPC-H DataFrame | 4 | Q1, Q3, Q6, Q12 via DataFrame API |
-| TPC-DS SQL | 102 | Q1-Q99 (Q36 excluded) + variants |
-| TPC-DS DataFrame | 24 | 24 queries via DataFrame API |
-| Function Parity | 57 | Array, Map, Null, String, Math functions |
-| Multi-dim Aggregations | 21 | pivot, unpivot, cube, rollup |
-| Window Functions | 35 | rank, lag/lead, frame specs |
-| **Total** | **266** | **All passing against Spark 4.0.1** |
-
-## Quick Start (Differential Tests)
-
-The recommended way to run integration tests is via the differential testing framework, which compares Thunderduck against Apache Spark 4.0.1:
-
-```bash
-# One-time setup (installs Spark 4.0.1, creates venv with all dependencies)
-./tests/scripts/setup-differential-testing.sh
-
-# Run ALL differential tests (266 tests)
-./tests/scripts/run-differential-tests-v2.sh
-
-# Run specific test group
-./tests/scripts/run-differential-tests-v2.sh tpch         # TPC-H tests (27 tests)
-./tests/scripts/run-differential-tests-v2.sh tpcds        # TPC-DS tests (126 tests)
-./tests/scripts/run-differential-tests-v2.sh functions    # Function parity (57 tests)
-./tests/scripts/run-differential-tests-v2.sh aggregations # Multi-dim aggregations (21 tests)
-./tests/scripts/run-differential-tests-v2.sh window       # Window functions (35 tests)
-
-# Show help
-./tests/scripts/run-differential-tests-v2.sh --help
-```
-
-See [Differential Testing Architecture](../../docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md) for details.
+This test suite validates the Spark Connect server implementation by running queries against both Thunderduck and Apache Spark 4.0.1, comparing results for correctness.
 
 ## Directory Structure
 
 ```
 tests/integration/
-├── README.md                       # This file
-├── conftest.py                     # pytest configuration and fixtures
-├── .venv/                          # Python virtual environment (created by setup script)
-├── .env                            # Environment configuration
+├── conftest.py                         # Pytest fixtures
+├── README.md                           # This file
 │
-│── # Differential Test Suites (266 tests total)
-├── test_differential_v2.py         # TPC-H SQL + DataFrame tests (27 tests)
-├── test_tpcds_differential.py      # TPC-DS SQL + DataFrame tests (126 tests)
-├── test_dataframe_functions.py     # Function parity tests (57 tests)
-├── test_multidim_aggregations.py   # pivot, unpivot, cube, rollup (21 tests)
-├── test_window_functions.py        # Window function tests (35 tests)
+├── differential/                       # Differential tests (vs Apache Spark 4.0.1)
+│   ├── test_differential_v2.py         # TPC-H SQL + DataFrame (34 tests)
+│   ├── test_tpcds_differential.py      # TPC-DS SQL + DataFrame (126 tests)
+│   ├── test_dataframe_functions.py     # Function parity (57 tests)
+│   ├── test_multidim_aggregations.py   # pivot, cube, rollup (21 tests)
+│   ├── test_window_functions.py        # Window functions (35 tests)
+│   ├── test_dataframe_ops_differential.py  # DataFrame operations (25 tests)
+│   ├── test_lambda_differential.py     # Lambda/HOF functions (18 tests)
+│   ├── test_using_joins_differential.py    # USING join syntax (11 tests)
+│   ├── test_statistics_differential.py # cov, corr, describe, summary (16 tests)
+│   ├── test_complex_types_differential.py  # struct, array, map access (15 tests)
+│   ├── test_type_literals_differential.py  # Type literals, intervals (32 tests)
+│   └── test_to_schema_differential.py  # df.to(schema) support (12 tests)
 │
-│── # Legacy/Utility Tests
-├── test_simple_sql.py              # Basic SQL connectivity tests
-├── test_tpch_queries.py            # TPC-H query tests (standalone)
-├── test_dataframe_operations.py    # DataFrame operation tests
-├── test_temp_views.py              # Temp view functionality tests
+├── test_*.py                           # Feature tests (Thunderduck only)
+│   ├── test_catalog_operations.py      # Catalog/database operations
+│   ├── test_empty_dataframe.py         # Empty DataFrame handling
+│   ├── test_simple_sql.py              # Basic SQL connectivity
+│   └── test_temp_views.py              # Temporary view management
 │
-└── utils/                          # Test utilities
-    ├── __init__.py
-    ├── server_manager.py           # Server lifecycle management
-    ├── dual_server_manager.py      # Manages both Spark + Thunderduck servers
-    ├── dataframe_diff.py           # Detailed DataFrame comparison
-    └── result_validator.py         # Result validation utilities
+├── tpch_sf001/                         # TPC-H SF0.01 data (parquet)
+├── tpcds_dataframe/                    # TPC-DS DataFrame builders
+├── sql/                                # SQL query files
+└── utils/                              # Test utilities
 ```
 
-## Setup Options
+## Quick Start
 
-### Option 1: Differential Testing (Recommended)
+### Run Differential Tests (Recommended)
 
-Uses a dedicated virtual environment with all dependencies:
+Compare Thunderduck against Apache Spark 4.0.1:
 
 ```bash
 # One-time setup
 ./tests/scripts/setup-differential-testing.sh
 
-# Run tests
+# Run all differential tests
 ./tests/scripts/run-differential-tests-v2.sh
+
+# Run specific test groups
+./tests/scripts/run-differential-tests-v2.sh tpch         # TPC-H (34 tests)
+./tests/scripts/run-differential-tests-v2.sh tpcds        # TPC-DS (126 tests)
+./tests/scripts/run-differential-tests-v2.sh functions    # Functions (57 tests)
+./tests/scripts/run-differential-tests-v2.sh aggregations # Aggregations (21 tests)
+./tests/scripts/run-differential-tests-v2.sh window       # Window (35 tests)
+./tests/scripts/run-differential-tests-v2.sh operations   # DataFrame ops (25 tests)
+./tests/scripts/run-differential-tests-v2.sh lambda       # Lambda/HOF (18 tests)
+./tests/scripts/run-differential-tests-v2.sh joins        # USING joins (11 tests)
+./tests/scripts/run-differential-tests-v2.sh statistics   # Statistics (16 tests)
+./tests/scripts/run-differential-tests-v2.sh types        # Complex types (47 tests)
+./tests/scripts/run-differential-tests-v2.sh schema       # ToSchema (12 tests)
 ```
 
-### Option 2: Manual Setup
+### Run Feature Tests
+
+Test specific Thunderduck features:
 
 ```bash
-# Build server
-mvn clean package -DskipTests
-
-# Install dependencies (in a venv is recommended)
-pip install pytest pyspark==4.0.1 pandas pyarrow grpcio grpcio-status
-
-# Run TPC-H differential tests (~20 seconds)
 cd tests/integration
-python -m pytest test_differential_v2.py -v
 
-# Run TPC-DS differential tests (~5 minutes)
-python -m pytest test_tpcds_differential.py -k "Batch" -v
+# All feature tests
+python3 -m pytest test_*.py -v
+
+# Specific test file
+python3 -m pytest test_empty_dataframe.py -v
 ```
 
-### Running Tests
+## Test Categories
 
-**Run all tests**:
-```bash
-pytest tests/integration/ -v
-```
+### Differential Tests (`differential/`)
 
-**Run specific test file**:
-```bash
-pytest tests/integration/test_simple_sql.py -v
-```
+These tests run the same query on both Thunderduck and Apache Spark 4.0.1, comparing results row-by-row.
 
-**Run specific test class**:
-```bash
-pytest tests/integration/test_tpch_queries.py::TestTPCHQuery1 -v
-```
+| Suite | Tests | Description |
+|-------|-------|-------------|
+| TPC-H | 34 | Q1-Q22 SQL + DataFrame API |
+| TPC-DS | 126 | 102 SQL + 24 DataFrame |
+| Functions | 57 | Array, Map, String, Math |
+| Aggregations | 21 | pivot, unpivot, cube, rollup |
+| Window | 35 | rank, lag/lead, frames |
+| Operations | 25 | drop, withColumn, union, sample |
+| Lambda | 18 | transform, filter, aggregate |
+| Joins | 11 | USING join syntax |
+| Statistics | 16 | cov, corr, describe, summary |
+| Complex Types | 15 | struct.field, arr[i], map[key] |
+| Type Literals | 32 | timestamps, intervals, arrays, maps |
+| ToSchema | 12 | df.to(schema) column reorder/cast |
+| **Total** | **402** | |
 
-**Run specific test**:
-```bash
-pytest tests/integration/test_tpch_queries.py::TestTPCHQuery1::test_q1_sql -v
-```
+### Feature Tests (root `test_*.py`)
 
-**Run with output**:
-```bash
-pytest tests/integration/ -v -s
-```
-
-**Run tests by marker**:
-```bash
-# Run only TPC-H tests
-pytest tests/integration/ -v -m tpch
-
-# Run only DataFrame API tests
-pytest tests/integration/ -v -m dataframe
-
-# Run only SQL tests
-pytest tests/integration/ -v -m sql
-```
-
-**Run with timeout**:
-```bash
-# Set custom timeout for slow queries
-pytest tests/integration/ -v --timeout=120
-```
-
-## Test Markers
-
-The test suite uses custom pytest markers to categorize tests:
-
-- `@pytest.mark.differential` - Differential tests (Spark vs Thunderduck)
-- `@pytest.mark.tpch` - TPC-H benchmark tests
-- `@pytest.mark.tpcds` - TPC-DS benchmark tests
-- `@pytest.mark.dataframe` - Tests using DataFrame API
-- `@pytest.mark.sql` - Tests using SQL
-- `@pytest.mark.functions` - DataFrame function parity tests
-- `@pytest.mark.aggregations` - Multi-dimensional aggregation tests
-- `@pytest.mark.window` - Window function tests
-- `@pytest.mark.slow` - Tests that take >10 seconds
-- `@pytest.mark.quick` - Quick sanity tests
-
-Markers are automatically assigned based on test names.
-
-## Test Structure
-
-### 1. TPC-H Query Tests
-
-**File**: `test_tpch_queries.py`
-
-Each TPC-H query has multiple test methods:
-
-```python
-class TestTPCHQuery1:
-    def test_q1_sql(self, spark, load_tpch_query, validator):
-        """Execute Q1 via SQL"""
-        sql = load_tpch_query(1)  # Loads sql/tpch_queries/q1.sql
-        result = spark.sql(sql)
-        # Validate results...
-
-    def test_q1_dataframe_api(self, spark, tpch_data_dir, validator):
-        """Execute Q1 via DataFrame API"""
-        df = spark.read.parquet(str(tpch_data_dir / "lineitem.parquet"))
-        result = df.filter(...).groupBy(...).agg(...).orderBy(...)
-        # Validate results...
-
-    def test_q1_sql_vs_dataframe(self, spark, load_tpch_query, tpch_data_dir):
-        """Compare SQL and DataFrame API results"""
-        # Execute both approaches and compare
-```
-
-**Current Coverage** (266 differential tests - all passing):
-- ✅ TPC-H: 27 tests (Q1-Q22 SQL + 4 DataFrame API)
-- ✅ TPC-DS: 126 tests (102 SQL + 24 DataFrame API, Q36 excluded)
-- ✅ Function Parity: 57 tests (array, map, null, string, math functions)
-- ✅ Multi-dim Aggregations: 21 tests (pivot, unpivot, cube, rollup)
-- ✅ Window Functions: 35 tests (ranking, analytic, frame specs)
-
-### 2. Basic DataFrame Operations
-
-**File**: `test_tpch_queries.py` (class `TestBasicDataFrameOperations`)
-
-Tests fundamental DataFrame operations:
-- Reading Parquet files
-- Filtering rows
-- Selecting columns
-- Aggregating data
-- Grouping data
-- Sorting results
-- Joining tables
-
-### 3. Simple SQL Tests
-
-**File**: `test_simple_sql.py`
-
-Basic connectivity and SQL execution tests:
-- Simple SELECT statements
-- Multiple columns
-- VALUES clauses
+Standalone tests for specific Thunderduck features (not compared to Spark).
 
 ## Fixtures
 
-### Session-Scoped Fixtures
+Key fixtures in `conftest.py`:
 
-These fixtures are created once per test session:
-
-- `server_manager` - Manages Spark Connect server lifecycle
-- `spark_session` - PySpark Spark Connect session
-- `workspace_dir` - Path to workspace root
-- `tpch_data_dir` - Path to TPC-H data directory
-- `tpch_queries_dir` - Path to TPC-H SQL queries
-
-### Function-Scoped Fixtures
-
-These fixtures are created for each test:
-
-- `spark` - Alias for `spark_session`
-- `validator` - ResultValidator instance
-- `load_tpch_query` - Function to load TPC-H SQL queries
-- `lineitem_df` - DataFrame for lineitem table
-- `orders_df` - DataFrame for orders table
-- `customer_df` - DataFrame for customer table
-- (and 5 more table fixtures)
-
-### Example Usage
-
-```python
-def test_my_query(spark, lineitem_df, validator):
-    # Use lineitem_df directly
-    result = lineitem_df.filter(col("l_quantity") > 40).count()
-
-    # Or read manually
-    result2 = spark.read.parquet("/workspace/data/tpch_sf001/lineitem.parquet")
-
-    # Validate results
-    validator.validate_row_count(result, expected_count=100)
-```
-
-## Server Management
-
-### ServerManager Class
-
-The `ServerManager` class handles server lifecycle:
-
-```python
-from utils.server_manager import ServerManager
-
-# Standalone usage
-manager = ServerManager(host="localhost", port=15002)
-
-try:
-    if manager.start(timeout=60):
-        print("Server started successfully")
-        # Run queries...
-finally:
-    manager.stop()
-
-# Context manager usage
-with ServerManager() as manager:
-    # Server starts automatically
-    # Run queries...
-    pass  # Server stops automatically
-```
-
-**Features**:
-- Automatic server startup/shutdown
-- Port availability checking
-- Graceful shutdown with timeout
-- Process group management
-- Log file creation
-- Error handling and reporting
-
-### Server Logs
-
-Server logs are automatically created:
-- `tests/integration/logs/server_stdout.log` - Server output
-- `tests/integration/logs/server_stderr.log` - Server errors
-
-Check logs when tests fail:
-```bash
-tail -f tests/integration/logs/server_stderr.log
-```
-
-## Result Validation
-
-### ResultValidator Class
-
-The `ResultValidator` class provides utilities for validating query results:
-
-```python
-from utils.result_validator import ResultValidator
-
-validator = ResultValidator(epsilon=1e-6)
-
-# Validate row count
-validator.validate_row_count(df, expected_count=4)
-
-# Validate schema
-validator.validate_schema(df, ["col1", "col2", "col3"])
-
-# Validate column values
-validator.validate_column_values(df, "status", ["A", "F", "O"])
-
-# Validate aggregates
-validator.validate_aggregate_result(df, {
-    "sum_qty": 1000.0,
-    "avg_price": 25.50,
-    "count": 42
-})
-
-# Compare DataFrames
-validator.validate_dataframe_equals(actual_df, expected_df, check_order=True)
-
-# Debug comparison
-validator.print_comparison(actual_df, expected_df)
-```
-
-**Features**:
-- Flexible validation methods
-- Floating-point comparison with epsilon
-- Schema validation
-- Aggregate validation
-- DataFrame comparison
-- Debug printing
-
-## Writing New Tests
-
-### Template for TPC-H Query
-
-```python
-class TestTPCHQueryN:
-    """TPC-H QN: Query Description
-
-    Tests: operations tested
-    Complexity: Simple/Moderate/Complex
-    """
-
-    @pytest.mark.tpch
-    @pytest.mark.timeout(60)
-    def test_qN_sql(self, spark, load_tpch_query, validator):
-        """Test TPC-H QN via SQL"""
-        sql = load_tpch_query(N)
-        result = spark.sql(sql)
-        rows = result.collect()
-
-        # Validate results
-        validator.validate_row_count(result, expected_count=...)
-        validator.validate_schema(result, [...])
-
-        # Custom validations
-        assert len(rows) > 0
-
-        print(f"\n✓ TPC-H QN (SQL) passed: {len(rows)} rows returned")
-
-    @pytest.mark.tpch
-    @pytest.mark.dataframe
-    @pytest.mark.timeout(60)
-    def test_qN_dataframe_api(self, spark, tpch_data_dir, validator):
-        """Test TPC-H QN via DataFrame API"""
-        # Load tables
-        table1 = spark.read.parquet(str(tpch_data_dir / "table1.parquet"))
-
-        # Build query
-        result = (table1
-            .filter(...)
-            .groupBy(...)
-            .agg(...)
-            .orderBy(...)
-        )
-
-        # Validate
-        rows = result.collect()
-        validator.validate_row_count(result, expected_count=...)
-
-        print(f"\n✓ TPC-H QN (DataFrame API) passed: {len(rows)} rows")
-```
-
-### Template for Basic Operation
-
-```python
-def test_operation_name(spark, tpch_data_dir):
-    """Test description"""
-    df = spark.read.parquet(str(tpch_data_dir / "table.parquet"))
-
-    result = df.operation(...)
-
-    # Assertions
-    assert condition, "Error message"
-
-    print("\n✓ Operation succeeded")
-```
+- `spark` / `spark_thunderduck` - Thunderduck session (port 15002)
+- `spark_reference` - Apache Spark session (port 15003)
+- `tpch_data_dir` - Path to TPC-H parquet files
 
 ## Troubleshooting
 
 ### Server Won't Start
 
-1. **Check if port is in use**:
-   ```bash
-   lsof -i :15002
-   # or
-   ss -lptn 'sport = :15002'
-   ```
-
-2. **Kill existing server**:
-   ```bash
-   kill $(lsof -ti:15002)
-   ```
-
-3. **Check server logs**:
-   ```bash
-   tail -50 tests/integration/logs/server_stderr.log
-   ```
-
-4. **Rebuild server**:
-   ```bash
-   mvn clean package -DskipTests -pl connect-server -am
-   ```
-
-### Tests Timeout
-
-1. **Increase timeout**:
-   ```python
-   @pytest.mark.timeout(120)  # 2 minutes
-   ```
-
-2. **Check server performance**:
-   - Review server logs for slow queries
-   - Check if DuckDB is struggling with data size
-
-### Data Not Found
-
-1. **Verify data exists**:
-   ```bash
-   ls -la /workspace/data/tpch_sf001/
-   ```
-
-2. **Generate data if missing**:
-   - See main project README for data generation instructions
-
-### Test Failures
-
-1. **Run single test with verbose output**:
-   ```bash
-   pytest tests/integration/test_tpch_queries.py::TestTPCHQuery1::test_q1_sql -v -s
-   ```
-
-2. **Use validator's print_comparison**:
-   ```python
-   validator.print_comparison(actual_df, expected_df)
-   ```
-
-3. **Collect and inspect results**:
-   ```python
-   rows = result.collect()
-   for row in rows:
-       print(row)
-   ```
-
-## Performance Benchmarking
-
-To track query performance, capture timing:
-
-```python
-import time
-
-def test_q1_performance(spark, load_tpch_query):
-    sql = load_tpch_query(1)
-
-    start = time.time()
-    result = spark.sql(sql)
-    rows = result.collect()  # Force execution
-    duration = time.time() - start
-
-    print(f"\nQ1 execution time: {duration:.3f}s")
-    assert duration < 5.0, f"Q1 too slow: {duration:.3f}s"
+```bash
+pkill -9 -f thunderduck-connect-server
+mvn clean package -DskipTests
 ```
 
-## CI/CD Integration
+### Check Server Logs
 
-To run tests in CI:
-
-```yaml
-# .github/workflows/integration-tests.yml
-- name: Run integration tests
-  run: |
-    mvn clean package -DskipTests -pl connect-server -am
-    pytest tests/integration/ -v --junit-xml=integration-test-results.xml
+```bash
+tail -f /tmp/thunderduck-server.log
 ```
-
-## Future Enhancements
-
-- [x] Add TPC-DS differential tests (126 tests, all passing)
-- [x] Add DataFrame function parity tests (57 tests)
-- [x] Add multi-dimensional aggregation tests (21 tests)
-- [x] Add window function tests (35 tests)
-- [x] Add test runner with named test groups
-- [ ] Add complex data types tests (nested structs, advanced array/map)
-- [ ] Add performance regression detection
-- [ ] Create HTML test report generation
-- [ ] Integrate into CI/CD pipeline
-
-## Resources
-
-- [TPC-H Specification](http://www.tpc.org/tpch/)
-- [Spark Connect Protocol](https://github.com/apache/spark/tree/master/connector/connect)
-- [PySpark API Reference](https://spark.apache.org/docs/4.0.1/api/python/)
-- [pytest Documentation](https://docs.pytest.org/)
-- [Differential Testing Architecture](../../docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
 
 ---
 
-**Last Updated**: 2025-12-16
-**PySpark Version**: 4.0.1
+**Last Updated**: 2025-12-19
