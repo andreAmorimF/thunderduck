@@ -25,7 +25,8 @@ tests/integration/
 │   ├── test_statistics_differential.py # cov, corr, describe, summary (16 tests)
 │   ├── test_complex_types_differential.py  # struct, array, map access (15 tests)
 │   ├── test_type_literals_differential.py  # Type literals, intervals (32 tests)
-│   └── test_to_schema_differential.py  # df.to(schema) support (12 tests)
+│   ├── test_to_schema_differential.py  # df.to(schema) support (12 tests)
+│   └── test_tpcds_dataframe_differential.py  # TPC-DS DataFrame API (34 tests)
 │
 ├── test_*.py                           # Feature tests (Thunderduck only)
 │   ├── test_catalog_operations.py      # Catalog/database operations
@@ -34,7 +35,7 @@ tests/integration/
 │   └── test_temp_views.py              # Temporary view management
 │
 ├── tpch_sf001/                         # TPC-H SF0.01 data (parquet)
-├── tpcds_dataframe/                    # TPC-DS DataFrame builders
+├── tpcds_dataframe/                    # TPC-DS DataFrame API implementations
 ├── sql/                                # SQL query files
 └── utils/                              # Test utilities
 ```
@@ -64,6 +65,7 @@ Compare Thunderduck against Apache Spark 4.0.1:
 ./tests/scripts/run-differential-tests-v2.sh statistics   # Statistics (16 tests)
 ./tests/scripts/run-differential-tests-v2.sh types        # Complex types (47 tests)
 ./tests/scripts/run-differential-tests-v2.sh schema       # ToSchema (12 tests)
+./tests/scripts/run-differential-tests-v2.sh dataframe    # TPC-DS DataFrame API (34 tests)
 ```
 
 ### Run Feature Tests
@@ -100,7 +102,8 @@ These tests run the same query on both Thunderduck and Apache Spark 4.0.1, compa
 | Complex Types | 15 | struct.field, arr[i], map[key] |
 | Type Literals | 32 | timestamps, intervals, arrays, maps |
 | ToSchema | 12 | df.to(schema) column reorder/cast |
-| **Total** | **402** | |
+| DataFrame API | 34 | TPC-DS queries via DataFrame API |
+| **Total** | **436** | |
 
 ### Feature Tests (root `test_*.py`)
 

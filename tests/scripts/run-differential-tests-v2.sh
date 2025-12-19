@@ -92,6 +92,9 @@ get_test_files() {
         schema)
             echo "differential/test_to_schema_differential.py"
             ;;
+        dataframe)
+            echo "differential/test_tpcds_dataframe_differential.py"
+            ;;
         all)
             echo "differential/"
             ;;
@@ -135,6 +138,9 @@ get_test_description() {
             ;;
         schema)
             echo "ToSchema df.to(schema) tests"
+            ;;
+        dataframe)
+            echo "TPC-DS DataFrame API tests"
             ;;
         all)
             echo "All differential tests"
