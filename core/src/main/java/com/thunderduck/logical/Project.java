@@ -3,9 +3,13 @@ package com.thunderduck.logical;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.FunctionCall;
 import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.functions.FunctionCategories;
+import com.thunderduck.types.ArrayType;
 import com.thunderduck.types.DataType;
+import com.thunderduck.types.MapType;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
+import com.thunderduck.types.UnresolvedType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -151,15 +155,99 @@ public class Project extends LogicalPlan {
                 return field.dataType();
             }
         } else if (expr instanceof FunctionCall) {
-            // For function calls, resolve argument types first and then compute result type
             FunctionCall func = (FunctionCall) expr;
-            // Functions like abs, sqrt, etc. typically preserve the argument type
-            // For now, try to get the type from the first argument if it's a column
-            if (!func.arguments().isEmpty()) {
-                DataType argType = resolveDataType(func.arguments().get(0), childSchema);
-                // Many numeric functions preserve the argument type
-                return argType;
+            DataType declaredType = func.dataType();
+
+            // If function already returns ArrayType or MapType, but with unresolved elements,
+            // we may need to resolve the element type from child schema
+            if (declaredType instanceof ArrayType) {
+                ArrayType arrType = (ArrayType) declaredType;
+                // Check for unresolved element types (UnresolvedType or StringType placeholder)
+                boolean hasUnresolved = UnresolvedType.containsUnresolved(arrType) ||
+                                       arrType.elementType() instanceof com.thunderduck.types.StringType;
+                if (hasUnresolved) {
+                    // Element type is unresolved - try to resolve from function semantics
+                    String funcName = func.functionName().toLowerCase();
+                    if (FunctionCategories.isArrayTypePreserving(funcName) ||
+                        FunctionCategories.isArraySetOperation(funcName)) {
+                        if (!func.arguments().isEmpty()) {
+                            DataType argType = resolveDataType(func.arguments().get(0), childSchema);
+                            if (argType instanceof ArrayType) {
+                                return argType;  // Return resolved array type
+                            }
+                        }
+                    }
+                }
+                // Recursively resolve nested types in the array
+                return resolveNestedType(declaredType, childSchema);
             }
+            if (declaredType instanceof MapType) {
+                // Recursively resolve nested types in the map
+                return resolveNestedType(declaredType, childSchema);
+            }
+
+            // If the function's declared type is unresolved (either UnresolvedType or StringType
+            // which is used as default for UnresolvedColumn), try to resolve from first argument
+            if ((UnresolvedType.isUnresolved(declaredType) ||
+                 declaredType instanceof com.thunderduck.types.StringType) &&
+                !func.arguments().isEmpty()) {
+                String funcName = func.functionName().toLowerCase();
+
+                // Array functions that preserve input array type
+                if (FunctionCategories.isArrayTypePreserving(funcName) ||
+                    FunctionCategories.isArraySetOperation(funcName)) {
+                    DataType argType = resolveDataType(func.arguments().get(0), childSchema);
+                    if (argType instanceof ArrayType) {
+                        return argType;
+                    }
+                }
+
+                // Map key/value extraction functions
+                if (FunctionCategories.isMapExtraction(funcName)) {
+                    DataType argType = resolveDataType(func.arguments().get(0), childSchema);
+                    if (argType instanceof MapType) {
+                        MapType mapType = (MapType) argType;
+                        return funcName.equals("map_keys")
+                            ? new ArrayType(mapType.keyType())
+                            : new ArrayType(mapType.valueType());
+                    }
+                }
+
+                // Element extraction
+                if (FunctionCategories.isElementExtraction(funcName)) {
+                    DataType argType = resolveDataType(func.arguments().get(0), childSchema);
+                    if (argType instanceof ArrayType) {
+                        return ((ArrayType) argType).elementType();
+                    }
+                    if (argType instanceof MapType) {
+                        return ((MapType) argType).valueType();
+                    }
+                }
+
+                // Explode functions
+                if (FunctionCategories.isExplodeFunction(funcName)) {
+                    DataType argType = resolveDataType(func.arguments().get(0), childSchema);
+                    if (argType instanceof ArrayType) {
+                        return ((ArrayType) argType).elementType();
+                    }
+                }
+
+                // Flatten - reduces nesting by 1 level
+                if (funcName.equals("flatten")) {
+                    DataType argType = resolveDataType(func.arguments().get(0), childSchema);
+                    if (argType instanceof ArrayType) {
+                        DataType elemType = ((ArrayType) argType).elementType();
+                        return (elemType instanceof ArrayType) ? elemType : argType;
+                    }
+                }
+
+                // These functions preserve their first argument's type
+                if (FunctionCategories.isTypePreserving(funcName)) {
+                    return resolveDataType(func.arguments().get(0), childSchema);
+                }
+            }
+            // Use the function's inferred return type
+            return declaredType;
         }
         // Fall back to expression's declared type
         return expr.dataType();
@@ -177,16 +265,72 @@ public class Project extends LogicalPlan {
                 return field.nullable();
             }
         } else if (expr instanceof FunctionCall) {
-            // Function calls are typically nullable if any argument is nullable
             FunctionCall func = (FunctionCall) expr;
-            for (Expression arg : func.arguments()) {
-                if (resolveNullable(arg, childSchema)) {
-                    return true;
+            String funcName = func.functionName().toLowerCase();
+
+            // For null-coalescing functions: non-null if ANY argument is non-null
+            // This means only nullable if ALL arguments are nullable
+            if (FunctionCategories.isNullCoalescing(funcName)) {
+                // Check if ALL resolved arguments are nullable
+                for (Expression arg : func.arguments()) {
+                    boolean argNullable = resolveNullable(arg, childSchema);
+                    if (!argNullable) {
+                        // At least one arg is non-null, so result is non-null
+                        return false;
+                    }
                 }
+                // All args are nullable, so result is nullable
+                return true;
             }
-            return false;
+
+            // For other functions: use the function's inferred nullable flag
+            return expr.nullable();
         }
         return expr.nullable();
+    }
+
+    /**
+     * Recursively resolves nested types within complex types (ArrayType, MapType).
+     *
+     * <p>This method handles arbitrary nesting, e.g.:
+     * <ul>
+     *   <li>ArrayType(UnresolvedType) → ArrayType(resolvedType)</li>
+     *   <li>MapType(UnresolvedType, ArrayType(UnresolvedType)) → fully resolved</li>
+     *   <li>ArrayType(MapType(K, ArrayType(V))) → each level resolved</li>
+     * </ul>
+     *
+     * @param type the type to resolve
+     * @param childSchema the child schema for resolving column types
+     * @return the resolved type, or the original if no resolution needed
+     */
+    private DataType resolveNestedType(DataType type, StructType childSchema) {
+        if (type instanceof ArrayType) {
+            ArrayType arrType = (ArrayType) type;
+            DataType elementType = arrType.elementType();
+            DataType resolvedElement = resolveNestedType(elementType, childSchema);
+            // Only create new ArrayType if element type changed
+            if (resolvedElement != elementType) {
+                return new ArrayType(resolvedElement);
+            }
+            return arrType;
+        } else if (type instanceof MapType) {
+            MapType mapType = (MapType) type;
+            DataType keyType = mapType.keyType();
+            DataType valueType = mapType.valueType();
+            DataType resolvedKey = resolveNestedType(keyType, childSchema);
+            DataType resolvedValue = resolveNestedType(valueType, childSchema);
+            // Only create new MapType if key or value type changed
+            if (resolvedKey != keyType || resolvedValue != valueType) {
+                return new MapType(resolvedKey, resolvedValue);
+            }
+            return mapType;
+        } else if (type instanceof UnresolvedType) {
+            // UnresolvedType at leaf level - cannot resolve without more context
+            // Return StringType as fallback (the previous default behavior)
+            return com.thunderduck.types.StringType.get();
+        }
+        // Primitive types are already resolved
+        return type;
     }
 
     @Override

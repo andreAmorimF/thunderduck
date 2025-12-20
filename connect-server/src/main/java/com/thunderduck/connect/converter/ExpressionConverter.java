@@ -2,10 +2,12 @@ package com.thunderduck.connect.converter;
 
 import com.thunderduck.expression.*;
 import com.thunderduck.expression.window.*;
+import com.thunderduck.functions.FunctionCategories;
 import com.thunderduck.logical.Sort;
 import com.thunderduck.types.DataType;
 import com.thunderduck.types.*;
 import com.thunderduck.types.IntegerType;
+import com.thunderduck.types.UnresolvedType;
 
 import org.apache.spark.connect.proto.Expression.*;
 import org.slf4j.Logger;
@@ -209,89 +211,8 @@ public class ExpressionConverter {
 
     /**
      * Converts an UnresolvedFunction (function call).
+     * Note: Function name mapping is handled by FunctionRegistry.translate() in FunctionCall.toSQL()
      */
-    /**
-     * Maps Spark function names to DuckDB equivalents.
-     * This is critical for DataFrame API compatibility.
-     */
-    private String mapFunctionName(String sparkFunctionName) {
-        String upperName = sparkFunctionName.toUpperCase();
-
-        switch (upperName) {
-            // String functions
-            case "ENDSWITH":
-                return "ENDS_WITH";
-            case "STARTSWITH":
-                return "STARTS_WITH";
-            case "CONTAINS":
-                return "CONTAINS";
-            case "SUBSTRING":
-                return "SUBSTR";
-            case "RLIKE":
-                return "REGEXP_MATCHES";
-
-            // Date/time functions
-            case "YEAR":
-                return "YEAR";
-            case "MONTH":
-                return "MONTH";
-            case "DAY":
-                return "DAY";
-            case "DAYOFMONTH":
-                return "DAY";
-            case "DAYOFWEEK":
-                return "DAYOFWEEK";
-            case "DAYOFYEAR":
-                return "DAYOFYEAR";
-            case "HOUR":
-                return "HOUR";
-            case "MINUTE":
-                return "MINUTE";
-            case "SECOND":
-                return "SECOND";
-            case "DATE_ADD":
-                return "DATE_ADD";
-            case "DATE_SUB":
-                return "DATE_SUB";
-            case "DATEDIFF":
-                return "DATE_DIFF";
-
-            // Math functions
-            case "RAND":
-                return "RANDOM";
-            case "POW":
-                return "POWER";
-            case "LOG":
-                return "LN";  // Natural log in DuckDB
-            case "LOG10":
-                return "LOG10";
-            case "LOG2":
-                return "LOG2";
-
-            // Aggregate functions
-            case "STDDEV":
-                return "STDDEV_SAMP";
-            case "STDDEV_POP":
-                return "STDDEV_POP";
-            case "STDDEV_SAMP":
-                return "STDDEV_SAMP";
-            case "VAR_POP":
-                return "VAR_POP";
-            case "VAR_SAMP":
-                return "VAR_SAMP";
-            case "VARIANCE":
-                return "VAR_SAMP";
-            case "COLLECT_LIST":
-                return "LIST";
-            case "COLLECT_SET":
-                return "LIST";  // Note: Will need DISTINCT handling
-
-            // Default: return as-is (most functions are compatible)
-            default:
-                return upperName;
-        }
-    }
-
     private com.thunderduck.expression.Expression convertUnresolvedFunction(UnresolvedFunction func) {
         // Don't map here - FunctionRegistry handles the mapping
         String functionName = func.getFunctionName();
@@ -366,9 +287,231 @@ public class ExpressionConverter {
         }
 
         logger.trace("Creating function call: {} with {} arguments", functionName, arguments.size());
-        // FunctionCall requires DataType - use StringType as default for now
-        // TODO: Infer proper return type based on function
-        return new FunctionCall(functionName, arguments, StringType.get());
+        // Infer return type and nullable based on function semantics
+        DataType returnType = inferFunctionReturnType(functionName, arguments);
+        boolean nullable = inferFunctionNullable(functionName, arguments);
+        return new FunctionCall(functionName, arguments, returnType, nullable);
+    }
+
+    /**
+     * Infers the return type for a function based on Spark semantics.
+     */
+    private DataType inferFunctionReturnType(String functionName, List<com.thunderduck.expression.Expression> args) {
+        String lower = functionName.toLowerCase();
+
+        // Boolean-returning functions
+        if (FunctionCategories.isBooleanReturning(lower) || lower.equals("isnantrue")) {
+            return BooleanType.get();
+        }
+
+        // Functions that always return Double
+        if (lower.matches("sqrt|log|ln|log10|log2|exp|expm1|" +
+                          "sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|" +
+                          "radians|degrees|cbrt|hypot|" +
+                          "sign|signum|" +
+                          "round|bround|truncate")) {
+            return DoubleType.get();
+        }
+
+        // Functions that return Long (Spark semantics for ceil/floor)
+        if (lower.matches("ceil|ceiling|floor")) {
+            return LongType.get();
+        }
+
+        // size() returns IntegerType in Spark (not LongType)
+        if (lower.equals("size")) {
+            return IntegerType.get();
+        }
+
+        // String position functions return IntegerType in Spark
+        if (FunctionCategories.isIntegerReturning(lower)) {
+            return IntegerType.get();
+        }
+
+        // Functions that return Long for counts
+        if (lower.matches("count|count_distinct|length|char_length|character_length")) {
+            return LongType.get();
+        }
+
+        // Date extraction functions return Integer
+        if (lower.matches("year|month|day|dayofmonth|dayofweek|dayofyear|" +
+                          "hour|minute|second|quarter|weekofyear|week")) {
+            return IntegerType.get();
+        }
+
+        // Functions that preserve first argument type
+        if (FunctionCategories.isTypePreserving(lower)) {
+            if (!args.isEmpty()) {
+                DataType argType = args.get(0).dataType();
+                // For these functions, if input is StringType (unresolved), keep it
+                // The Project.inferSchema will resolve from child schema
+                return argType;
+            }
+            return UnresolvedType.functionReturn();
+        }
+
+        // String functions
+        if (lower.matches("concat|concat_ws|upper|lower|ucase|lcase|" +
+                          "trim|ltrim|rtrim|" +
+                          "lpad|rpad|repeat|reverse|" +
+                          "substring|substr|left|right|" +
+                          "replace|translate|regexp_replace|regexp_extract|" +
+                          "split|initcap|format_string|printf")) {
+            return StringType.get();
+        }
+
+        // Array functions that preserve element type (return same ArrayType as input)
+        if (FunctionCategories.isArrayTypePreserving(lower)) {
+            if (!args.isEmpty() && args.get(0).dataType() instanceof ArrayType) {
+                return args.get(0).dataType();
+            }
+            return new ArrayType(UnresolvedType.arrayElement());
+        }
+
+        // Array set operations (return ArrayType matching first input)
+        if (FunctionCategories.isArraySetOperation(lower)) {
+            if (!args.isEmpty() && args.get(0).dataType() instanceof ArrayType) {
+                return args.get(0).dataType();
+            }
+            return new ArrayType(UnresolvedType.arrayElement());
+        }
+
+        // Array constructor - creates array from elements
+        if (lower.equals("array")) {
+            if (!args.isEmpty()) {
+                return new ArrayType(args.get(0).dataType());
+            }
+            return new ArrayType(UnresolvedType.arrayElement());
+        }
+
+        // Flatten - reduces nesting by 1 level: ArrayType(ArrayType(T)) -> ArrayType(T)
+        if (lower.equals("flatten")) {
+            if (!args.isEmpty() && args.get(0).dataType() instanceof ArrayType) {
+                DataType elemType = ((ArrayType) args.get(0).dataType()).elementType();
+                return (elemType instanceof ArrayType) ? elemType : args.get(0).dataType();
+            }
+            return new ArrayType(UnresolvedType.arrayElement());
+        }
+
+        // Element extraction - returns element type of array or value type of map
+        if (lower.equals("element_at")) {
+            if (!args.isEmpty()) {
+                DataType argType = args.get(0).dataType();
+                if (argType instanceof ArrayType) {
+                    return ((ArrayType) argType).elementType();
+                }
+                if (argType instanceof MapType) {
+                    return ((MapType) argType).valueType();
+                }
+            }
+            return UnresolvedType.functionReturn();
+        }
+
+        // map_keys - returns array of key types
+        if (lower.equals("map_keys")) {
+            if (!args.isEmpty() && args.get(0).dataType() instanceof MapType) {
+                return new ArrayType(((MapType) args.get(0).dataType()).keyType());
+            }
+            return new ArrayType(UnresolvedType.mapKey());
+        }
+
+        // map_values - returns array of value types
+        if (lower.equals("map_values")) {
+            if (!args.isEmpty() && args.get(0).dataType() instanceof MapType) {
+                return new ArrayType(((MapType) args.get(0).dataType()).valueType());
+            }
+            return new ArrayType(UnresolvedType.mapValue());
+        }
+
+        // map_from_arrays - returns MapType from key and value arrays
+        if (lower.equals("map_from_arrays")) {
+            if (args.size() >= 2) {
+                DataType keysType = args.get(0).dataType();
+                DataType valuesType = args.get(1).dataType();
+                if (keysType instanceof ArrayType && valuesType instanceof ArrayType) {
+                    return new MapType(
+                        ((ArrayType) keysType).elementType(),
+                        ((ArrayType) valuesType).elementType()
+                    );
+                }
+            }
+            return new MapType(UnresolvedType.mapKey(), UnresolvedType.mapValue());
+        }
+
+        // map constructor - creates map from key-value pairs
+        if (lower.equals("map")) {
+            if (args.size() >= 2) {
+                return new MapType(args.get(0).dataType(), args.get(1).dataType());
+            }
+            return new MapType(UnresolvedType.mapKey(), UnresolvedType.mapValue());
+        }
+
+        // map_entries and map_from_entries need StructType support
+        if (lower.matches("map_entries|map_from_entries")) {
+            return UnresolvedType.functionReturn();  // TODO: Requires StructType as DataType
+        }
+
+        // Explode functions - returns element type of array (map explode needs struct support)
+        if (lower.matches("explode|explode_outer")) {
+            if (!args.isEmpty()) {
+                DataType argType = args.get(0).dataType();
+                if (argType instanceof ArrayType) {
+                    return ((ArrayType) argType).elementType();
+                }
+                // Maps need StructType(key, value) support
+            }
+            return UnresolvedType.arrayElement();
+        }
+
+        // posexplode and inline need additional handling
+        if (lower.matches("posexplode|posexplode_outer|inline|inline_outer")) {
+            return UnresolvedType.functionReturn();  // TODO: Complex generator functions
+        }
+
+        // Pow/power preserves Double
+        if (lower.matches("pow|power")) {
+            return DoubleType.get();
+        }
+
+        // Mod functions preserve input type
+        if (lower.matches("mod|pmod")) {
+            if (!args.isEmpty()) {
+                return args.get(0).dataType();
+            }
+            return LongType.get();
+        }
+
+        // Default to UnresolvedType for unknown functions
+        // This will be resolved during schema inference if possible
+        return UnresolvedType.functionReturn();
+    }
+
+    /**
+     * Infers whether a function result is nullable based on Spark semantics.
+     */
+    private boolean inferFunctionNullable(String functionName, List<com.thunderduck.expression.Expression> args) {
+        String lower = functionName.toLowerCase();
+
+        // Null-coalescing functions are non-null if ANY argument is non-null
+        // In other words, only nullable if ALL arguments are nullable
+        if (FunctionCategories.isNullCoalescing(lower)) {
+            if (args.isEmpty()) {
+                return true;
+            }
+            // Only nullable if all args are nullable
+            return args.stream().allMatch(com.thunderduck.expression.Expression::nullable);
+        }
+
+        // isnull/isnotnull always return non-null boolean
+        if (lower.matches("isnull|isnotnull")) {
+            return false;
+        }
+
+        // Most functions are nullable if any argument is nullable
+        if (args.isEmpty()) {
+            return true;
+        }
+        return args.stream().anyMatch(com.thunderduck.expression.Expression::nullable);
     }
 
     /**

@@ -1553,6 +1553,23 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     .setScale(decimalType.scale())
                     .build())
                 .build();
+        } else if (dataType instanceof com.thunderduck.types.ArrayType) {
+            com.thunderduck.types.ArrayType arrayType = (com.thunderduck.types.ArrayType) dataType;
+            return org.apache.spark.connect.proto.DataType.newBuilder()
+                .setArray(org.apache.spark.connect.proto.DataType.Array.newBuilder()
+                    .setElementType(convertDataTypeToProto(arrayType.elementType()))
+                    .setContainsNull(true)  // Arrays can contain nulls by default
+                    .build())
+                .build();
+        } else if (dataType instanceof com.thunderduck.types.MapType) {
+            com.thunderduck.types.MapType mapType = (com.thunderduck.types.MapType) dataType;
+            return org.apache.spark.connect.proto.DataType.newBuilder()
+                .setMap(org.apache.spark.connect.proto.DataType.Map.newBuilder()
+                    .setKeyType(convertDataTypeToProto(mapType.keyType()))
+                    .setValueType(convertDataTypeToProto(mapType.valueType()))
+                    .setValueContainsNull(true)  // Map values can contain nulls by default
+                    .build())
+                .build();
         } else {
             // Default to string for unsupported types
             logger.warn("Unsupported data type for schema conversion: {}, defaulting to STRING", dataType.getClass().getSimpleName());

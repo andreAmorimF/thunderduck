@@ -1,5 +1,7 @@
 package com.thunderduck.functions;
 
+import com.thunderduck.types.*;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +28,7 @@ public class FunctionRegistry {
 
     private static final Map<String, String> DIRECT_MAPPINGS = new HashMap<>();
     private static final Map<String, FunctionTranslator> CUSTOM_TRANSLATORS = new HashMap<>();
+    private static final Map<String, FunctionMetadata> FUNCTION_METADATA = new HashMap<>();
 
     static {
         initializeStringFunctions();
@@ -35,6 +38,7 @@ public class FunctionRegistry {
         initializeWindowFunctions();
         initializeArrayFunctions();
         initializeConditionalFunctions();
+        initializeFunctionMetadata();
     }
 
     /**
@@ -126,7 +130,7 @@ public class FunctionRegistry {
 
         // Position and search
         DIRECT_MAPPINGS.put("instr", "instr");
-        DIRECT_MAPPINGS.put("locate", "position");
+        // Note: locate uses CUSTOM_TRANSLATOR (see below) due to argument order difference
         DIRECT_MAPPINGS.put("position", "position");
 
         // Padding
@@ -154,6 +158,29 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("md5", "md5");
         DIRECT_MAPPINGS.put("sha1", "sha1");
         DIRECT_MAPPINGS.put("sha2", "sha256"); // Spark sha2(str, 256) → DuckDB sha256(str)
+
+        // Custom translator for locate - Spark and DuckDB have different argument orders
+        // Spark: locate(substr, str) - substring first, string second
+        // DuckDB instr: instr(str, substr) - string first, substring second
+        // Note: Spark returns NULL if str is NULL, DuckDB instr returns 0 - we must preserve NULL
+        CUSTOM_TRANSLATORS.put("locate", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("locate requires at least 2 arguments");
+            }
+            String substr = args[0];
+            String str = args[1];
+
+            if (args.length > 2) {
+                // locate(substr, str, pos) - with start position
+                String startPos = args[2];
+                return "CASE WHEN " + str + " IS NULL THEN NULL " +
+                       "WHEN instr(substr(" + str + ", " + startPos + "), " + substr + ") > 0 " +
+                       "THEN instr(substr(" + str + ", " + startPos + "), " + substr + ") + " + startPos + " - 1 " +
+                       "ELSE 0 END";
+            }
+            // Basic 2-arg form: swap argument order for instr, but return NULL if str is NULL
+            return "CASE WHEN " + str + " IS NULL THEN NULL ELSE instr(" + str + ", " + substr + ") END";
+        });
     }
 
     // ==================== Math Functions ====================
@@ -203,6 +230,22 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("e", "e");
         DIRECT_MAPPINGS.put("rand", "random");
         DIRECT_MAPPINGS.put("random", "random");
+
+        // Comparison functions
+        DIRECT_MAPPINGS.put("greatest", "greatest");
+        DIRECT_MAPPINGS.put("least", "least");
+
+        // Custom translator for pmod (positive modulo)
+        // DuckDB doesn't have pmod, so we emulate: pmod(a, b) = ((a % b) + b) % b
+        CUSTOM_TRANSLATORS.put("pmod", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("pmod requires 2 arguments");
+            }
+            String a = args[0];
+            String b = args[1];
+            // Positive modulo formula: ((a % b) + b) % b
+            return "(((" + a + ") % (" + b + ") + (" + b + ")) % (" + b + "))";
+        });
     }
 
     // ==================== Date/Time Functions ====================
@@ -317,12 +360,17 @@ public class FunctionRegistry {
         // Array operations
         DIRECT_MAPPINGS.put("array_contains", "list_contains");
         DIRECT_MAPPINGS.put("array_distinct", "list_distinct");
-        DIRECT_MAPPINGS.put("array_sort", "list_sort");
+        // Note: array_sort and sort_array use custom translators (see below)
         DIRECT_MAPPINGS.put("array_max", "list_max");
         DIRECT_MAPPINGS.put("array_min", "list_min");
         DIRECT_MAPPINGS.put("size", "len");
         DIRECT_MAPPINGS.put("explode", "unnest");
         DIRECT_MAPPINGS.put("flatten", "flatten");
+        DIRECT_MAPPINGS.put("reverse", "list_reverse");
+        DIRECT_MAPPINGS.put("array_position", "list_position");
+        DIRECT_MAPPINGS.put("element_at", "list_extract");
+        DIRECT_MAPPINGS.put("slice", "list_slice");
+        DIRECT_MAPPINGS.put("arrays_overlap", "list_has_any");
 
         // Array construction
         DIRECT_MAPPINGS.put("array", "list_value");
@@ -336,6 +384,39 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("aggregate", "list_reduce");
         // Note: exists, forall require special handling in ExpressionConverter
         // as they need to wrap list_transform with list_any/list_all
+
+        // Custom translators for sort_array/array_sort
+        // Spark uses boolean (TRUE=asc, FALSE=desc), DuckDB uses string ('ASC'/'DESC')
+        CUSTOM_TRANSLATORS.put("sort_array", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("sort_array requires at least 1 argument");
+            }
+            String arrayArg = args[0];
+            String direction = "'ASC'";  // default ascending
+            if (args.length > 1) {
+                String secondArg = args[1].trim().toUpperCase();
+                // Convert TRUE -> 'ASC', FALSE -> 'DESC'
+                if ("FALSE".equals(secondArg)) {
+                    direction = "'DESC'";
+                }
+            }
+            return "list_sort(" + arrayArg + ", " + direction + ")";
+        });
+
+        CUSTOM_TRANSLATORS.put("array_sort", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("array_sort requires at least 1 argument");
+            }
+            String arrayArg = args[0];
+            String direction = "'ASC'";  // default ascending
+            if (args.length > 1) {
+                String secondArg = args[1].trim().toUpperCase();
+                if ("FALSE".equals(secondArg)) {
+                    direction = "'DESC'";
+                }
+            }
+            return "list_sort(" + arrayArg + ", " + direction + ")";
+        });
     }
 
     // ==================== Conditional Functions ====================
@@ -383,5 +464,135 @@ public class FunctionRegistry {
         }
         String normalizedName = sparkFunctionName.toLowerCase();
         return DIRECT_MAPPINGS.getOrDefault(normalizedName, sparkFunctionName);
+    }
+
+    /**
+     * Gets the function metadata if available.
+     *
+     * <p>Function metadata provides type inference and nullable information
+     * in addition to translation logic.
+     *
+     * @param functionName the Spark function name
+     * @return the metadata, or empty if not available
+     */
+    public static Optional<FunctionMetadata> getMetadata(String functionName) {
+        if (functionName == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(FUNCTION_METADATA.get(functionName.toLowerCase()));
+    }
+
+    // ==================== Function Metadata Initialization ====================
+
+    /**
+     * Initialize function metadata for key functions that need type/nullable inference.
+     *
+     * <p>This provides a single source of truth for functions that have complex
+     * type or nullable inference requirements. Functions not in this map will
+     * fall back to the legacy inference logic in ExpressionConverter.
+     */
+    private static void initializeFunctionMetadata() {
+        // Null-coalescing functions: return first argument's type, non-null if ANY arg is non-null
+        FUNCTION_METADATA.put("greatest", FunctionMetadata.builder("greatest")
+            .duckdbName("greatest")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("least", FunctionMetadata.builder("least")
+            .duckdbName("least")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("coalesce", FunctionMetadata.builder("coalesce")
+            .duckdbName("coalesce")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("nvl", FunctionMetadata.builder("nvl")
+            .duckdbName("coalesce")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("ifnull", FunctionMetadata.builder("ifnull")
+            .duckdbName("ifnull")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        // Math type-preserving functions
+        FUNCTION_METADATA.put("abs", FunctionMetadata.builder("abs")
+            .duckdbName("abs")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("pmod", FunctionMetadata.builder("pmod")
+            .translator(args -> {
+                if (args.length < 2) {
+                    throw new IllegalArgumentException("pmod requires 2 arguments");
+                }
+                String a = args[0];
+                String b = args[1];
+                return "(((" + a + ") % (" + b + ") + (" + b + ")) % (" + b + "))";
+            })
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // Position functions return IntegerType
+        FUNCTION_METADATA.put("locate", FunctionMetadata.builder("locate")
+            .translator(args -> {
+                if (args.length < 2) {
+                    throw new IllegalArgumentException("locate requires at least 2 arguments");
+                }
+                String substr = args[0];
+                String str = args[1];
+                if (args.length > 2) {
+                    String startPos = args[2];
+                    return "CASE WHEN " + str + " IS NULL THEN NULL " +
+                           "WHEN instr(substr(" + str + ", " + startPos + "), " + substr + ") > 0 " +
+                           "THEN instr(substr(" + str + ", " + startPos + "), " + substr + ") + " + startPos + " - 1 " +
+                           "ELSE 0 END";
+                }
+                return "CASE WHEN " + str + " IS NULL THEN NULL ELSE instr(" + str + ", " + substr + ") END";
+            })
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("instr", FunctionMetadata.builder("instr")
+            .duckdbName("instr")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("position", FunctionMetadata.builder("position")
+            .duckdbName("position")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("array_position", FunctionMetadata.builder("array_position")
+            .duckdbName("list_position")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // Boolean-returning functions
+        FUNCTION_METADATA.put("isnull", FunctionMetadata.builder("isnull")
+            .duckdbName("isnull")
+            .returnType(FunctionMetadata.constantType(BooleanType.get()))
+            .nullable(FunctionMetadata.alwaysNonNull())
+            .build());
+
+        FUNCTION_METADATA.put("isnotnull", FunctionMetadata.builder("isnotnull")
+            .duckdbName("isnotnull")
+            .returnType(FunctionMetadata.constantType(BooleanType.get()))
+            .nullable(FunctionMetadata.alwaysNonNull())
+            .build());
     }
 }

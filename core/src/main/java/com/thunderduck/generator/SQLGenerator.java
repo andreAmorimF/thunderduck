@@ -1147,6 +1147,14 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         } else if (vector instanceof org.apache.arrow.vector.TimeStampMicroVector) {
             long micros = ((org.apache.arrow.vector.TimeStampMicroVector) vector).get(index);
             return new java.sql.Timestamp(micros / 1000);
+        } else if (vector instanceof org.apache.arrow.vector.complex.ListVector) {
+            // Handle array/list types - return as List to preserve structure
+            org.apache.arrow.vector.complex.ListVector listVector = (org.apache.arrow.vector.complex.ListVector) vector;
+            return listVector.getObject(index);  // Returns java.util.List
+        } else if (vector instanceof org.apache.arrow.vector.complex.MapVector) {
+            // Handle map types - return as List of Map.Entry-like structures
+            org.apache.arrow.vector.complex.MapVector mapVector = (org.apache.arrow.vector.complex.MapVector) vector;
+            return mapVector.getObject(index);  // Returns List of structs (key, value)
         }
 
         // Fallback: try to get object representation
@@ -1178,6 +1186,47 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             return "DATE '" + value.toString() + "'";
         } else if (value instanceof java.sql.Timestamp) {
             return "TIMESTAMP '" + value.toString() + "'";
+        } else if (value instanceof java.util.List) {
+            // Format as DuckDB array literal: [elem1, elem2, ...]
+            java.util.List<?> list = (java.util.List<?>) value;
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(formatSQLValue(list.get(i)));
+            }
+            sb.append("]");
+            return sb.toString();
+        } else if (value instanceof java.util.Map) {
+            // Format as DuckDB map literal: MAP([keys], [values])
+            java.util.Map<?, ?> map = (java.util.Map<?, ?>) value;
+            StringBuilder keys = new StringBuilder("[");
+            StringBuilder values = new StringBuilder("[");
+            boolean first = true;
+            for (java.util.Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!first) {
+                    keys.append(", ");
+                    values.append(", ");
+                }
+                keys.append(formatSQLValue(entry.getKey()));
+                values.append(formatSQLValue(entry.getValue()));
+                first = false;
+            }
+            keys.append("]");
+            values.append("]");
+            return "MAP(" + keys + ", " + values + ")";
+        } else if (value instanceof org.apache.arrow.vector.util.JsonStringHashMap) {
+            // Arrow returns maps as JsonStringHashMap (key-value struct entries)
+            // Format as DuckDB map literal
+            @SuppressWarnings("unchecked")
+            org.apache.arrow.vector.util.JsonStringHashMap<String, ?> arrowMap =
+                (org.apache.arrow.vector.util.JsonStringHashMap<String, ?>) value;
+            Object key = arrowMap.get("key");
+            Object val = arrowMap.get("value");
+            // This is a single entry from a map - should be handled by the List case above
+            // Just format as a struct-like value
+            return "{'key': " + formatSQLValue(key) + ", 'value': " + formatSQLValue(val) + "}";
         } else {
             // Fallback: convert to string and quote
             String escaped = value.toString().replace("'", "''");
