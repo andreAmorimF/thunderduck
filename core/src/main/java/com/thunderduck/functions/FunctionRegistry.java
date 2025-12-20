@@ -417,6 +417,70 @@ public class FunctionRegistry {
             }
             return "list_sort(" + arrayArg + ", " + direction + ")";
         });
+
+        // ==================== Complex Type Constructors ====================
+
+        // STRUCT: positional struct → row() function
+        // Spark: struct(col1, col2)
+        // DuckDB: row(col1, col2)
+        DIRECT_MAPPINGS.put("struct", "row");
+
+        // NAMED_STRUCT: alternating name/value pairs → struct_pack syntax
+        // Spark: named_struct('name', 'Alice', 'age', 30)
+        // DuckDB: struct_pack(name := 'Alice', age := 30)
+        CUSTOM_TRANSLATORS.put("named_struct", args -> {
+            if (args.length == 0) {
+                return "struct_pack()";
+            }
+            if (args.length % 2 != 0) {
+                throw new IllegalArgumentException(
+                    "named_struct requires even number of arguments (name/value pairs)");
+            }
+
+            StringBuilder sb = new StringBuilder("struct_pack(");
+            for (int i = 0; i < args.length; i += 2) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                String fieldName = extractFieldName(args[i]);
+                String value = args[i + 1];
+                sb.append(fieldName).append(" := ").append(value);
+            }
+            sb.append(")");
+            return sb.toString();
+        });
+
+        // MAP constructor: alternating key/value pairs → MAP([keys], [values])
+        // Spark: map('a', 1, 'b', 2)
+        // DuckDB: MAP(['a', 'b'], [1, 2])
+        FunctionTranslator mapTranslator = args -> {
+            if (args.length == 0) {
+                return "MAP([], [])";
+            }
+            if (args.length % 2 != 0) {
+                throw new IllegalArgumentException(
+                    "map requires even number of arguments (key/value pairs)");
+            }
+
+            StringBuilder keys = new StringBuilder("[");
+            StringBuilder values = new StringBuilder("[");
+
+            for (int i = 0; i < args.length; i += 2) {
+                if (i > 0) {
+                    keys.append(", ");
+                    values.append(", ");
+                }
+                keys.append(args[i]);
+                values.append(args[i + 1]);
+            }
+
+            keys.append("]");
+            values.append("]");
+
+            return "MAP(" + keys + ", " + values + ")";
+        };
+        CUSTOM_TRANSLATORS.put("map", mapTranslator);
+        CUSTOM_TRANSLATORS.put("create_map", mapTranslator);
     }
 
     // ==================== Conditional Functions ====================
@@ -594,5 +658,33 @@ public class FunctionRegistry {
             .returnType(FunctionMetadata.constantType(BooleanType.get()))
             .nullable(FunctionMetadata.alwaysNonNull())
             .build());
+    }
+
+    // ==================== Helper Methods ====================
+
+    /**
+     * Extracts a field name from a quoted string literal.
+     * Removes surrounding single/double quotes if present.
+     *
+     * <p>Used by complex type constructors like named_struct to extract
+     * field names from Spark SQL string literals.
+     *
+     * @param quotedName the potentially quoted field name
+     * @return the unquoted field name
+     */
+    private static String extractFieldName(String quotedName) {
+        if (quotedName == null) {
+            return "field";
+        }
+        String trimmed = quotedName.trim();
+        // Remove surrounding single quotes
+        if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length() >= 2) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        // Remove surrounding double quotes
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 }

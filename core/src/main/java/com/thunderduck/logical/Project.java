@@ -126,7 +126,18 @@ public class Project extends LogicalPlan {
     @Override
     public StructType inferSchema() {
         // Get child schema for resolving column types
-        StructType childSchema = child().schema();
+        StructType childSchema = null;
+        try {
+            childSchema = child().schema();
+        } catch (Exception e) {
+            // Child schema resolution failed - return null to trigger DuckDB inference
+            return null;
+        }
+
+        // If child schema is null, return null to trigger DuckDB-based inference
+        if (childSchema == null) {
+            return null;
+        }
 
         List<StructField> fields = new ArrayList<>();
         for (int i = 0; i < projections.size(); i++) {

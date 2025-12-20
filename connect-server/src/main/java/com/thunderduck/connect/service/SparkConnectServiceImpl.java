@@ -836,7 +836,360 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             sql = beforeOrderBy + "ORDER BY " + newOrderBy.toString() + " " + afterOrderBy;
         }
 
+        // Translate Spark-specific SQL functions to DuckDB equivalents
+        sql = translateSparkFunctions(sql);
+
         return sql;
+    }
+
+    /**
+     * Translates Spark-specific SQL functions to DuckDB equivalents.
+     *
+     * <p>Handles functions like:
+     * <ul>
+     *   <li>NAMED_STRUCT('field', value, ...) → struct_pack(field := value, ...)</li>
+     *   <li>MAP('k1', v1, 'k2', v2) → MAP(['k1', 'k2'], [v1, v2])</li>
+     *   <li>STRUCT(v1, v2) → row(v1, v2)</li>
+     *   <li>ARRAY(v1, v2) → list_value(v1, v2)</li>
+     * </ul>
+     *
+     * @param sql the SQL string to translate
+     * @return the translated SQL string
+     */
+    private String translateSparkFunctions(String sql) {
+        // Translate NAMED_STRUCT to struct_pack
+        sql = translateNamedStruct(sql);
+
+        // Translate MAP function to DuckDB MAP syntax
+        sql = translateMapFunction(sql);
+
+        // Translate STRUCT to row
+        sql = translateStructFunction(sql);
+
+        // Translate ARRAY to list_value
+        sql = translateArrayFunction(sql);
+
+        return sql;
+    }
+
+    /**
+     * Translates NAMED_STRUCT('field', value, ...) to struct_pack(field := value, ...)
+     */
+    private String translateNamedStruct(String sql) {
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        String sqlLower = sql.toLowerCase();
+
+        while (i < sql.length()) {
+            int funcStart = sqlLower.indexOf("named_struct(", i);
+            if (funcStart == -1) {
+                result.append(sql.substring(i));
+                break;
+            }
+
+            // Check this isn't part of a larger identifier
+            if (funcStart > 0 && Character.isLetterOrDigit(sql.charAt(funcStart - 1))) {
+                result.append(sql.substring(i, funcStart + 13));
+                i = funcStart + 13;
+                continue;
+            }
+
+            // Append everything before the function
+            result.append(sql.substring(i, funcStart));
+
+            // Find the matching closing parenthesis
+            int parenStart = funcStart + 12; // Position of '('
+            int parenEnd = findMatchingParen(sql, parenStart);
+
+            if (parenEnd == -1) {
+                // No matching paren found, just append and continue
+                result.append(sql.substring(funcStart));
+                break;
+            }
+
+            // Extract arguments
+            String argsStr = sql.substring(parenStart + 1, parenEnd);
+            java.util.List<String> args = parseArguments(argsStr);
+
+            // Build struct_pack syntax
+            result.append("struct_pack(");
+            for (int j = 0; j < args.size(); j += 2) {
+                if (j > 0) {
+                    result.append(", ");
+                }
+                // Extract field name from quoted string
+                String fieldName = extractFieldNameFromSQL(args.get(j));
+                String value = (j + 1 < args.size()) ? args.get(j + 1) : "NULL";
+                result.append(fieldName).append(" := ").append(value);
+            }
+            result.append(")");
+
+            i = parenEnd + 1;
+            sqlLower = sql.toLowerCase(); // Refresh for next iteration
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Translates MAP('k1', v1, 'k2', v2) to MAP(['k1', 'k2'], [v1, v2])
+     */
+    private String translateMapFunction(String sql) {
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        String sqlLower = sql.toLowerCase();
+
+        while (i < sql.length()) {
+            // Look for standalone "map(" - not "map_keys", "map_values", etc.
+            int funcStart = sqlLower.indexOf("map(", i);
+            if (funcStart == -1) {
+                result.append(sql.substring(i));
+                break;
+            }
+
+            // Check this isn't part of a larger identifier (e.g., map_keys, bitmap, etc.)
+            if (funcStart > 0 && (Character.isLetterOrDigit(sql.charAt(funcStart - 1)) || sql.charAt(funcStart - 1) == '_')) {
+                result.append(sql.substring(i, funcStart + 4));
+                i = funcStart + 4;
+                continue;
+            }
+
+            // Append everything before the function
+            result.append(sql.substring(i, funcStart));
+
+            // Find the matching closing parenthesis
+            int parenStart = funcStart + 3; // Position of '('
+            int parenEnd = findMatchingParen(sql, parenStart);
+
+            if (parenEnd == -1) {
+                result.append(sql.substring(funcStart));
+                break;
+            }
+
+            // Extract arguments
+            String argsStr = sql.substring(parenStart + 1, parenEnd);
+            java.util.List<String> args = parseArguments(argsStr);
+
+            // Build DuckDB MAP syntax: MAP([keys], [values])
+            if (args.isEmpty()) {
+                result.append("MAP([], [])");
+            } else {
+                StringBuilder keys = new StringBuilder("[");
+                StringBuilder values = new StringBuilder("[");
+
+                for (int j = 0; j < args.size(); j += 2) {
+                    if (j > 0) {
+                        keys.append(", ");
+                        values.append(", ");
+                    }
+                    keys.append(args.get(j));
+                    values.append((j + 1 < args.size()) ? args.get(j + 1) : "NULL");
+                }
+
+                keys.append("]");
+                values.append("]");
+
+                result.append("MAP(").append(keys).append(", ").append(values).append(")");
+            }
+
+            i = parenEnd + 1;
+            sqlLower = sql.toLowerCase();
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Translates STRUCT(v1, v2) to row(v1, v2)
+     */
+    private String translateStructFunction(String sql) {
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        String sqlLower = sql.toLowerCase();
+
+        while (i < sql.length()) {
+            int funcStart = sqlLower.indexOf("struct(", i);
+            if (funcStart == -1) {
+                result.append(sql.substring(i));
+                break;
+            }
+
+            // Check this isn't part of a larger identifier (e.g., named_struct)
+            if (funcStart > 0 && (Character.isLetterOrDigit(sql.charAt(funcStart - 1)) || sql.charAt(funcStart - 1) == '_')) {
+                result.append(sql.substring(i, funcStart + 7));
+                i = funcStart + 7;
+                continue;
+            }
+
+            // Append everything before, then replace "struct(" with "row("
+            result.append(sql.substring(i, funcStart));
+            result.append("row(");
+
+            i = funcStart + 7; // Skip past "struct("
+            sqlLower = sql.toLowerCase();
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Translates ARRAY(v1, v2) to list_value(v1, v2)
+     */
+    private String translateArrayFunction(String sql) {
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        String sqlLower = sql.toLowerCase();
+
+        while (i < sql.length()) {
+            int funcStart = sqlLower.indexOf("array(", i);
+            if (funcStart == -1) {
+                result.append(sql.substring(i));
+                break;
+            }
+
+            // Check this isn't part of a larger identifier (e.g., array_contains)
+            if (funcStart > 0 && (Character.isLetterOrDigit(sql.charAt(funcStart - 1)) || sql.charAt(funcStart - 1) == '_')) {
+                result.append(sql.substring(i, funcStart + 6));
+                i = funcStart + 6;
+                continue;
+            }
+
+            // Also check it's not followed by a letter/underscore (e.g., ARRAY<INT>)
+            int afterParen = funcStart + 5;
+            if (afterParen < sql.length() && sql.charAt(afterParen) == '<') {
+                // This is ARRAY<type> cast syntax, not ARRAY() constructor
+                result.append(sql.substring(i, funcStart + 6));
+                i = funcStart + 6;
+                continue;
+            }
+
+            // Append everything before, then replace "array(" with "list_value("
+            result.append(sql.substring(i, funcStart));
+            result.append("list_value(");
+
+            i = funcStart + 6; // Skip past "array("
+            sqlLower = sql.toLowerCase();
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Finds the position of the matching closing parenthesis.
+     * @param sql the SQL string
+     * @param openParenPos the position of the opening parenthesis
+     * @return the position of the matching closing paren, or -1 if not found
+     */
+    private int findMatchingParen(String sql, int openParenPos) {
+        if (openParenPos >= sql.length() || sql.charAt(openParenPos) != '(') {
+            return -1;
+        }
+
+        int level = 1;
+        boolean inString = false;
+        char stringChar = 0;
+
+        for (int i = openParenPos + 1; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+
+            if (inString) {
+                if (c == stringChar) {
+                    // Check for escaped quote
+                    if (i + 1 < sql.length() && sql.charAt(i + 1) == stringChar) {
+                        i++; // Skip escaped quote
+                    } else {
+                        inString = false;
+                    }
+                }
+            } else {
+                if (c == '\'' || c == '"') {
+                    inString = true;
+                    stringChar = c;
+                } else if (c == '(') {
+                    level++;
+                } else if (c == ')') {
+                    level--;
+                    if (level == 0) {
+                        return i;
+                    }
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    /**
+     * Parses a comma-separated argument list, respecting nested parens and strings.
+     */
+    private java.util.List<String> parseArguments(String argsStr) {
+        java.util.List<String> args = new java.util.ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int parenLevel = 0;
+        boolean inString = false;
+        char stringChar = 0;
+
+        for (int i = 0; i < argsStr.length(); i++) {
+            char c = argsStr.charAt(i);
+
+            if (inString) {
+                current.append(c);
+                if (c == stringChar) {
+                    if (i + 1 < argsStr.length() && argsStr.charAt(i + 1) == stringChar) {
+                        current.append(argsStr.charAt(i + 1));
+                        i++; // Skip escaped quote
+                    } else {
+                        inString = false;
+                    }
+                }
+            } else {
+                if (c == '\'' || c == '"') {
+                    inString = true;
+                    stringChar = c;
+                    current.append(c);
+                } else if (c == '(') {
+                    parenLevel++;
+                    current.append(c);
+                } else if (c == ')') {
+                    parenLevel--;
+                    current.append(c);
+                } else if (c == ',' && parenLevel == 0) {
+                    args.add(current.toString().trim());
+                    current = new StringBuilder();
+                } else {
+                    current.append(c);
+                }
+            }
+        }
+
+        if (current.length() > 0) {
+            args.add(current.toString().trim());
+        }
+
+        return args;
+    }
+
+    /**
+     * Extracts a field name from a SQL string literal.
+     * Removes surrounding quotes and handles escaped quotes.
+     */
+    private String extractFieldNameFromSQL(String quotedName) {
+        if (quotedName == null) {
+            return "field";
+        }
+        String trimmed = quotedName.trim();
+        // Remove surrounding single quotes
+        if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length() >= 2) {
+            String inner = trimmed.substring(1, trimmed.length() - 1);
+            // Handle escaped quotes
+            return inner.replace("''", "'");
+        }
+        // Remove surrounding double quotes
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+            String inner = trimmed.substring(1, trimmed.length() - 1);
+            return inner.replace("\"\"", "\"");
+        }
+        return trimmed;
     }
 
     /**

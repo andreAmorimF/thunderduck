@@ -450,9 +450,35 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             selectExprs.add(expr.toSQL());
         }
 
+        // Get child schema for type-aware SQL generation (e.g., CAST for AVG of decimal)
+        com.thunderduck.types.StructType childSchema = null;
+        try {
+            childSchema = plan.child().schema();
+        } catch (Exception e) {
+            // Child schema unavailable - proceed without type-specific handling
+        }
+
         // Add aggregate expressions
         for (Aggregate.AggregateExpression aggExpr : plan.aggregateExpressions()) {
             String aggSQL = aggExpr.toSQL();
+
+            // For AVG of decimal columns, wrap with CAST to preserve decimal type
+            // (DuckDB returns DOUBLE for AVG, but Spark preserves DECIMAL)
+            // Spark: AVG(DECIMAL(p,s)) -> DECIMAL(p+4, s+4)
+            if (childSchema != null &&
+                aggExpr.function().equalsIgnoreCase("AVG") &&
+                aggExpr.argument() != null) {
+
+                com.thunderduck.types.DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
+                if (argType instanceof com.thunderduck.types.DecimalType) {
+                    com.thunderduck.types.DecimalType decType = (com.thunderduck.types.DecimalType) argType;
+                    int newPrecision = Math.min(decType.precision() + 4, 38);
+                    int newScale = Math.min(decType.scale() + 4, newPrecision);
+                    aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        aggSQL, newPrecision, newScale);
+                }
+            }
+
             // Add alias if provided
             if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
                 aggSQL += " AS " + SQLQuoting.quoteIdentifier(aggExpr.alias());
@@ -484,6 +510,35 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(" HAVING ");
             sql.append(plan.havingCondition().toSQL());
         }
+    }
+
+    /**
+     * Resolves the data type of an expression from the child schema.
+     *
+     * @param expr the expression
+     * @param childSchema the child schema for resolving column types
+     * @return the resolved data type
+     */
+    private com.thunderduck.types.DataType resolveExpressionType(
+            com.thunderduck.expression.Expression expr,
+            com.thunderduck.types.StructType childSchema) {
+        // Get underlying expression if aliased
+        com.thunderduck.expression.Expression baseExpr = expr;
+        if (expr instanceof com.thunderduck.expression.AliasExpression) {
+            baseExpr = ((com.thunderduck.expression.AliasExpression) expr).expression();
+        }
+
+        // Resolve column reference from child schema
+        if (baseExpr instanceof UnresolvedColumn && childSchema != null) {
+            String colName = ((UnresolvedColumn) baseExpr).columnName();
+            com.thunderduck.types.StructField field = childSchema.fieldByName(colName);
+            if (field != null) {
+                return field.dataType();
+            }
+        }
+
+        // For other expressions, use their declared type
+        return baseExpr.dataType();
     }
 
     /**

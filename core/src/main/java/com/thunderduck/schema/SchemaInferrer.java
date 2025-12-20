@@ -82,8 +82,15 @@ public class SchemaInferrer {
             return StringType.get(); // Default fallback
         }
 
+        String upper = duckdbType.toUpperCase().trim();
+
+        // Handle DECIMAL(p,s) or NUMERIC(p,s) with precision and scale
+        if (upper.startsWith("DECIMAL(") || upper.startsWith("NUMERIC(")) {
+            return parseDecimalType(upper);
+        }
+
         // Normalize: uppercase and remove size specifiers like VARCHAR(255)
-        String normalized = duckdbType.toUpperCase().replaceAll("\\(.*\\)", "").trim();
+        String normalized = upper.replaceAll("\\(.*\\)", "").trim();
 
         switch (normalized) {
             // Integer types
@@ -129,7 +136,8 @@ public class SchemaInferrer {
                 return DoubleType.get();
             case "DECIMAL":
             case "NUMERIC":
-                return DoubleType.get(); // Approximation
+                // Default decimal without precision/scale specified
+                return new DecimalType(38, 18);
 
             // String types
             case "VARCHAR":
@@ -182,5 +190,36 @@ public class SchemaInferrer {
                 }
                 return StringType.get(); // Safe fallback
         }
+    }
+
+    /**
+     * Parses a DECIMAL(precision, scale) or NUMERIC(precision, scale) type string.
+     *
+     * @param typeStr the type string like "DECIMAL(10,2)"
+     * @return the DecimalType with extracted precision and scale
+     */
+    private static DataType parseDecimalType(String typeStr) {
+        try {
+            // Extract content between parentheses: "DECIMAL(10,2)" -> "10,2"
+            int start = typeStr.indexOf('(');
+            int end = typeStr.indexOf(')');
+            if (start > 0 && end > start) {
+                String params = typeStr.substring(start + 1, end).trim();
+                String[] parts = params.split(",");
+                if (parts.length == 2) {
+                    int precision = Integer.parseInt(parts[0].trim());
+                    int scale = Integer.parseInt(parts[1].trim());
+                    return new DecimalType(precision, scale);
+                } else if (parts.length == 1) {
+                    // DECIMAL(precision) without scale
+                    int precision = Integer.parseInt(parts[0].trim());
+                    return new DecimalType(precision, 0);
+                }
+            }
+        } catch (NumberFormatException e) {
+            // Fall through to default
+        }
+        // Default if parsing fails
+        return new DecimalType(38, 18);
     }
 }

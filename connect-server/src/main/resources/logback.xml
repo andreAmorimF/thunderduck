@@ -28,6 +28,7 @@
 
     <!-- Component-specific logging -->
     <logger name="com.thunderduck.connect" level="DEBUG" />
+    <logger name="com.thunderduck.logical" level="DEBUG" />
     <logger name="com.thunderduck.runtime" level="INFO" />
     <logger name="io.grpc" level="WARN" />
     <logger name="org.apache.arrow" level="WARN" />

@@ -207,8 +207,9 @@ public class RelationConverter {
                 }
 
                 logger.debug("Creating TableScan for parquet file: {}", path);
-                // Schema will be inferred by DuckDB from Parquet file
-                return new TableScan(path, TableScan.TableFormat.PARQUET, null);
+                // Infer schema from parquet file if schemaInferrer is available
+                StructType schema = inferParquetSchema(path);
+                return new TableScan(path, TableScan.TableFormat.PARQUET, schema);
             }
 
             // Add support for other formats as needed
@@ -217,8 +218,9 @@ public class RelationConverter {
             Read.NamedTable namedTable = read.getNamedTable();
             String tableName = namedTable.getUnparsedIdentifier();
             logger.debug("Creating TableScan for table: {}", tableName);
-            // For named tables, use TABLE format (regular DuckDB table)
-            return new TableScan(tableName, TableScan.TableFormat.TABLE, null);
+            // Infer schema from named table if schemaInferrer is available
+            StructType schema = inferTableSchema(tableName);
+            return new TableScan(tableName, TableScan.TableFormat.TABLE, schema);
         } else {
             throw new PlanConversionException("Read relation must have either data_source or named_table");
         }
@@ -1546,5 +1548,52 @@ public class RelationConverter {
 
         logger.debug("Creating ToSchema SQL: {}", sql);
         return new SQLRelation(sql);
+    }
+
+    /**
+     * Infers the schema of a named table using DuckDB's DESCRIBE.
+     *
+     * @param tableName the table name
+     * @return the inferred schema, or null if schema inference is unavailable
+     */
+    private StructType inferTableSchema(String tableName) {
+        if (schemaInferrer == null) {
+            logger.debug("Schema inferrer not available, returning null schema for table: {}", tableName);
+            return null;
+        }
+
+        try {
+            // Use DESCRIBE to get table schema
+            StructType schema = schemaInferrer.inferSchema("SELECT * FROM " + SQLQuoting.quoteIdentifier(tableName));
+            logger.debug("Inferred schema for table {}: {}", tableName, schema);
+            return schema;
+        } catch (Exception e) {
+            logger.warn("Failed to infer schema for table {}: {}", tableName, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Infers the schema of a parquet file using DuckDB's DESCRIBE.
+     *
+     * @param path the parquet file path
+     * @return the inferred schema, or null if schema inference is unavailable
+     */
+    private StructType inferParquetSchema(String path) {
+        if (schemaInferrer == null) {
+            logger.debug("Schema inferrer not available, returning null schema for parquet: {}", path);
+            return null;
+        }
+
+        try {
+            // Use read_parquet to get schema from parquet file
+            String sql = "SELECT * FROM read_parquet('" + path.replace("'", "''") + "')";
+            StructType schema = schemaInferrer.inferSchema(sql);
+            logger.debug("Inferred schema for parquet {}: {}", path, schema);
+            return schema;
+        } catch (Exception e) {
+            logger.warn("Failed to infer schema for parquet {}: {}", path, e.getMessage());
+            return null;
+        }
     }
 }
