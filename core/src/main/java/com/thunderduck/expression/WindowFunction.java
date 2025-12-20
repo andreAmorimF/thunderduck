@@ -4,6 +4,7 @@ import com.thunderduck.expression.window.WindowFrame;
 import com.thunderduck.logical.Sort;
 import com.thunderduck.types.DataType;
 import com.thunderduck.types.DoubleType;
+import com.thunderduck.types.IntegerType;
 import com.thunderduck.types.LongType;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -184,6 +185,7 @@ public class WindowFunction extends Expression {
             case "RANK":
             case "DENSE_RANK":
             case "NTILE":
+                return IntegerType.get();  // Spark returns INT for ranking functions
             case "COUNT":
                 return LongType.get();
             case "LAG":
@@ -256,7 +258,7 @@ public class WindowFunction extends Expression {
         // If using named window, just reference the name
         if (windowName != null) {
             sql.append(windowName);
-            return sql.toString();
+            return wrapWithCastIfRankingFunction(sql.toString());
         }
 
         // Otherwise, inline window specification
@@ -316,7 +318,27 @@ public class WindowFunction extends Expression {
 
         sql.append(")");
 
-        return sql.toString();
+        return wrapWithCastIfRankingFunction(sql.toString());
+    }
+
+    /**
+     * Wraps the SQL with CAST to INTEGER if this is a ranking function.
+     *
+     * <p>DuckDB returns BIGINT for ranking functions, but Spark returns INTEGER.
+     * This method wraps the SQL with a CAST to ensure type compatibility.
+     *
+     * @param sql the generated window function SQL
+     * @return the SQL wrapped with CAST for ranking functions, or unchanged for others
+     */
+    private String wrapWithCastIfRankingFunction(String sql) {
+        String funcUpper = function.toUpperCase();
+        if (funcUpper.equals("ROW_NUMBER") ||
+            funcUpper.equals("RANK") ||
+            funcUpper.equals("DENSE_RANK") ||
+            funcUpper.equals("NTILE")) {
+            return "CAST(" + sql + " AS INTEGER)";
+        }
+        return sql;
     }
 
     // Note: toString() is intentionally NOT overridden here.
