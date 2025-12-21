@@ -379,9 +379,11 @@ public class ExpressionConverter {
         // Array constructor - creates array from elements
         if (lower.equals("array")) {
             if (!args.isEmpty()) {
-                return new ArrayType(args.get(0).dataType());
+                // Check if any element is nullable - determines containsNull
+                boolean containsNull = args.stream().anyMatch(Expression::nullable);
+                return new ArrayType(args.get(0).dataType(), containsNull);
             }
-            return new ArrayType(UnresolvedType.arrayElement());
+            return new ArrayType(UnresolvedType.arrayElement(), false);
         }
 
         // Flatten - reduces nesting by 1 level: ArrayType(ArrayType(T)) -> ArrayType(T)
@@ -407,20 +409,21 @@ public class ExpressionConverter {
             return UnresolvedType.functionReturn();
         }
 
-        // map_keys - returns array of key types
+        // map_keys - returns array of key types (keys can never be null in Spark)
         if (lower.equals("map_keys")) {
             if (!args.isEmpty() && args.get(0).dataType() instanceof MapType) {
-                return new ArrayType(((MapType) args.get(0).dataType()).keyType());
+                return new ArrayType(((MapType) args.get(0).dataType()).keyType(), false);
             }
-            return new ArrayType(UnresolvedType.mapKey());
+            return new ArrayType(UnresolvedType.mapKey(), false);
         }
 
-        // map_values - returns array of value types
+        // map_values - returns array of value types (inherits valueContainsNull from map)
         if (lower.equals("map_values")) {
             if (!args.isEmpty() && args.get(0).dataType() instanceof MapType) {
-                return new ArrayType(((MapType) args.get(0).dataType()).valueType());
+                MapType mapType = (MapType) args.get(0).dataType();
+                return new ArrayType(mapType.valueType(), mapType.valueContainsNull());
             }
-            return new ArrayType(UnresolvedType.mapValue());
+            return new ArrayType(UnresolvedType.mapValue(), true);
         }
 
         // map_from_arrays - returns MapType from key and value arrays
@@ -429,21 +432,33 @@ public class ExpressionConverter {
                 DataType keysType = args.get(0).dataType();
                 DataType valuesType = args.get(1).dataType();
                 if (keysType instanceof ArrayType && valuesType instanceof ArrayType) {
+                    // Propagate valueContainsNull from the values array
+                    boolean valueContainsNull = ((ArrayType) valuesType).containsNull();
                     return new MapType(
                         ((ArrayType) keysType).elementType(),
-                        ((ArrayType) valuesType).elementType()
+                        ((ArrayType) valuesType).elementType(),
+                        valueContainsNull
                     );
                 }
             }
-            return new MapType(UnresolvedType.mapKey(), UnresolvedType.mapValue());
+            return new MapType(UnresolvedType.mapKey(), UnresolvedType.mapValue(), true);
         }
 
         // map constructor - creates map from key-value pairs
+        // Spark: map('a', 1, 'b', 2) - alternating key-value pairs
         if (lower.equals("map")) {
             if (args.size() >= 2) {
-                return new MapType(args.get(0).dataType(), args.get(1).dataType());
+                // Check if any value (odd positions) is nullable
+                boolean valueContainsNull = false;
+                for (int i = 1; i < args.size(); i += 2) {
+                    if (args.get(i).nullable()) {
+                        valueContainsNull = true;
+                        break;
+                    }
+                }
+                return new MapType(args.get(0).dataType(), args.get(1).dataType(), valueContainsNull);
             }
-            return new MapType(UnresolvedType.mapKey(), UnresolvedType.mapValue());
+            return new MapType(UnresolvedType.mapKey(), UnresolvedType.mapValue(), false);
         }
 
         // map_entries and map_from_entries need StructType support
@@ -491,6 +506,12 @@ public class ExpressionConverter {
      */
     private boolean inferFunctionNullable(String functionName, List<com.thunderduck.expression.Expression> args) {
         String lower = functionName.toLowerCase();
+
+        // Complex type constructors are never null (the container itself is not null)
+        // Even if elements inside can be null, the array/map/struct itself is not
+        if (lower.matches("array|map|create_map|named_struct|struct")) {
+            return false;
+        }
 
         // Null-coalescing functions are non-null if ANY argument is non-null
         // In other words, only nullable if ALL arguments are nullable
@@ -837,12 +858,16 @@ public class ExpressionConverter {
                 org.apache.spark.connect.proto.DataType.Decimal decimal = protoType.getDecimal();
                 return new DecimalType(decimal.getPrecision(), decimal.getScale());
             case ARRAY:
-                DataType elementType = convertDataType(protoType.getArray().getElementType());
-                return new ArrayType(elementType);
+                org.apache.spark.connect.proto.DataType.Array arrayProto = protoType.getArray();
+                DataType elementType = convertDataType(arrayProto.getElementType());
+                boolean containsNull = arrayProto.getContainsNull();
+                return new ArrayType(elementType, containsNull);
             case MAP:
-                DataType keyType = convertDataType(protoType.getMap().getKeyType());
-                DataType valueType = convertDataType(protoType.getMap().getValueType());
-                return new MapType(keyType, valueType);
+                org.apache.spark.connect.proto.DataType.Map mapProto = protoType.getMap();
+                DataType keyType = convertDataType(mapProto.getKeyType());
+                DataType valueType = convertDataType(mapProto.getValueType());
+                boolean valueContainsNull = mapProto.getValueContainsNull();
+                return new MapType(keyType, valueType, valueContainsNull);
             default:
                 throw new PlanConversionException("Unsupported DataType: " + protoType.getKindCase());
         }
@@ -870,7 +895,9 @@ public class ExpressionConverter {
             // Analytic functions
             case "LAG":
             case "LEAD":
+            case "FIRST":
             case "FIRST_VALUE":
+            case "LAST":
             case "LAST_VALUE":
             case "NTH_VALUE":
                 return true;
@@ -890,34 +917,44 @@ public class ExpressionConverter {
         // For now, we'll create a basic FunctionCall and let the planner handle it
         // The proper window specification will be added via convertWindow when OVER is present
 
-        // Infer return type based on window function
-        DataType returnType = inferWindowFunctionReturnType(functionName);
+        // Infer return type based on window function and arguments
+        DataType returnType = inferWindowFunctionReturnType(functionName, arguments);
         return new FunctionCall(functionName.toLowerCase(), arguments, returnType);
     }
 
     /**
      * Infers the return type for a window function.
+     * For analytic functions (LAG, LEAD, etc.), the return type is the type of the first argument.
      */
-    private DataType inferWindowFunctionReturnType(String functionName) {
+    private DataType inferWindowFunctionReturnType(String functionName,
+            List<com.thunderduck.expression.Expression> arguments) {
         switch (functionName.toUpperCase()) {
             case "ROW_NUMBER":
             case "RANK":
             case "DENSE_RANK":
             case "NTILE":
-                return LongType.get();  // These return BIGINT
+                // Spark returns INT for ranking functions (consistent with WindowFunction.dataType())
+                return IntegerType.get();
             case "PERCENT_RANK":
             case "CUME_DIST":
                 return DoubleType.get();  // These return percentages
             case "LAG":
             case "LEAD":
+            case "FIRST":
             case "FIRST_VALUE":
+            case "LAST":
             case "LAST_VALUE":
             case "NTH_VALUE":
-                // These return the same type as their input - use StringType as default
-                // TODO: Infer from argument type
-                return StringType.get();
+                // These return the same type as their first argument
+                if (!arguments.isEmpty()) {
+                    DataType argType = arguments.get(0).dataType();
+                    if (argType != null) {
+                        return argType;
+                    }
+                }
+                return LongType.get();  // Fallback if no argument type available
             default:
-                return StringType.get();  // Default fallback
+                return LongType.get();  // Default fallback
         }
     }
 
@@ -1040,7 +1077,27 @@ public class ExpressionConverter {
                 // Value represents offset for PRECEDING/FOLLOWING
                 // The protobuf doesn't directly specify if it's preceding or following,
                 // so we need to infer based on the sign and position
-                long offset = protoBoundary.getValue().getLiteral().getLong();
+
+                // Extract the offset value - may be Long, Integer, or other numeric type
+                long offset;
+                org.apache.spark.connect.proto.Expression.Literal lit = protoBoundary.getValue().getLiteral();
+                switch (lit.getLiteralTypeCase()) {
+                    case LONG:
+                        offset = lit.getLong();
+                        break;
+                    case INTEGER:
+                        offset = lit.getInteger();
+                        break;
+                    case SHORT:
+                        offset = lit.getShort();
+                        break;
+                    case BYTE:
+                        offset = lit.getByte();
+                        break;
+                    default:
+                        logger.warn("Unexpected literal type for frame boundary: {}", lit.getLiteralTypeCase());
+                        offset = 0;
+                }
 
                 if (offset < 0) {
                     // Negative offset means preceding for lower, following for upper

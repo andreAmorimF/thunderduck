@@ -161,6 +161,21 @@ public class Aggregate extends LogicalPlan {
                 }
             }
 
+            // For SUM of decimal columns, wrap with CAST to match Spark precision rules
+            // Spark: SUM(DECIMAL(p,s)) -> DECIMAL(p+10, s), capped at max precision 38
+            if (childSchema != null &&
+                aggExpr.function().equalsIgnoreCase("SUM") &&
+                aggExpr.argument() != null) {
+
+                DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
+                if (argType instanceof DecimalType) {
+                    DecimalType decType = (DecimalType) argType;
+                    int newPrecision = Math.min(decType.precision() + 10, 38);
+                    aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        aggSQL, newPrecision, decType.scale());
+                }
+            }
+
             // Add alias if provided
             if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
                 aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(aggExpr.alias());
@@ -201,15 +216,13 @@ public class Aggregate extends LogicalPlan {
         try {
             childSchema = child().schema();
         } catch (Exception e) {
-            // Child schema resolution failed - return null to trigger DuckDB inference
-            return null;
+            // Child schema resolution failed - continue with null childSchema
+            // We can still infer column names from expressions and types from aggregate functions
         }
 
-        // If child schema is null, return null to trigger DuckDB-based inference
-        // which will provide correct column names and types from actual execution
-        if (childSchema == null) {
-            return null;
-        }
+        // Note: childSchema may be null, but we can still produce a schema
+        // using expression names and default/aggregate types.
+        // This ensures column names are preserved even when child schema is unavailable.
 
         List<StructField> fields = new ArrayList<>();
 
@@ -330,7 +343,10 @@ public class Aggregate extends LogicalPlan {
                     return DoubleType.get();
                 }
                 if (argType instanceof DecimalType) {
-                    return argType; // Preserve decimal
+                    // Spark: SUM(DECIMAL(p,s)) -> DECIMAL(p+10, s), capped at max precision 38
+                    DecimalType decType = (DecimalType) argType;
+                    int newPrecision = Math.min(decType.precision() + 10, 38);
+                    return new DecimalType(newPrecision, decType.scale());
                 }
                 return DoubleType.get(); // Default
             case "AVG":

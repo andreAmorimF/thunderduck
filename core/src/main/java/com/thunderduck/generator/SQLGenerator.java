@@ -170,6 +170,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             visitSample((Sample) plan);
         } else if (plan instanceof WithColumns) {
             visitWithColumns((WithColumns) plan);
+        } else if (plan instanceof ToDF) {
+            visitToDF((ToDF) plan);
         } else {
             throw new UnsupportedOperationException(
                 "SQL generation not implemented for: " + plan.getClass().getSimpleName());
@@ -472,6 +474,38 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
+     * Visits a ToDF node (column renaming operation).
+     * Generates SQL that renames columns using DuckDB's table alias with column names syntax.
+     */
+    private void visitToDF(ToDF plan) {
+        List<String> columnNames = plan.columnNames();
+
+        if (columnNames.isEmpty()) {
+            // No renaming needed, just visit child
+            visit(plan.child());
+            return;
+        }
+
+        // Build column alias list
+        StringBuilder columnList = new StringBuilder();
+        for (int i = 0; i < columnNames.size(); i++) {
+            if (i > 0) {
+                columnList.append(", ");
+            }
+            columnList.append(quoteIdentifier(columnNames.get(i)));
+        }
+
+        // Generate: SELECT * FROM (child) AS _todf_subquery(col1, col2, ...)
+        sql.append("SELECT * FROM (");
+        subqueryDepth++;
+        visit(plan.child());
+        subqueryDepth--;
+        sql.append(") AS _todf_subquery(");
+        sql.append(columnList);
+        sql.append(")");
+    }
+
+    /**
      * Visits an Aggregate node (GROUP BY clause).
      * Builds SQL directly in buffer to avoid corruption from generate() calls.
      */
@@ -516,6 +550,21 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                     int newScale = Math.min(decType.scale() + 4, newPrecision);
                     aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
                         aggSQL, newPrecision, newScale);
+                }
+            }
+
+            // For SUM of decimal columns, wrap with CAST to match Spark precision rules
+            // Spark: SUM(DECIMAL(p,s)) -> DECIMAL(p+10, s), capped at max precision 38
+            if (childSchema != null &&
+                aggExpr.function().equalsIgnoreCase("SUM") &&
+                aggExpr.argument() != null) {
+
+                com.thunderduck.types.DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
+                if (argType instanceof com.thunderduck.types.DecimalType) {
+                    com.thunderduck.types.DecimalType decType = (com.thunderduck.types.DecimalType) argType;
+                    int newPrecision = Math.min(decType.precision() + 10, 38);
+                    aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        aggSQL, newPrecision, decType.scale());
                 }
             }
 

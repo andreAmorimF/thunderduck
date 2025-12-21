@@ -1,8 +1,10 @@
 package com.thunderduck.logical;
 
+import com.thunderduck.expression.BinaryExpression;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.FunctionCall;
 import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.expression.WindowFunction;
 import com.thunderduck.functions.FunctionCategories;
 import com.thunderduck.types.ArrayType;
 import com.thunderduck.types.DataType;
@@ -165,6 +167,126 @@ public class Project extends LogicalPlan {
             if (field != null) {
                 return field.dataType();
             }
+        } else if (expr instanceof WindowFunction) {
+            // Handle WindowFunction - resolve argument types from child schema
+            WindowFunction wf = (WindowFunction) expr;
+            String func = wf.function().toUpperCase();
+
+            // Ranking functions return IntegerType
+            if (func.equals("ROW_NUMBER") || func.equals("RANK") ||
+                func.equals("DENSE_RANK") || func.equals("NTILE")) {
+                return com.thunderduck.types.IntegerType.get();
+            }
+
+            // PERCENT_RANK and CUME_DIST return DoubleType
+            if (func.equals("PERCENT_RANK") || func.equals("CUME_DIST")) {
+                return com.thunderduck.types.DoubleType.get();
+            }
+
+            // COUNT always returns LongType
+            if (func.equals("COUNT")) {
+                return com.thunderduck.types.LongType.get();
+            }
+
+            // Functions that return the type of their first argument
+            // Analytic: LAG, LEAD, FIRST/FIRST_VALUE, LAST/LAST_VALUE, NTH_VALUE
+            // Aggregate: MIN, MAX (preserve input type)
+            if (func.equals("LAG") || func.equals("LEAD") ||
+                func.equals("FIRST") || func.equals("FIRST_VALUE") ||
+                func.equals("LAST") || func.equals("LAST_VALUE") ||
+                func.equals("NTH_VALUE") ||
+                func.equals("MIN") || func.equals("MAX")) {
+
+                if (!wf.arguments().isEmpty()) {
+                    Expression arg = wf.arguments().get(0);
+                    DataType argType = resolveDataType(arg, childSchema);
+                    if (argType != null) {
+                        return argType;
+                    }
+                }
+            }
+
+            // SUM promotes type: Integer/Long -> Long, Float/Double -> Double, Decimal -> Decimal(p+10,s)
+            if (func.equals("SUM")) {
+                if (!wf.arguments().isEmpty()) {
+                    Expression arg = wf.arguments().get(0);
+                    DataType argType = resolveDataType(arg, childSchema);
+                    if (argType != null) {
+                        if (argType instanceof com.thunderduck.types.IntegerType ||
+                            argType instanceof com.thunderduck.types.LongType ||
+                            argType instanceof com.thunderduck.types.ShortType ||
+                            argType instanceof com.thunderduck.types.ByteType) {
+                            return com.thunderduck.types.LongType.get();
+                        }
+                        if (argType instanceof com.thunderduck.types.FloatType ||
+                            argType instanceof com.thunderduck.types.DoubleType) {
+                            return com.thunderduck.types.DoubleType.get();
+                        }
+                        if (argType instanceof com.thunderduck.types.DecimalType) {
+                            com.thunderduck.types.DecimalType decType = (com.thunderduck.types.DecimalType) argType;
+                            int newPrecision = Math.min(decType.precision() + 10, 38);
+                            return new com.thunderduck.types.DecimalType(newPrecision, decType.scale());
+                        }
+                        return argType;  // Preserve other types
+                    }
+                }
+                return com.thunderduck.types.LongType.get();  // Default fallback
+            }
+
+            // AVG returns Double for numeric types, Decimal for Decimal input
+            if (func.equals("AVG")) {
+                if (!wf.arguments().isEmpty()) {
+                    Expression arg = wf.arguments().get(0);
+                    DataType argType = resolveDataType(arg, childSchema);
+                    if (argType != null) {
+                        if (argType instanceof com.thunderduck.types.DecimalType) {
+                            return argType;  // AVG(Decimal) returns same precision Decimal
+                        }
+                        return com.thunderduck.types.DoubleType.get();
+                    }
+                }
+                return com.thunderduck.types.DoubleType.get();
+            }
+
+            // STDDEV, VARIANCE, etc. return Double
+            if (func.equals("STDDEV") || func.equals("STDDEV_POP") || func.equals("STDDEV_SAMP") ||
+                func.equals("VARIANCE") || func.equals("VAR_POP") || func.equals("VAR_SAMP")) {
+                return com.thunderduck.types.DoubleType.get();
+            }
+
+            // Fall back to WindowFunction's own type inference
+            return wf.dataType();
+        } else if (expr instanceof BinaryExpression) {
+            // Handle binary expressions (arithmetic, comparison, etc.)
+            BinaryExpression binExpr = (BinaryExpression) expr;
+            BinaryExpression.Operator op = binExpr.operator();
+
+            // Comparison and logical operators always return boolean
+            if (op.isComparison() || op.isLogical()) {
+                return com.thunderduck.types.BooleanType.get();
+            }
+
+            // Arithmetic operators - resolve operand types and determine result type
+            DataType leftType = resolveDataType(binExpr.left(), childSchema);
+            DataType rightType = resolveDataType(binExpr.right(), childSchema);
+
+            // Division always returns Double
+            if (op == BinaryExpression.Operator.DIVIDE) {
+                return com.thunderduck.types.DoubleType.get();
+            }
+
+            // For +, -, *, %, use numeric type promotion
+            if (op.isArithmetic()) {
+                return promoteNumericTypes(leftType, rightType);
+            }
+
+            // String concatenation returns String
+            if (op == BinaryExpression.Operator.CONCAT) {
+                return com.thunderduck.types.StringType.get();
+            }
+
+            // Default to left operand type
+            return leftType;
         } else if (expr instanceof FunctionCall) {
             FunctionCall func = (FunctionCall) expr;
             DataType declaredType = func.dataType();
@@ -218,9 +340,11 @@ public class Project extends LogicalPlan {
                     DataType argType = resolveDataType(func.arguments().get(0), childSchema);
                     if (argType instanceof MapType) {
                         MapType mapType = (MapType) argType;
+                        // map_keys: keys can never be null
+                        // map_values: inherits valueContainsNull from the map
                         return funcName.equals("map_keys")
-                            ? new ArrayType(mapType.keyType())
-                            : new ArrayType(mapType.valueType());
+                            ? new ArrayType(mapType.keyType(), false)
+                            : new ArrayType(mapType.valueType(), mapType.valueContainsNull());
                     }
                 }
 
@@ -275,6 +399,9 @@ public class Project extends LogicalPlan {
             if (field != null) {
                 return field.nullable();
             }
+        } else if (expr instanceof WindowFunction) {
+            // WindowFunction.nullable() already has proper logic for all window function types
+            return expr.nullable();
         } else if (expr instanceof FunctionCall) {
             FunctionCall func = (FunctionCall) expr;
             String funcName = func.functionName().toLowerCase();
@@ -321,7 +448,8 @@ public class Project extends LogicalPlan {
             DataType resolvedElement = resolveNestedType(elementType, childSchema);
             // Only create new ArrayType if element type changed
             if (resolvedElement != elementType) {
-                return new ArrayType(resolvedElement);
+                // Preserve the containsNull flag from the original type
+                return new ArrayType(resolvedElement, arrType.containsNull());
             }
             return arrType;
         } else if (type instanceof MapType) {
@@ -332,7 +460,8 @@ public class Project extends LogicalPlan {
             DataType resolvedValue = resolveNestedType(valueType, childSchema);
             // Only create new MapType if key or value type changed
             if (resolvedKey != keyType || resolvedValue != valueType) {
-                return new MapType(resolvedKey, resolvedValue);
+                // Preserve the valueContainsNull flag from the original type
+                return new MapType(resolvedKey, resolvedValue, mapType.valueContainsNull());
             }
             return mapType;
         } else if (type instanceof UnresolvedType) {
@@ -342,6 +471,66 @@ public class Project extends LogicalPlan {
         }
         // Primitive types are already resolved
         return type;
+    }
+
+    /**
+     * Promotes numeric types according to Spark's type promotion rules.
+     *
+     * <p>Order: Byte < Short < Integer < Long < Float < Double
+     * Decimal types are handled separately (widest precision wins).
+     *
+     * @param left the left operand type
+     * @param right the right operand type
+     * @return the promoted type
+     */
+    private DataType promoteNumericTypes(DataType left, DataType right) {
+        // If either is Double, result is Double
+        if (left instanceof com.thunderduck.types.DoubleType ||
+            right instanceof com.thunderduck.types.DoubleType) {
+            return com.thunderduck.types.DoubleType.get();
+        }
+
+        // If either is Float, result is Float (unless other is Double)
+        if (left instanceof com.thunderduck.types.FloatType ||
+            right instanceof com.thunderduck.types.FloatType) {
+            return com.thunderduck.types.FloatType.get();
+        }
+
+        // If either is Decimal, result is Decimal with appropriate precision
+        if (left instanceof com.thunderduck.types.DecimalType ||
+            right instanceof com.thunderduck.types.DecimalType) {
+            // Use the Decimal type with higher precision
+            if (left instanceof com.thunderduck.types.DecimalType &&
+                right instanceof com.thunderduck.types.DecimalType) {
+                com.thunderduck.types.DecimalType leftDec = (com.thunderduck.types.DecimalType) left;
+                com.thunderduck.types.DecimalType rightDec = (com.thunderduck.types.DecimalType) right;
+                int maxPrecision = Math.max(leftDec.precision(), rightDec.precision());
+                int maxScale = Math.max(leftDec.scale(), rightDec.scale());
+                return new com.thunderduck.types.DecimalType(maxPrecision, maxScale);
+            }
+            return left instanceof com.thunderduck.types.DecimalType ? left : right;
+        }
+
+        // If either is Long, result is Long
+        if (left instanceof com.thunderduck.types.LongType ||
+            right instanceof com.thunderduck.types.LongType) {
+            return com.thunderduck.types.LongType.get();
+        }
+
+        // If either is Integer, result is Integer
+        if (left instanceof com.thunderduck.types.IntegerType ||
+            right instanceof com.thunderduck.types.IntegerType) {
+            return com.thunderduck.types.IntegerType.get();
+        }
+
+        // If either is Short, result is Short
+        if (left instanceof com.thunderduck.types.ShortType ||
+            right instanceof com.thunderduck.types.ShortType) {
+            return com.thunderduck.types.ShortType.get();
+        }
+
+        // Default to left type
+        return left;
     }
 
     @Override

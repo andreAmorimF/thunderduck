@@ -834,27 +834,8 @@ public class RelationConverter {
             return input;
         }
 
-        // Generate SQL to rename all columns positionally
-        // SELECT col1 AS new1, col2 AS new2, ... FROM (input)
-        // Since we don't have schema info, use DuckDB's positional syntax:
-        // SELECT * FROM (input) AS _todf_subquery(new1, new2, ...)
-        SQLGenerator generator = new SQLGenerator();
-        String inputSql = generator.generate(input);
-
-        StringBuilder columnList = new StringBuilder();
-        for (int i = 0; i < newNames.size(); i++) {
-            if (i > 0) {
-                columnList.append(", ");
-            }
-            columnList.append(SQLQuoting.quoteIdentifier(newNames.get(i)));
-        }
-
-        // DuckDB supports table alias with column names: AS alias(col1, col2, ...)
-        String sql = String.format("SELECT * FROM (%s) AS _todf_subquery(%s)",
-            inputSql, columnList.toString());
-
-        logger.debug("Creating ToDF SQL: {}", sql);
-        return new SQLRelation(sql);
+        logger.debug("ToDF: renaming columns to: {}", newNames);
+        return new com.thunderduck.logical.ToDF(input, newNames);
     }
 
     /**

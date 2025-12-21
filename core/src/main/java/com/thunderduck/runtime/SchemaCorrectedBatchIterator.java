@@ -1,10 +1,15 @@
 package com.thunderduck.runtime;
 
+import com.thunderduck.types.ArrayType;
+import com.thunderduck.types.DataType;
+import com.thunderduck.types.MapType;
+import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -117,23 +122,104 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
         for (int i = 0; i < duckdbSchema.getFields().size(); i++) {
             Field duckField = duckdbSchema.getFields().get(i);
 
-            // Get nullable from logical schema if available
+            // Get nullable and dataType from logical schema if available
             boolean nullable = true;  // Default to nullable
+            DataType logicalType = null;
             if (logicalSchema != null && i < logicalSchema.size()) {
-                nullable = logicalSchema.fields().get(i).nullable();
+                StructField field = logicalSchema.fields().get(i);
+                nullable = field.nullable();
+                logicalType = field.dataType();
             }
 
-            // Create field with correct nullable flag
-            FieldType fieldType = new FieldType(
-                nullable,
-                duckField.getType(),
-                duckField.getDictionary(),
-                duckField.getMetadata()
-            );
-            correctedFields.add(new Field(duckField.getName(), fieldType, duckField.getChildren()));
+            // Correct the field including children for complex types
+            Field correctedField = correctField(duckField, nullable, logicalType);
+            correctedFields.add(correctedField);
         }
 
         return new Schema(correctedFields, duckdbSchema.getCustomMetadata());
+    }
+
+    /**
+     * Recursively corrects a single field's nullable flags.
+     *
+     * @param arrowField the Arrow field from DuckDB
+     * @param nullable the correct nullable flag for this field
+     * @param logicalType the logical type with correct nullable info (may be null)
+     * @return the corrected Arrow field
+     */
+    private Field correctField(Field arrowField, boolean nullable, DataType logicalType) {
+        List<Field> correctedChildren = new ArrayList<>();
+        List<Field> originalChildren = arrowField.getChildren();
+
+        // Handle complex types that have children
+        if (arrowField.getType() instanceof ArrowType.List && logicalType instanceof ArrayType) {
+            // Arrow List has one child (element)
+            ArrayType arrayType = (ArrayType) logicalType;
+            if (originalChildren != null && !originalChildren.isEmpty()) {
+                Field elementField = originalChildren.get(0);
+                // The containsNull flag determines if elements can be null
+                Field correctedElement = correctField(
+                    elementField,
+                    arrayType.containsNull(),
+                    arrayType.elementType()
+                );
+                correctedChildren.add(correctedElement);
+            }
+        } else if (arrowField.getType() instanceof ArrowType.Map && logicalType instanceof MapType) {
+            // Arrow Map has one child (entries struct with key and value)
+            MapType mapType = (MapType) logicalType;
+            if (originalChildren != null && !originalChildren.isEmpty()) {
+                Field entriesField = originalChildren.get(0);
+                List<Field> entryChildren = entriesField.getChildren();
+                if (entryChildren != null && entryChildren.size() >= 2) {
+                    // Keys can never be null, values use valueContainsNull
+                    Field correctedKey = correctField(entryChildren.get(0), false, mapType.keyType());
+                    Field correctedValue = correctField(entryChildren.get(1), mapType.valueContainsNull(), mapType.valueType());
+
+                    List<Field> correctedEntryChildren = new ArrayList<>();
+                    correctedEntryChildren.add(correctedKey);
+                    correctedEntryChildren.add(correctedValue);
+
+                    // Create corrected entries field
+                    FieldType entriesType = new FieldType(
+                        entriesField.isNullable(),
+                        entriesField.getType(),
+                        entriesField.getDictionary(),
+                        entriesField.getMetadata()
+                    );
+                    correctedChildren.add(new Field(entriesField.getName(), entriesType, correctedEntryChildren));
+                } else {
+                    correctedChildren.add(entriesField);
+                }
+            }
+        } else if (arrowField.getType() instanceof ArrowType.Struct && logicalType instanceof StructType) {
+            // Arrow Struct has children for each field
+            StructType structType = (StructType) logicalType;
+            if (originalChildren != null) {
+                for (int i = 0; i < originalChildren.size(); i++) {
+                    Field child = originalChildren.get(i);
+                    if (i < structType.size()) {
+                        StructField logicalField = structType.fields().get(i);
+                        Field correctedChild = correctField(child, logicalField.nullable(), logicalField.dataType());
+                        correctedChildren.add(correctedChild);
+                    } else {
+                        correctedChildren.add(child);
+                    }
+                }
+            }
+        } else {
+            // Not a complex type or no logical type info - keep original children
+            correctedChildren = originalChildren;
+        }
+
+        // Create field with correct nullable flag and corrected children
+        FieldType fieldType = new FieldType(
+            nullable,
+            arrowField.getType(),
+            arrowField.getDictionary(),
+            arrowField.getMetadata()
+        );
+        return new Field(arrowField.getName(), fieldType, correctedChildren);
     }
 
     /**

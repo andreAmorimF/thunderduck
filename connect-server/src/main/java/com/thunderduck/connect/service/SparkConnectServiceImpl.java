@@ -1944,7 +1944,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             return org.apache.spark.connect.proto.DataType.newBuilder()
                 .setArray(org.apache.spark.connect.proto.DataType.Array.newBuilder()
                     .setElementType(convertDataTypeToProto(arrayType.elementType()))
-                    .setContainsNull(true)  // Arrays can contain nulls by default
+                    .setContainsNull(arrayType.containsNull())  // Preserve actual containsNull flag
                     .build())
                 .build();
         } else if (dataType instanceof com.thunderduck.types.MapType) {
@@ -1953,8 +1953,23 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                 .setMap(org.apache.spark.connect.proto.DataType.Map.newBuilder()
                     .setKeyType(convertDataTypeToProto(mapType.keyType()))
                     .setValueType(convertDataTypeToProto(mapType.valueType()))
-                    .setValueContainsNull(true)  // Map values can contain nulls by default
+                    .setValueContainsNull(mapType.valueContainsNull())  // Preserve actual valueContainsNull flag
                     .build())
+                .build();
+        } else if (dataType instanceof com.thunderduck.types.StructType) {
+            com.thunderduck.types.StructType structType = (com.thunderduck.types.StructType) dataType;
+            org.apache.spark.connect.proto.DataType.Struct.Builder structBuilder =
+                org.apache.spark.connect.proto.DataType.Struct.newBuilder();
+            for (com.thunderduck.types.StructField field : structType.fields()) {
+                org.apache.spark.connect.proto.DataType.StructField.Builder fieldBuilder =
+                    org.apache.spark.connect.proto.DataType.StructField.newBuilder()
+                        .setName(field.name())
+                        .setNullable(field.nullable())
+                        .setDataType(convertDataTypeToProto(field.dataType()));
+                structBuilder.addFields(fieldBuilder);
+            }
+            return org.apache.spark.connect.proto.DataType.newBuilder()
+                .setStruct(structBuilder)
                 .build();
         } else {
             // Default to string for unsupported types
@@ -1985,7 +2000,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             // Convert Arrow schema to thunderduck StructType
             java.util.List<com.thunderduck.types.StructField> fields = new java.util.ArrayList<>();
             for (org.apache.arrow.vector.types.pojo.Field arrowField : arrowSchema.getFields()) {
-                com.thunderduck.types.DataType fieldType = convertArrowTypeToDataType(arrowField.getType());
+                com.thunderduck.types.DataType fieldType = convertArrowFieldToDataType(arrowField);
                 fields.add(new com.thunderduck.types.StructField(
                     arrowField.getName(),
                     fieldType,
@@ -1999,9 +2014,58 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
     }
 
     /**
-     * Converts Arrow type to thunderduck DataType.
+     * Converts Arrow Field to thunderduck DataType.
+     * Handles complex types (List, Map, Struct) by recursively converting child fields.
      */
-    private com.thunderduck.types.DataType convertArrowTypeToDataType(org.apache.arrow.vector.types.pojo.ArrowType arrowType) {
+    private com.thunderduck.types.DataType convertArrowFieldToDataType(org.apache.arrow.vector.types.pojo.Field arrowField) {
+        org.apache.arrow.vector.types.pojo.ArrowType arrowType = arrowField.getType();
+        java.util.List<org.apache.arrow.vector.types.pojo.Field> children = arrowField.getChildren();
+
+        // Handle complex types first (they need access to children)
+        if (arrowType instanceof org.apache.arrow.vector.types.pojo.ArrowType.List) {
+            // Arrow List has one child field (the element type)
+            if (children != null && !children.isEmpty()) {
+                org.apache.arrow.vector.types.pojo.Field elementField = children.get(0);
+                com.thunderduck.types.DataType elementType = convertArrowFieldToDataType(elementField);
+                boolean containsNull = elementField.isNullable();
+                return new com.thunderduck.types.ArrayType(elementType, containsNull);
+            }
+            // Fallback for empty list - default to string element
+            return new com.thunderduck.types.ArrayType(com.thunderduck.types.StringType.get(), true);
+        } else if (arrowType instanceof org.apache.arrow.vector.types.pojo.ArrowType.Map) {
+            // Arrow Map has one child field (entries struct with key and value fields)
+            if (children != null && !children.isEmpty()) {
+                org.apache.arrow.vector.types.pojo.Field entriesField = children.get(0);
+                java.util.List<org.apache.arrow.vector.types.pojo.Field> entryChildren = entriesField.getChildren();
+                if (entryChildren != null && entryChildren.size() >= 2) {
+                    com.thunderduck.types.DataType keyType = convertArrowFieldToDataType(entryChildren.get(0));
+                    com.thunderduck.types.DataType valueType = convertArrowFieldToDataType(entryChildren.get(1));
+                    boolean valueContainsNull = entryChildren.get(1).isNullable();
+                    return new com.thunderduck.types.MapType(keyType, valueType, valueContainsNull);
+                }
+            }
+            // Fallback
+            return new com.thunderduck.types.MapType(
+                com.thunderduck.types.StringType.get(),
+                com.thunderduck.types.StringType.get(),
+                true);
+        } else if (arrowType instanceof org.apache.arrow.vector.types.pojo.ArrowType.Struct) {
+            // Arrow Struct has child fields for each struct field
+            java.util.List<com.thunderduck.types.StructField> structFields = new java.util.ArrayList<>();
+            if (children != null) {
+                for (org.apache.arrow.vector.types.pojo.Field child : children) {
+                    com.thunderduck.types.DataType childType = convertArrowFieldToDataType(child);
+                    structFields.add(new com.thunderduck.types.StructField(
+                        child.getName(),
+                        childType,
+                        child.isNullable()
+                    ));
+                }
+            }
+            return new com.thunderduck.types.StructType(structFields);
+        }
+
+        // Handle primitive types (no children needed)
         if (arrowType instanceof org.apache.arrow.vector.types.pojo.ArrowType.Int) {
             org.apache.arrow.vector.types.pojo.ArrowType.Int intType =
                 (org.apache.arrow.vector.types.pojo.ArrowType.Int) arrowType;

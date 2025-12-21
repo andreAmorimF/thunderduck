@@ -382,6 +382,16 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("transform", "list_transform");
         DIRECT_MAPPINGS.put("filter", "list_filter");
         DIRECT_MAPPINGS.put("aggregate", "list_reduce");
+
+        // MAP_FROM_ARRAYS: create map from key and value arrays
+        // Spark: MAP_FROM_ARRAYS(ARRAY('a', 'b'), ARRAY(1, 2))
+        // DuckDB: MAP(keys_array, values_array)
+        CUSTOM_TRANSLATORS.put("map_from_arrays", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("map_from_arrays requires exactly 2 arguments");
+            }
+            return "MAP(" + args[0] + ", " + args[1] + ")";
+        });
         // Note: exists, forall require special handling in ExpressionConverter
         // as they need to wrap list_transform with list_any/list_all
 

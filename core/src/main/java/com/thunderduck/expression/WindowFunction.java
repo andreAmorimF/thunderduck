@@ -190,7 +190,9 @@ public class WindowFunction extends Expression {
                 return LongType.get();
             case "LAG":
             case "LEAD":
+            case "FIRST":
             case "FIRST_VALUE":
+            case "LAST":
             case "LAST_VALUE":
             case "NTH_VALUE":
                 // These return the type of their argument
@@ -222,14 +224,28 @@ public class WindowFunction extends Expression {
 
     @Override
     public boolean nullable() {
-        // Ranking functions always return non-null values
         String funcUpper = function.toUpperCase();
+
+        // Ranking functions always return non-null values
         if (funcUpper.equals("ROW_NUMBER") ||
             funcUpper.equals("RANK") ||
             funcUpper.equals("DENSE_RANK") ||
-            funcUpper.equals("NTILE")) {
+            funcUpper.equals("NTILE") ||
+            funcUpper.equals("PERCENT_RANK") ||
+            funcUpper.equals("CUME_DIST")) {
             return false;
         }
+
+        // COUNT always returns non-null (0 for empty groups)
+        if (funcUpper.equals("COUNT")) {
+            return false;
+        }
+
+        // LAG/LEAD with default value (3rd argument) are non-nullable
+        if ((funcUpper.equals("LAG") || funcUpper.equals("LEAD")) && arguments.size() >= 3) {
+            return false;
+        }
+
         // All other window functions can return null
         return true;
     }
@@ -238,9 +254,39 @@ public class WindowFunction extends Expression {
     public String toSQL() {
         StringBuilder sql = new StringBuilder();
 
-        // Function name and arguments
-        sql.append(function.toUpperCase());
+        // Function name - map to DuckDB equivalent
+        String duckDbFunction = getDuckDbFunctionName(function);
+        sql.append(duckDbFunction);
         sql.append("(");
+
+        // Determine how to handle arguments based on function type
+        String funcUpper = function.toUpperCase();
+        boolean isFirstLast = funcUpper.equals("FIRST") || funcUpper.equals("FIRST_VALUE") ||
+                              funcUpper.equals("LAST") || funcUpper.equals("LAST_VALUE");
+        boolean isNthValue = funcUpper.equals("NTH_VALUE");
+        boolean ignoreNulls = false;
+        int argsToOutput = arguments.size();
+
+        // Handle ignoreNulls parameter for FIRST/LAST/NTH_VALUE
+        // Spark: first(col, ignoreNulls) → DuckDB: FIRST_VALUE(col) [IGNORE NULLS]
+        // Spark: nth_value(col, n, ignoreNulls) → DuckDB: NTH_VALUE(col, n) [IGNORE NULLS]
+        if (isFirstLast && arguments.size() >= 2) {
+            // Second argument is ignoreNulls boolean
+            Expression ignoreNullsArg = arguments.get(1);
+            if (ignoreNullsArg instanceof Literal) {
+                Object val = ((Literal) ignoreNullsArg).value();
+                ignoreNulls = Boolean.TRUE.equals(val) || "true".equalsIgnoreCase(String.valueOf(val));
+            }
+            argsToOutput = 1;  // Only output the first argument
+        } else if (isNthValue && arguments.size() >= 3) {
+            // Third argument is ignoreNulls boolean
+            Expression ignoreNullsArg = arguments.get(2);
+            if (ignoreNullsArg instanceof Literal) {
+                Object val = ((Literal) ignoreNullsArg).value();
+                ignoreNulls = Boolean.TRUE.equals(val) || "true".equalsIgnoreCase(String.valueOf(val));
+            }
+            argsToOutput = 2;  // Output first two arguments (expr, n)
+        }
 
         // Add arguments
         // Special case: COUNT(*) - output * without quotes
@@ -250,7 +296,7 @@ public class WindowFunction extends Expression {
             "*".equals(((Literal) arguments.get(0)).value())) {
             sql.append("*");
         } else {
-            for (int i = 0; i < arguments.size(); i++) {
+            for (int i = 0; i < argsToOutput; i++) {
                 if (i > 0) {
                     sql.append(", ");
                 }
@@ -259,6 +305,11 @@ public class WindowFunction extends Expression {
         }
 
         sql.append(")");
+
+        // Add IGNORE NULLS if specified (must come after closing paren, before OVER)
+        if (ignoreNulls && (isFirstLast || isNthValue)) {
+            sql.append(" IGNORE NULLS");
+        }
 
         // OVER clause
         sql.append(" OVER ");
@@ -327,6 +378,30 @@ public class WindowFunction extends Expression {
         sql.append(")");
 
         return wrapWithCastIfRankingFunction(sql.toString());
+    }
+
+    /**
+     * Maps Spark function names to their DuckDB equivalents for window functions.
+     *
+     * <p>Some functions have different names in Spark vs DuckDB:
+     * <ul>
+     *   <li>{@code first} → {@code first_value} (DuckDB's aggregate first() doesn't work with OVER)</li>
+     *   <li>{@code last} → {@code last_value} (DuckDB's aggregate last() doesn't work with OVER)</li>
+     * </ul>
+     *
+     * @param sparkFunctionName the Spark function name
+     * @return the equivalent DuckDB function name
+     */
+    private String getDuckDbFunctionName(String sparkFunctionName) {
+        String funcUpper = sparkFunctionName.toUpperCase();
+        switch (funcUpper) {
+            case "FIRST":
+                return "FIRST_VALUE";
+            case "LAST":
+                return "LAST_VALUE";
+            default:
+                return funcUpper;
+        }
     }
 
     /**
