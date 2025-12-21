@@ -105,6 +105,7 @@ def run_differential_query(
 # TPC-DS Differential Tests - Parameterized
 # ============================================================================
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 @pytest.mark.parametrize("query_id", ALL_QUERIES)
@@ -141,6 +142,7 @@ class TestTPCDS_Differential:
 # Quick Sanity Test
 # ============================================================================
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 @pytest.mark.quick
@@ -179,6 +181,7 @@ class TestTPCDS_Sanity:
 # Batch Tests for Faster Feedback
 # ============================================================================
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch1:
@@ -204,6 +207,7 @@ class TestTPCDS_Batch1:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch2:
@@ -229,6 +233,7 @@ class TestTPCDS_Batch2:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch3:
@@ -254,6 +259,7 @@ class TestTPCDS_Batch3:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch4:
@@ -279,6 +285,7 @@ class TestTPCDS_Batch4:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch5:
@@ -304,6 +311,7 @@ class TestTPCDS_Batch5:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch6:
@@ -329,6 +337,7 @@ class TestTPCDS_Batch6:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch7:
@@ -354,6 +363,7 @@ class TestTPCDS_Batch7:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch8:
@@ -379,6 +389,7 @@ class TestTPCDS_Batch8:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch9:
@@ -404,6 +415,7 @@ class TestTPCDS_Batch9:
         )
 
 
+@pytest.mark.skip(reason="SparkSQL not yet supported - pending SQL parser integration")
 @pytest.mark.differential
 @pytest.mark.tpcds
 class TestTPCDS_Batch10:

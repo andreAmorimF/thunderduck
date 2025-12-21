@@ -149,8 +149,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     showStringVertical = showString.getVertical();
 
                     if (input.hasSql()) {
-                        sql = input.getSql().getQuery();
-                        logger.debug("Found SQL in ShowString.input: {}", sql);
+                        // SparkSQL not yet supported - pending SQL parser integration
+                        throw new UnsupportedOperationException(
+                            "spark.sql() is not yet supported. Please use DataFrame API instead. " +
+                            "SQL support will be added in a future release.");
                     } else {
                         // Deserialize non-SQL relation and generate SQL
                         try {
@@ -166,9 +168,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         }
                     }
                 } else if (root.hasSql()) {
-                    // Direct SQL relation
-                    sql = root.getSql().getQuery();
-                    logger.debug("Found direct SQL relation: {}", sql);
+                    // SparkSQL not yet supported - pending SQL parser integration
+                    throw new UnsupportedOperationException(
+                        "spark.sql() is not yet supported. Please use DataFrame API instead. " +
+                        "SQL support will be added in a future release.");
                 } else if (root.hasCatalog()) {
                     // Handle catalog operations (dropTempView, etc.)
                     executeCatalogOperation(root.getCatalog(), session, responseObserver);
@@ -179,18 +182,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     return;
                 }
             } else if (plan.hasCommand() && plan.getCommand().hasSqlCommand()) {
-                // SQL command (e.g., spark.sql(...))
-                SqlCommand sqlCommand = plan.getCommand().getSqlCommand();
-
-                // In Spark 4.0.1, the 'sql' field is deprecated and replaced with 'input' relation
-                if (sqlCommand.hasInput() && sqlCommand.getInput().hasSql()) {
-                    sql = sqlCommand.getInput().getSql().getQuery();
-                    logger.debug("Found SQL command (from input relation): {}", sql);
-                } else if (!sqlCommand.getSql().isEmpty()) {
-                    // Fallback for older clients or backward compatibility
-                    sql = sqlCommand.getSql();
-                    logger.debug("Found SQL command (legacy): {}", sql);
-                }
+                // SparkSQL not yet supported - pending SQL parser integration
+                throw new UnsupportedOperationException(
+                    "spark.sql() is not yet supported. Please use DataFrame API instead. " +
+                    "SQL support will be added in a future release.");
             } else if (plan.hasCommand()) {
                 // Handle non-SQL commands (CreateTempView, DropTempView, etc.)
                 Command command = plan.getCommand();

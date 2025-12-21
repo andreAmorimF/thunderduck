@@ -6,6 +6,8 @@
 
 > **⚠️ Alpha Software**: Despite extensive test coverage, Thunderduck is currently alpha quality software and will undergo extensive testing with real-world workloads before production readiness.
 
+> **📋 SparkSQL Notice**: Direct SQL execution via `spark.sql()` is **not yet supported**. SparkSQL support will be added once a proper SQL parser is integrated. The **DataFrame API is fully functional** and recommended for all use cases.
+
 **Thunderduck** is a high-performance embedded execution engine that translates Spark DataFrame operations to DuckDB SQL, delivering 5-10x faster query execution than Spark local mode with 6-8x better memory efficiency.
 
 ## Table of Contents
@@ -33,7 +35,7 @@ Thunderduck provides a Spark-compatible API that translates DataFrame operations
 - **Multi-architecture support**: x86_64 (Intel/AMD) and ARM64 (AWS Graviton, Apple Silicon)
 - **Zero-copy Arrow data paths** for efficient data interchange
 - **Format support**: Parquet, Delta Lake (PLANNED), Iceberg (PLANNED)
-- **Comprehensive Spark API compatibility** with 266 differential tests
+- **Comprehensive Spark API compatibility** with 85+ DataFrame differential tests
 - **Query plan introspection** via EXPLAIN statements
 
 ### Why Thunderduck?
@@ -166,8 +168,9 @@ spark = SparkSession.builder \
 df = spark.read.parquet("data/tpch_sf001/lineitem.parquet")
 df.filter(df.l_quantity > 40).groupBy("l_returnflag").count().show()
 
-# Execute SQL
-spark.sql("SELECT COUNT(*) FROM parquet.`data/tpch_sf001/orders.parquet`").show()
+# More DataFrame operations
+orders = spark.read.parquet("data/tpch_sf001/orders.parquet")
+orders.select("o_orderkey", "o_totalprice").filter(orders.o_totalprice > 1000).show()
 ```
 
 ### Verify Installation
@@ -276,7 +279,7 @@ thunderduck includes a comprehensive test suite with 700+ tests:
 
 - **Unit Tests (300+)**: Type mapping, expression translation, SQL generation
 - **Integration Tests (100+)**: End-to-end pipelines, format readers
-- **Differential Tests (266)**: Spark 4.0.1 parity validation (all passing)
+- **Differential Tests (85+)**: Spark 4.0.1 DataFrame API parity validation
 - **End-to-End Tests**: PySpark client → Spark Connect → thunderduck validation
 - **Performance Benchmarks (70+)**: TPC-H queries, micro-benchmarks
 
@@ -284,11 +287,12 @@ thunderduck includes a comprehensive test suite with 700+ tests:
 
 | Test Suite | Tests | Description |
 |------------|-------|-------------|
-| TPC-H | 27 | SQL (Q1-Q22) + DataFrame API (Q1, Q3, Q6, Q12) |
-| TPC-DS | 126 | SQL (102 queries) + DataFrame API (24 queries) |
+| TPC-DS DataFrame | 33 | DataFrame API implementations of TPC-DS queries |
 | Function Parity | 57 | Array, Map, Null, String, Math functions |
 | Multi-dim Aggregations | 21 | pivot, unpivot, cube, rollup, grouping |
 | Window Functions | 35 | rank, lag/lead, frame specs, analytics |
+
+> **Note**: SQL-based tests (TPC-H SQL, TPC-DS SQL) are disabled pending SparkSQL parser integration.
 
 ### Running Tests
 
@@ -316,7 +320,7 @@ The differential testing framework compares Thunderduck results against Apache S
 # One-time setup (downloads Spark 4.0.1, creates Python venv)
 ./tests/scripts/setup-differential-testing.sh
 
-# Run ALL differential tests (266 tests)
+# Run DataFrame differential tests
 ./tests/scripts/run-differential-tests-v2.sh
 ```
 
@@ -325,18 +329,18 @@ The differential testing framework compares Thunderduck results against Apache S
 Run specific test suites using named groups:
 
 ```bash
-# Run by test group
-./tests/scripts/run-differential-tests-v2.sh tpch         # TPC-H tests (27 tests)
-./tests/scripts/run-differential-tests-v2.sh tpcds        # TPC-DS tests (126 tests)
+# Run by test group (DataFrame API tests)
 ./tests/scripts/run-differential-tests-v2.sh functions    # Function parity (57 tests)
 ./tests/scripts/run-differential-tests-v2.sh aggregations # Multi-dim aggregations (21 tests)
 ./tests/scripts/run-differential-tests-v2.sh window       # Window functions (35 tests)
-./tests/scripts/run-differential-tests-v2.sh all          # All tests (default)
+./tests/scripts/run-differential-tests-v2.sh all          # All DataFrame tests (default)
 
 # With pytest options
 ./tests/scripts/run-differential-tests-v2.sh window -x    # Stop on first failure
 ./tests/scripts/run-differential-tests-v2.sh --help       # Show help
 ```
+
+> **Note**: `tpch` and `tpcds` SQL test groups are disabled pending SparkSQL parser integration.
 
 ### What It Does
 
@@ -369,7 +373,7 @@ python -m pytest -m "window" -v                       # Window function tests
 
 ### Test Results
 
-All 266 differential tests pass with Thunderduck consistently faster than Spark:
+DataFrame API differential tests pass with Thunderduck consistently faster than Spark:
 - **TPC-H Q1**: ~6x faster
 - **Full test suite**: ~3 minutes
 
@@ -464,31 +468,19 @@ python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py::TestTPCH::t
 tests/src/test/python/thunderduck_e2e/
 ├── test_runner.py        # Base test class with PySpark session setup
 ├── test_dataframes.py    # DataFrame operation tests
-├── test_sql.py          # SQL query tests
-├── test_tpch.py         # TPC-H benchmark tests (dual implementation)
-├── test_tpcds.py        # TPC-DS benchmark tests (planned)
+├── test_tpch.py         # TPC-H benchmark tests (DataFrame API)
 └── test_edge_cases.py   # Error handling and edge cases
 ```
 
-### TPC-H E2E Tests (Dual Implementation)
+> **Note**: SQL-based test files (`test_sql.py`, `test_tpcds.py`) are disabled pending SparkSQL parser integration.
 
-The TPC-H test suite is unique: **each query is tested in TWO ways** to ensure complete Spark API compatibility:
+### TPC-H E2E Tests (DataFrame API)
 
-1. **SQL Version**: Direct SQL query execution
-2. **DataFrame API Version**: Equivalent operations using PySpark DataFrame API
+The TPC-H test suite validates DataFrame API compatibility using PySpark DataFrame operations:
 
 Example from `test_tpch.py`:
 
 ```python
-def test_q01_sql(self):
-    """Q1: Pricing Summary Report (SQL version)."""
-    query = """
-        SELECT ... FROM lineitem WHERE ...
-    """
-    df = self.spark.sql(query)
-    result = df.collect()
-    self.assertGreater(len(result), 0)
-
 def test_q01_dataframe(self):
     """Q1: Pricing Summary Report (DataFrame API version)."""
     df = self.df_lineitem \
@@ -499,7 +491,9 @@ def test_q01_dataframe(self):
     self.assertGreater(len(result), 0)
 ```
 
-**Coverage Status**: All 22 TPC-H queries (Q1-Q22) have both SQL and DataFrame implementations ✅
+**Coverage Status**: All 22 TPC-H queries (Q1-Q22) have DataFrame API implementations ✅
+
+> **Note**: SQL versions of tests are disabled pending SparkSQL parser integration.
 
 ### Running TPC-H E2E Tests
 
@@ -507,16 +501,10 @@ def test_q01_dataframe(self):
 # Ensure TPC-H data is generated (see Data Generation section)
 # Default location: ./data/tpch_sf001/
 
-# Run all TPC-H tests (44 tests total: 22 SQL + 22 DataFrame)
+# Run all TPC-H DataFrame tests
 python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -v
 
-# Run only SQL versions
-python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -k "sql" -v
-
-# Run only DataFrame versions
-python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -k "dataframe" -v
-
-# Run specific query (both versions)
+# Run specific query
 python -m pytest tests/src/test/python/thunderduck_e2e/test_tpch.py -k "q01" -v
 ```
 
@@ -598,7 +586,7 @@ tests/src/test/python/thunderduck_e2e/test_tpch.py::TestTPCH::test_q02_dataframe
 All PRs must meet these criteria:
 - Line coverage ≥ 85%
 - Branch coverage ≥ 80%
-- All 266 differential tests passing (100%)
+- All DataFrame differential tests passing (100%)
 - All E2E tests passing (100%)
 - Zero compiler warnings
 

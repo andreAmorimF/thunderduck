@@ -106,8 +106,9 @@ public class RelationConverter {
             case SET_OP:
                 return convertSetOp(relation.getSetOp());
             case SQL:
-                // Direct SQL relation - we'll handle this as a special case
-                return new SQLRelation(relation.getSql().getQuery());
+                // SparkSQL not yet supported - pending SQL parser integration
+                throw new UnsupportedOperationException(
+                    "Raw SQL relations are not yet supported. Please use DataFrame API instead.");
             case SHOW_STRING:
                 // ShowString is handled at root level in SparkConnectServiceImpl.executeShowString()
                 // If we reach here, something is wrong - ShowString should never be nested
