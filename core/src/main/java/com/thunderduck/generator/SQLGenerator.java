@@ -449,11 +449,39 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         }
         excludeFilter.append("))");
 
-        // Build new column expressions
+        // Get child schema for type-aware SQL generation
+        com.thunderduck.types.StructType childSchema = null;
+        try {
+            childSchema = plan.child().schema();
+        } catch (Exception e) {
+            // Child schema unavailable - proceed without type-specific handling
+        }
+
+        // Build new column expressions with type-aware CAST for divisions
         StringBuilder newColExprs = new StringBuilder();
         for (int i = 0; i < plan.columnNames().size(); i++) {
             if (i > 0) newColExprs.append(", ");
-            newColExprs.append(plan.columnExpressions().get(i).toSQL());
+
+            Expression expr = plan.columnExpressions().get(i);
+            String exprSQL = expr.toSQL();
+
+            // Check if expression contains a division that should produce DecimalType
+            // DuckDB calculates decimal division differently than Spark, so we need CAST
+            if (childSchema != null) {
+                com.thunderduck.types.DataType resolvedType =
+                    com.thunderduck.types.TypeInferenceEngine.resolveType(expr, childSchema);
+                if (resolvedType instanceof com.thunderduck.types.DecimalType) {
+                    com.thunderduck.types.DecimalType decType =
+                        (com.thunderduck.types.DecimalType) resolvedType;
+                    // Check if expression contains division (either BinaryExpression or in nested expressions)
+                    if (containsDivision(expr)) {
+                        exprSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                            exprSQL, decType.precision(), decType.scale());
+                    }
+                }
+            }
+
+            newColExprs.append(exprSQL);
             newColExprs.append(" AS ");
             newColExprs.append(SQLQuoting.quoteIdentifier(plan.columnNames().get(i)));
         }
@@ -471,6 +499,35 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         subqueryDepth--;
 
         sql.append(") AS _withcol_subquery");
+    }
+
+    /**
+     * Checks if an expression contains a division operation.
+     * This includes direct BinaryExpression divisions and divisions nested in other expressions.
+     */
+    private boolean containsDivision(Expression expr) {
+        if (expr instanceof BinaryExpression) {
+            BinaryExpression binExpr = (BinaryExpression) expr;
+            if (binExpr.operator() == BinaryExpression.Operator.DIVIDE) {
+                return true;
+            }
+            // Check children
+            return containsDivision(binExpr.left()) || containsDivision(binExpr.right());
+        }
+        // For other expression types, check if they might contain divisions
+        // (e.g., AliasExpression, FunctionCall with expression arguments)
+        if (expr instanceof com.thunderduck.expression.AliasExpression) {
+            return containsDivision(((com.thunderduck.expression.AliasExpression) expr).expression());
+        }
+        if (expr instanceof com.thunderduck.expression.WindowFunction) {
+            com.thunderduck.expression.WindowFunction wf = (com.thunderduck.expression.WindowFunction) expr;
+            for (Expression arg : wf.arguments()) {
+                if (containsDivision(arg)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

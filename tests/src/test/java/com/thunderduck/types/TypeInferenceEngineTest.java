@@ -65,30 +65,37 @@ public class TypeInferenceEngineTest extends TestBase {
         }
 
         @Test
-        @DisplayName("Decimal division caps precision and scale at 38")
+        @DisplayName("Decimal division applies precision loss adjustment when precision > 38")
         void testDecimalDivisionPrecisionCap() {
             // Decimal(38, 2) / Decimal(38, 2)
-            // Scale = max(6, 2 + 38 + 1) = 41, capped to 38
-            // Precision = 38 - 2 + 2 + 41 = 79, capped to 38
+            // Step 1: Initial calculation
+            //   Scale = max(6, 2 + 38 + 1) = 41
+            //   Precision = 38 - 2 + 2 + 41 = 79
+            // Step 2: Precision loss adjustment (since 79 > 38)
+            //   intDigits = 79 - 41 = 38
+            //   minScale = min(41, 6) = 6  (retain at least 6 fractional digits)
+            //   scale = max(38 - 38, 6) = 6
+            //   precision = 38
             DecimalType dividend = new DecimalType(38, 2);
             DecimalType divisor = new DecimalType(38, 2);
 
             DecimalType result = TypeInferenceEngine.promoteDecimalDivision(dividend, divisor);
 
             assertThat(result.precision()).isEqualTo(38);
-            assertThat(result.scale()).isEqualTo(38);
+            assertThat(result.scale()).isEqualTo(6);
         }
 
         @ParameterizedTest
         @DisplayName("Decimal division with various precision/scale combinations")
         @CsvSource({
             // p1, s1, p2, s2, expectedPrecision, expectedScale
-            // Formula: scale = max(6, s1 + p2 + 1), precision = p1 - s1 + s2 + scale
-            "10, 2, 5, 1, 17, 8",       // scale=max(6,8)=8, prec=10-2+1+8=17
-            "18, 6, 10, 2, 31, 17",     // scale=max(6,17)=17, prec=18-6+2+17=31
-            "5, 0, 3, 0, 11, 6",        // scale=max(6,4)=6, prec=5-0+0+6=11
-            "20, 10, 10, 5, 36, 21",    // scale=max(6,21)=21, prec=20-10+5+21=36
-            "38, 0, 38, 0, 38, 38"      // scale=39->38(cap), prec=77->38(cap)
+            // Step 1: scale = max(6, s1 + p2 + 1), precision = p1 - s1 + s2 + scale
+            // Step 2: If precision > 38, apply precision loss adjustment
+            "10, 2, 5, 1, 17, 8",       // scale=8, prec=17 (no adjustment needed)
+            "18, 6, 10, 2, 31, 17",     // scale=17, prec=31 (no adjustment needed)
+            "5, 0, 3, 0, 11, 6",        // scale=6, prec=11 (no adjustment needed)
+            "20, 10, 10, 5, 36, 21",    // scale=21, prec=36 (no adjustment needed)
+            "38, 0, 38, 0, 38, 6"       // Initial: scale=39, prec=77. Adjustment: intDigits=38, scale=max(0,6)=6
         })
         void testDecimalDivisionVariations(int p1, int s1, int p2, int s2,
                                            int expectedPrecision, int expectedScale) {

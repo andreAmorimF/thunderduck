@@ -29,18 +29,25 @@ All logical plan nodes (WithColumns, Project, Aggregate) now delegate to this en
 
 ## Priority 2: Type Preservation Fixes
 
-### Decimal Division - PARTIALLY FIXED
+### Decimal Division - FIXED ✓
 
-**Commit**: `dc59d72` - Fix Decimal division type preservation
+**Commits**:
+- `dc59d72` - Initial Decimal division type preservation
+- (pending) - Fix Q98 Decimal scale calculation
 
 **What was fixed**:
-- Added `promoteDecimalDivision()` using Spark's formula
-- Division of Decimal/Decimal now returns Decimal (not Double)
+- Added `promoteDecimalDivision()` using Spark's two-step formula with precision loss adjustment
+- Added `promoteDecimalMultiplication()` for proper Decimal * Integer arithmetic
+- Division of Decimal/Decimal now returns correct Decimal type
+- Added CAST wrapper in SQL generation for divisions to force Spark-compatible types
+- **Q98 now passes**
 
-**Remaining issue (Q98)**:
-- Precision/scale calculation differs from Spark
-- Reference: `DecimalType(38,17)`, Test: `DecimalType(38,30)`
-- The scale formula `max(6, s1 + p2 + 1)` may need adjustment for division in aggregate context
+**Technical details**:
+- Spark's division formula has two steps:
+  1. Calculate initial: `scale = max(6, s1 + p2 + 1)`, `precision = p1 - s1 + s2 + scale`
+  2. If precision > 38, apply precision loss adjustment: `scale = max(6, 38 - intDigits)`
+- Integer literals promoted to Decimal based on actual value (100 → Decimal(3,0))
+- CAST wrapper added in SQLGenerator.visitWithColumns() for division expressions
 
 ### CASE WHEN Type Preservation - PARTIALLY FIXED
 
@@ -74,15 +81,13 @@ All logical plan nodes (WithColumns, Project, Aggregate) now delegate to this en
 
 | Query | Status | Issue |
 |-------|--------|-------|
-| Q3, Q7, Q13, Q15, Q19, Q26, Q32, Q37, Q41, Q42, Q45, Q48, Q50, Q52, Q55, Q71, Q82, Q91, Q92, Q96 | PASS | - |
+| Q3, Q7, Q13, Q15, Q19, Q26, Q32, Q37, Q41, Q42, Q45, Q48, Q50, Q52, Q55, Q71, Q82, Q91, Q92, Q96, **Q98** | PASS | - |
 | Q9, Q12, Q17, Q20, Q25, Q29, Q40, Q43, Q62, Q84, Q85 | FAIL | Various type/data issues |
-| Q98 | FAIL | Decimal scale mismatch (38,17 vs 38,30) |
 | Q99 | FAIL | CASE WHEN returns DoubleType instead of DecimalType |
 
 ### Failure Categories
 
-1. **Decimal precision/scale** (Q98)
-   - Division scale calculation differs from Spark
+1. ~~**Decimal precision/scale** (Q98)~~ - **FIXED**
 
 2. **CASE WHEN type inference** (Q99, Q62)
    - Column references unresolved at conversion time
@@ -100,7 +105,7 @@ All logical plan nodes (WithColumns, Project, Aggregate) now delegate to this en
 ## Priority 4: Next Steps
 
 ### Immediate (Type Fixes)
-1. **Fix Decimal division scale** - Investigate Q98 scale formula
+1. ~~**Fix Decimal division scale**~~ - **DONE** (Q98 passes)
 2. **Schema-aware CASE WHEN** - Create CaseWhenExpression with deferred type resolution
 
 ### Future Work
@@ -114,10 +119,11 @@ All logical plan nodes (WithColumns, Project, Aggregate) now delegate to this en
 
 | File | Changes |
 |------|---------|
-| `core/.../types/TypeInferenceEngine.java` | Added `promoteDecimalDivision()` |
+| `core/.../types/TypeInferenceEngine.java` | Added `promoteDecimalDivision()`, `promoteDecimalMultiplication()`, precision loss adjustment |
 | `core/.../expression/RawSQLExpression.java` | Added optional type field |
+| `core/.../generator/SQLGenerator.java` | Added CAST wrapper for decimal divisions in `visitWithColumns()` |
 | `connect-server/.../ExpressionConverter.java` | Updated `convertCaseWhen()` type inference |
-| `tests/.../types/TypeInferenceEngineTest.java` | NEW - 15 unit tests |
+| `tests/.../types/TypeInferenceEngineTest.java` | NEW - 15 unit tests (updated expectations) |
 | `tests/.../expression/RawSQLExpressionTest.java` | NEW - 12 unit tests |
 
 ---

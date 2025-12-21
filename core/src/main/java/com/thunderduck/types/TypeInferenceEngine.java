@@ -4,6 +4,7 @@ import com.thunderduck.expression.AliasExpression;
 import com.thunderduck.expression.BinaryExpression;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.FunctionCall;
+import com.thunderduck.expression.Literal;
 import com.thunderduck.expression.UnresolvedColumn;
 import com.thunderduck.expression.WindowFunction;
 import com.thunderduck.functions.FunctionCategories;
@@ -145,11 +146,23 @@ public final class TypeInferenceEngine {
     /**
      * Calculates the result type for Decimal division per Spark semantics.
      *
-     * <p>Spark's Decimal division formula:
-     * <ul>
-     *   <li>Precision: p1 - s1 + s2 + max(6, s1 + p2 + 1)</li>
-     *   <li>Scale: max(6, s1 + p2 + 1)</li>
-     * </ul>
+     * <p>Spark uses a two-step process:
+     * <ol>
+     *   <li>Calculate initial precision/scale:
+     *       <ul>
+     *         <li>Scale: max(6, s1 + p2 + 1)</li>
+     *         <li>Precision: p1 - s1 + s2 + scale</li>
+     *       </ul>
+     *   </li>
+     *   <li>If precision exceeds 38, apply precision loss adjustment:
+     *       <ul>
+     *         <li>intDigits = precision - scale</li>
+     *         <li>minScale = min(scale, 6) (retain at least 6 fractional digits)</li>
+     *         <li>adjustedScale = max(38 - intDigits, minScale)</li>
+     *         <li>finalPrecision = 38</li>
+     *       </ul>
+     *   </li>
+     * </ol>
      *
      * <p>Where p1, s1 are precision/scale of dividend and p2, s2 are precision/scale of divisor.
      *
@@ -163,14 +176,91 @@ public final class TypeInferenceEngine {
         int p2 = divisor.precision();
         int s2 = divisor.scale();
 
+        // Step 1: Calculate initial precision and scale
         int scale = Math.max(6, s1 + p2 + 1);
         int precision = p1 - s1 + s2 + scale;
 
-        // Cap at maximum precision and scale (38 for Spark)
+        // Step 2: Apply precision loss adjustment if precision exceeds maximum
+        if (precision > 38) {
+            int intDigits = precision - scale;
+            int minScale = Math.min(scale, 6);  // retain at least 6 fractional digits
+            scale = Math.max(38 - intDigits, minScale);
+            precision = 38;
+        }
+
+        // Final safety cap (shouldn't be needed after adjustment)
         scale = Math.min(scale, 38);
         precision = Math.min(precision, 38);
 
         return new DecimalType(precision, scale);
+    }
+
+    /**
+     * Calculates the result type for Decimal multiplication per Spark semantics.
+     *
+     * <p>Spark's multiplication formula:
+     * <ul>
+     *   <li>precision = p1 + p2 + 1 (capped at 38)</li>
+     *   <li>scale = s1 + s2 (capped at precision)</li>
+     * </ul>
+     *
+     * @param left the left operand type
+     * @param right the right operand type
+     * @return the result DecimalType
+     */
+    public static DecimalType promoteDecimalMultiplication(DecimalType left, DecimalType right) {
+        int p1 = left.precision();
+        int s1 = left.scale();
+        int p2 = right.precision();
+        int s2 = right.scale();
+
+        // Spark's multiplication formula
+        int precision = Math.min(p1 + p2 + 1, 38);
+        int scale = Math.min(s1 + s2, precision);
+
+        return new DecimalType(precision, scale);
+    }
+
+    /**
+     * Converts a type to DecimalType if possible, for Decimal arithmetic operations.
+     *
+     * <p>Integer types are promoted to Decimal based on their value range or,
+     * if the expression is a Literal, based on the actual value's digit count.
+     *
+     * @param type the source type
+     * @param expr the expression (used to extract literal values)
+     * @return DecimalType if convertible, null otherwise
+     */
+    private static DecimalType toDecimalType(DataType type, Expression expr) {
+        if (type instanceof DecimalType) {
+            return (DecimalType) type;
+        }
+
+        // For integer types, promote to Decimal
+        // If it's a literal, use the actual value to determine precision
+        if (type instanceof IntegerType || type instanceof LongType ||
+            type instanceof ShortType || type instanceof ByteType) {
+
+            if (expr instanceof Literal) {
+                Literal lit = (Literal) expr;
+                Object value = lit.value();
+                if (value instanceof Number) {
+                    // Calculate precision based on actual value
+                    long absValue = Math.abs(((Number) value).longValue());
+                    int precision = absValue == 0 ? 1 : (int) Math.log10(absValue) + 1;
+                    return new DecimalType(precision, 0);
+                }
+            }
+
+            // Default precision based on type
+            if (type instanceof ByteType) return new DecimalType(3, 0);
+            if (type instanceof ShortType) return new DecimalType(5, 0);
+            if (type instanceof IntegerType) return new DecimalType(10, 0);
+            if (type instanceof LongType) return new DecimalType(19, 0);
+        }
+
+        // Not convertible to Decimal
+        return null;
     }
 
     // ========================================================================
@@ -342,6 +432,15 @@ public final class TypeInferenceEngine {
                 return promoteDecimalDivision((DecimalType) leftType, (DecimalType) rightType);
             }
             return DoubleType.get();
+        }
+
+        // Multiplication: Handle Decimal arithmetic specially per Spark rules
+        if (op == BinaryExpression.Operator.MULTIPLY) {
+            DecimalType leftDec = toDecimalType(leftType, binExpr.left());
+            DecimalType rightDec = toDecimalType(rightType, binExpr.right());
+            if (leftDec != null && rightDec != null) {
+                return promoteDecimalMultiplication(leftDec, rightDec);
+            }
         }
 
         // For other arithmetic operators, use numeric type promotion
