@@ -134,19 +134,18 @@ public class ExpressionConverter {
 
             case YEAR_MONTH_INTERVAL:
                 // YearMonthInterval is stored as total months
-                return new RawSQLExpression(
-                    String.format("INTERVAL '%d' MONTH", literal.getYearMonthInterval()));
+                return IntervalExpression.yearMonth(literal.getYearMonthInterval());
 
             case DAY_TIME_INTERVAL:
                 // DayTimeInterval is stored as total microseconds
-                return new RawSQLExpression(buildDayTimeIntervalSQL(literal.getDayTimeInterval()));
+                return IntervalExpression.dayTime(literal.getDayTimeInterval());
 
             case CALENDAR_INTERVAL:
                 // CalendarInterval has months, days, and microseconds components
                 org.apache.spark.connect.proto.Expression.Literal.CalendarInterval cal =
                     literal.getCalendarInterval();
-                return new RawSQLExpression(buildCalendarIntervalSQL(
-                    cal.getMonths(), cal.getDays(), cal.getMicroseconds()));
+                return IntervalExpression.calendar(
+                    cal.getMonths(), cal.getDays(), cal.getMicroseconds());
 
             case ARRAY:
                 return convertArrayLiteral(literal.getArray());
@@ -614,7 +613,7 @@ public class ExpressionConverter {
     }
 
     /**
-     * Converts ISIN function to SQL IN clause.
+     * Converts ISIN function to InExpression.
      * First argument is the column/expression, rest are the values to check.
      */
     private com.thunderduck.expression.Expression convertIsIn(List<com.thunderduck.expression.Expression> arguments) {
@@ -622,18 +621,10 @@ public class ExpressionConverter {
             throw new PlanConversionException("ISIN requires at least 2 arguments (expression and at least one value)");
         }
 
-        StringBuilder inExpr = new StringBuilder();
-        inExpr.append(arguments.get(0).toSQL()).append(" IN (");
+        com.thunderduck.expression.Expression testExpr = arguments.get(0);
+        List<com.thunderduck.expression.Expression> values = arguments.subList(1, arguments.size());
 
-        for (int i = 1; i < arguments.size(); i++) {
-            if (i > 1) {
-                inExpr.append(", ");
-            }
-            inExpr.append(arguments.get(i).toSQL());
-        }
-
-        inExpr.append(")");
-        return new RawSQLExpression(inExpr.toString());
+        return new InExpression(testExpr, values);
     }
 
     /**
@@ -718,10 +709,17 @@ public class ExpressionConverter {
 
     /**
      * Converts an ExpressionString (SQL expression as string).
+     *
+     * <p>Thunderduck currently supports only the DataFrame API, not SQL expression strings.
+     * SQL expressions require a SQL parser to generate proper typed AST nodes.
      */
     private com.thunderduck.expression.Expression convertExpressionString(ExpressionString exprString) {
-        // For now, wrap it as a raw SQL expression
-        return new RawSQLExpression(exprString.getExpression());
+        throw new UnsupportedOperationException(
+            "SQL expression strings are not supported. " +
+            "Thunderduck currently supports only the DataFrame API. " +
+            "Use DataFrame operations instead of expr(), selectExpr(), or raw SQL. " +
+            "Received: " + exprString.getExpression()
+        );
     }
 
     /**
@@ -1774,29 +1772,27 @@ public class ExpressionConverter {
     }
 
     /**
-     * Converts an Array literal to DuckDB list syntax.
+     * Converts an Array literal to ArrayLiteralExpression.
      *
      * @param array the proto array literal
-     * @return expression representing [elem1, elem2, ...]
+     * @return ArrayLiteralExpression with element list
      */
     private com.thunderduck.expression.Expression convertArrayLiteral(
             org.apache.spark.connect.proto.Expression.Literal.Array array) {
 
-        List<String> elementSQLs = new ArrayList<>();
+        List<com.thunderduck.expression.Expression> elements = new ArrayList<>();
         for (org.apache.spark.connect.proto.Expression.Literal elem : array.getElementsList()) {
-            com.thunderduck.expression.Expression elemExpr = convertLiteral(elem);
-            elementSQLs.add(elemExpr.toSQL());
+            elements.add(convertLiteral(elem));
         }
 
-        String listSQL = "[" + String.join(", ", elementSQLs) + "]";
-        return new RawSQLExpression(listSQL);
+        return new ArrayLiteralExpression(elements);
     }
 
     /**
-     * Converts a Map literal to DuckDB map syntax.
+     * Converts a Map literal to MapLiteralExpression.
      *
      * @param map the proto map literal
-     * @return expression representing MAP([keys], [values])
+     * @return MapLiteralExpression with key/value lists
      */
     private com.thunderduck.expression.Expression convertMapLiteral(
             org.apache.spark.connect.proto.Expression.Literal.Map map) {
@@ -1807,26 +1803,22 @@ public class ExpressionConverter {
                 map.getKeysCount() + " keys vs " + map.getValuesCount() + " values");
         }
 
-        List<String> keySQLs = new ArrayList<>();
-        List<String> valueSQLs = new ArrayList<>();
+        List<com.thunderduck.expression.Expression> keys = new ArrayList<>();
+        List<com.thunderduck.expression.Expression> values = new ArrayList<>();
 
         for (int i = 0; i < map.getKeysCount(); i++) {
-            keySQLs.add(convertLiteral(map.getKeys(i)).toSQL());
-            valueSQLs.add(convertLiteral(map.getValues(i)).toSQL());
+            keys.add(convertLiteral(map.getKeys(i)));
+            values.add(convertLiteral(map.getValues(i)));
         }
 
-        String keysList = "[" + String.join(", ", keySQLs) + "]";
-        String valuesList = "[" + String.join(", ", valueSQLs) + "]";
-        String mapSQL = "MAP(" + keysList + ", " + valuesList + ")";
-
-        return new RawSQLExpression(mapSQL);
+        return new MapLiteralExpression(keys, values);
     }
 
     /**
-     * Converts a Struct literal to DuckDB struct syntax.
+     * Converts a Struct literal to StructLiteralExpression.
      *
      * @param struct the proto struct literal
-     * @return expression representing {'field1': val1, 'field2': val2}
+     * @return StructLiteralExpression with field names and values
      */
     private com.thunderduck.expression.Expression convertStructLiteral(
             org.apache.spark.connect.proto.Expression.Literal.Struct struct) {
@@ -1845,17 +1837,14 @@ public class ExpressionConverter {
                 typeInfo.getFieldsCount() + " fields vs " + struct.getElementsCount() + " values");
         }
 
-        List<String> fieldPairs = new ArrayList<>();
-        for (int i = 0; i < typeInfo.getFieldsCount(); i++) {
-            String fieldName = typeInfo.getFields(i).getName();
-            String valueSQL = convertLiteral(struct.getElements(i)).toSQL();
+        List<String> fieldNames = new ArrayList<>();
+        List<com.thunderduck.expression.Expression> fieldValues = new ArrayList<>();
 
-            // Use single quotes for field names in DuckDB struct syntax
-            String quotedName = "'" + fieldName.replace("'", "''") + "'";
-            fieldPairs.add(quotedName + ": " + valueSQL);
+        for (int i = 0; i < typeInfo.getFieldsCount(); i++) {
+            fieldNames.add(typeInfo.getFields(i).getName());
+            fieldValues.add(convertLiteral(struct.getElements(i)));
         }
 
-        String structSQL = "{" + String.join(", ", fieldPairs) + "}";
-        return new RawSQLExpression(structSQL);
+        return new StructLiteralExpression(fieldNames, fieldValues);
     }
 }

@@ -33,9 +33,9 @@ import java.util.Objects;
  * </pre>
  *
  * <p>This class preserves the structure of the CASE WHEN expression to allow
- * schema-aware type resolution in TypeInferenceEngine. Unlike RawSQLExpression
- * which loses branch information, this class retains all condition and result
- * expressions for proper type inference.
+ * schema-aware type resolution in TypeInferenceEngine. By retaining all
+ * condition and result expressions, proper type inference can be performed
+ * based on the types of all branches.
  */
 public class CaseWhenExpression extends Expression {
 

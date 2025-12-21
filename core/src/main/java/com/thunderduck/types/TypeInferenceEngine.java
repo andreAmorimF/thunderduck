@@ -1,13 +1,19 @@
 package com.thunderduck.types;
 
 import com.thunderduck.expression.AliasExpression;
+import com.thunderduck.expression.ArrayLiteralExpression;
 import com.thunderduck.expression.BinaryExpression;
 import com.thunderduck.expression.CaseWhenExpression;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.FunctionCall;
+import com.thunderduck.expression.InExpression;
 import com.thunderduck.expression.Literal;
+import com.thunderduck.expression.MapLiteralExpression;
+import com.thunderduck.expression.StructLiteralExpression;
 import com.thunderduck.expression.UnresolvedColumn;
 import com.thunderduck.expression.WindowFunction;
+
+import java.util.List;
 import com.thunderduck.functions.FunctionCategories;
 
 /**
@@ -361,6 +367,26 @@ public final class TypeInferenceEngine {
             return resolveCaseWhenType((CaseWhenExpression) expr, schema);
         }
 
+        // Handle ArrayLiteralExpression - resolve element types with schema
+        if (expr instanceof ArrayLiteralExpression) {
+            return resolveArrayLiteralType((ArrayLiteralExpression) expr, schema);
+        }
+
+        // Handle MapLiteralExpression - resolve key/value types with schema
+        if (expr instanceof MapLiteralExpression) {
+            return resolveMapLiteralType((MapLiteralExpression) expr, schema);
+        }
+
+        // Handle StructLiteralExpression - resolve field types with schema
+        if (expr instanceof StructLiteralExpression) {
+            return resolveStructLiteralType((StructLiteralExpression) expr, schema);
+        }
+
+        // Handle InExpression - always returns Boolean
+        if (expr instanceof InExpression) {
+            return BooleanType.get();
+        }
+
         // Default: use the expression's declared type
         return expr.dataType();
     }
@@ -552,6 +578,89 @@ public final class TypeInferenceEngine {
     }
 
     /**
+     * Resolves the type of an array literal with schema awareness.
+     *
+     * <p>If the array is empty, returns ArrayType(StringType, true).
+     * Otherwise, unifies all element types to determine the element type.
+     *
+     * @param array the array literal expression
+     * @param schema the schema for resolving column types
+     * @return ArrayType with unified element type
+     */
+    public static DataType resolveArrayLiteralType(ArrayLiteralExpression array, StructType schema) {
+        if (array.isEmpty()) {
+            return new ArrayType(StringType.get(), true);
+        }
+
+        DataType elementType = null;
+        for (Expression elem : array.elements()) {
+            DataType elemType = resolveType(elem, schema);
+            elementType = unifyTypes(elementType, elemType);
+        }
+
+        return new ArrayType(elementType != null ? elementType : StringType.get(), true);
+    }
+
+    /**
+     * Resolves the type of a map literal with schema awareness.
+     *
+     * <p>If the map is empty, returns MapType(StringType, StringType, true).
+     * Otherwise, unifies all key and value types separately.
+     *
+     * @param map the map literal expression
+     * @param schema the schema for resolving column types
+     * @return MapType with unified key and value types
+     */
+    public static DataType resolveMapLiteralType(MapLiteralExpression map, StructType schema) {
+        if (map.isEmpty()) {
+            return new MapType(StringType.get(), StringType.get(), true);
+        }
+
+        DataType keyType = null;
+        for (Expression key : map.keys()) {
+            DataType kType = resolveType(key, schema);
+            keyType = unifyTypes(keyType, kType);
+        }
+
+        DataType valueType = null;
+        for (Expression value : map.values()) {
+            DataType vType = resolveType(value, schema);
+            valueType = unifyTypes(valueType, vType);
+        }
+
+        return new MapType(
+            keyType != null ? keyType : StringType.get(),
+            valueType != null ? valueType : StringType.get(),
+            true);
+    }
+
+    /**
+     * Resolves the type of a struct literal with schema awareness.
+     *
+     * <p>Returns a StructType with field names from the literal and types
+     * resolved from the schema.
+     *
+     * @param struct the struct literal expression
+     * @param schema the schema for resolving column types
+     * @return StructType with resolved field types
+     */
+    public static DataType resolveStructLiteralType(StructLiteralExpression struct, StructType schema) {
+        List<StructField> fields = new java.util.ArrayList<>();
+
+        List<String> fieldNames = struct.fieldNames();
+        List<Expression> fieldValues = struct.fieldValues();
+
+        for (int i = 0; i < fieldNames.size(); i++) {
+            String name = fieldNames.get(i);
+            DataType type = resolveType(fieldValues.get(i), schema);
+            boolean nullable = fieldValues.get(i).nullable();
+            fields.add(new StructField(name, type, nullable));
+        }
+
+        return new StructType(fields);
+    }
+
+    /**
      * Unifies two types for CASE WHEN branches.
      *
      * <p>Returns the common supertype of two types:
@@ -565,7 +674,7 @@ public final class TypeInferenceEngine {
      * @param b second type (may be null)
      * @return the unified type
      */
-    private static DataType unifyTypes(DataType a, DataType b) {
+    public static DataType unifyTypes(DataType a, DataType b) {
         if (a == null) return b;
         if (b == null) return a;
 

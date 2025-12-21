@@ -104,25 +104,61 @@ All logical plan nodes (WithColumns, Project, Aggregate) now delegate to this en
 ### Remaining
 - Q84 nullable mismatch fix
 - SQL test implementation
-- Complex type handling improvements
-- Interval arithmetic support
 - Pivot/unpivot operations
 
 ---
 
-## Files Modified (This Session)
+## Priority 5: RawSQLExpression Elimination - COMPLETED ✓
+
+### Problem
+`RawSQLExpression` was used as a catch-all for expressions without typed representations, causing:
+- Type information loss (TypeInferenceEngine defaults to StringType)
+- Nullable analysis failure (always returns true)
+- No schema-aware resolution
+
+### Solution: Created Typed Expression Classes
+
+| Expression Class | Replaces | Purpose |
+|-----------------|----------|---------|
+| `ArrayLiteralExpression` | Array literals | Preserves element list for type inference |
+| `MapLiteralExpression` | Map literals | Preserves key/value lists for type inference |
+| `StructLiteralExpression` | Struct literals | Preserves field names/values for type inference |
+| `InExpression` | ISIN function | Preserves test expr and values, returns BooleanType |
+| `IntervalExpression` | Interval literals | Preserves interval components for SQL generation |
+
+### RawSQLExpression Completely Eliminated (2025-12-21)
+
+`RawSQLExpression.java` has been **deleted** from the codebase:
+- `convertExpressionString()` now throws `UnsupportedOperationException` with clear error message
+- Reasoning: Thunderduck explicitly does NOT support Spark SQL (`spark.sql()`, `expr()`, `selectExpr()`)
+- When Spark SQL is added, a proper SQL parser will generate typed AST nodes - RawSQLExpression would still not be needed
+- Users attempting to use SQL expression strings receive clear guidance to use DataFrame API instead
+
+---
+
+## Files Modified (All Sessions)
 
 | File | Changes |
 |------|---------|
-| `core/.../types/TypeInferenceEngine.java` | Added `promoteDecimalDivision()`, `promoteDecimalMultiplication()`, `resolveCaseWhenType()`, `unifyTypes()`, `toDecimalForUnification()`, `unifyDecimalTypes()` |
+| `core/.../types/TypeInferenceEngine.java` | Added `promoteDecimalDivision()`, `promoteDecimalMultiplication()`, `resolveCaseWhenType()`, `unifyTypes()` (public), `toDecimalForUnification()`, `unifyDecimalTypes()`, `resolveArrayLiteralType()`, `resolveMapLiteralType()`, `resolveStructLiteralType()` |
 | `core/.../expression/CaseWhenExpression.java` | NEW - Expression class preserving CASE WHEN branch structure |
-| `core/.../expression/RawSQLExpression.java` | Added optional type field |
+| `core/.../expression/ArrayLiteralExpression.java` | NEW - Array literal with element list |
+| `core/.../expression/MapLiteralExpression.java` | NEW - Map literal with key/value lists |
+| `core/.../expression/StructLiteralExpression.java` | NEW - Struct literal with field names/values |
+| `core/.../expression/InExpression.java` | NEW - IN clause with test expr and values |
+| `core/.../expression/IntervalExpression.java` | NEW - Interval literals (YEAR_MONTH, DAY_TIME, CALENDAR) |
+| `core/.../expression/RawSQLExpression.java` | DELETED - No longer needed |
 | `core/.../generator/SQLGenerator.java` | Added CAST wrapper for decimal divisions, fixed GROUP BY alias unwrapping |
 | `core/.../logical/Aggregate.java` | Fixed GROUP BY alias unwrapping |
-| `connect-server/.../ExpressionConverter.java` | Updated `convertCaseWhen()` to return `CaseWhenExpression` |
+| `connect-server/.../ExpressionConverter.java` | Updated to use typed expression classes |
 | `tests/.../types/TypeInferenceEngineTest.java` | 15 unit tests |
 | `tests/.../expression/CaseWhenExpressionTest.java` | NEW - 19 unit tests |
-| `tests/.../expression/RawSQLExpressionTest.java` | NEW - 12 unit tests |
+| `tests/.../expression/RawSQLExpressionTest.java` | DELETED - No longer needed |
+| `tests/.../expression/ArrayLiteralExpressionTest.java` | NEW - 14 unit tests |
+| `tests/.../expression/MapLiteralExpressionTest.java` | NEW - 13 unit tests |
+| `tests/.../expression/StructLiteralExpressionTest.java` | NEW - 11 unit tests |
+| `tests/.../expression/InExpressionTest.java` | NEW - 14 unit tests |
+| `tests/.../expression/IntervalExpressionTest.java` | NEW - 21 unit tests |
 
 ---
 
