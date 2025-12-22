@@ -15,6 +15,7 @@
 #   aggregations - Multi-dimensional aggregation tests
 #   window      - Window function tests
 #   datetime    - Date/time function tests
+#   conditional - Conditional expressions (when/otherwise)
 #   operations  - DataFrame operations tests
 #   lambda      - Lambda/HOF function tests
 #   joins       - USING join tests
@@ -103,7 +104,7 @@ get_test_files() {
             echo "differential/test_lambda_differential.py"
             ;;
         joins)
-            echo "differential/test_using_joins_differential.py"
+            echo "differential/test_joins_differential.py differential/test_using_joins_differential.py"
             ;;
         statistics)
             echo "differential/test_statistics_differential.py"
@@ -119,6 +120,9 @@ get_test_files() {
             ;;
         datetime)
             echo "differential/test_datetime_functions_differential.py"
+            ;;
+        conditional)
+            echo "differential/test_conditional_differential.py"
             ;;
         all)
             echo "differential/"
@@ -169,6 +173,9 @@ get_test_description() {
             ;;
         datetime)
             echo "Date/time function tests"
+            ;;
+        conditional)
+            echo "Conditional expressions (when/otherwise)"
             ;;
         all)
             echo "All differential tests"

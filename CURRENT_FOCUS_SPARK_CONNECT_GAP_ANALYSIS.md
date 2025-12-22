@@ -1,9 +1,9 @@
 # Spark Connect 4.0.x Gap Analysis for Thunderduck
 
-**Version:** 4.3
+**Version:** 4.4
 **Date:** 2025-12-22
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
-**Validation:** 351 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
+**Validation:** 363 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
 
 ---
 
@@ -499,7 +499,7 @@ Features intentionally not supported due to Spark/DuckDB architectural differenc
 
 This section documents operations that are implemented but NOT covered by differential tests.
 
-### 10.1 Current Test Summary: 351 tests across 18 files
+### 10.1 Current Test Summary: 363 tests across 19 files
 
 | Category | Test File | Tests | Status |
 |----------|-----------|-------|--------|
@@ -520,6 +520,7 @@ This section documents operations that are implemented but NOT covered by differ
 | Schema Operations | test_to_schema_differential.py | 12 | Good |
 | TPC-DS DataFrame | test_tpcds_dataframe_differential.py | 33 | Good |
 | **Date/Time Functions** | test_datetime_functions_differential.py | **18** | **NEW (M54)** |
+| **Conditional Expressions** | test_conditional_differential.py | **12** | **NEW (M55)** |
 
 ### 10.2 Operations NOT Differentially Tested
 
@@ -531,9 +532,9 @@ All major date/time functions now have differential test coverage:
 - ✅ Truncation: `date_trunc()`, `last_day()`
 - ⏳ Pending: `months_between()` (complex fractional calculation), `next_day()` (DuckDB doesn't have native function)
 
-#### Conditional Expressions - NO COVERAGE
-- `when().otherwise()` (CASE WHEN)
-- `if()` / `iff()`
+#### Conditional Expressions - ✅ COVERED (M55)
+All conditional expressions now have differential test coverage:
+- ✅ `when().otherwise()` (CASE WHEN) - 12 tests covering basic, chained, nested, type coercion, null handling, aggregation
 
 #### Join Types - ONLY USING JOINS TESTED
 - Inner join with ON condition
@@ -570,14 +571,14 @@ All major date/time functions now have differential test coverage:
 | Priority | New Test File | Coverage | Est. Tests | Status |
 |----------|---------------|----------|------------|--------|
 | ~~High~~ | ~~test_datetime_functions_differential.py~~ | ~~Date/time functions~~ | ~~20~~ | ✅ **DONE (M54)** |
-| High | test_conditional_differential.py | when/otherwise, if | ~10 | Pending |
+| ~~High~~ | ~~test_conditional_differential.py~~ | ~~when/otherwise~~ | ~~10~~ | ✅ **DONE (M55)** |
 | High | test_joins_differential.py | All join types | ~15 | Pending |
 | High | test_set_operations_differential.py | union, intersect, except | ~12 | Pending |
 | Medium | test_type_casting_differential.py | Explicit casts | ~15 | Pending |
 | Medium | Expand test_dataframe_ops | distinct, dropDuplicates | ~8 | Pending |
 | Medium | Expand test_multidim_aggregations | countDistinct, collect_* | ~10 | Pending |
 
-**Total estimated new tests: ~70-80** (datetime complete)
+**Total estimated new tests: ~60** (datetime + conditional complete)
 
 ---
 
@@ -712,7 +713,7 @@ spark.udf.register(...)                       # User-defined functions not suppo
 
 ---
 
-**Document Version:** 4.3
+**Document Version:** 4.4
 **Last Updated:** 2025-12-22
 **Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 
@@ -720,6 +721,7 @@ spark.udf.register(...)                       # User-defined functions not suppo
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v4.4 | 2025-12-22 | Added conditional expressions differential tests (M55). 12 tests covering basic when/otherwise, chained conditions, type coercion, null handling, nested CASE WHEN, aggregation. Test count: 351→363. |
 | v4.3 | 2025-12-22 | Added date/time differential tests (M54). 18 tests covering extraction, arithmetic, formatting, truncation. Fixed Arrow DATE/TIMESTAMP type handling, dayofweek offset, datediff arg order, date_trunc TIMESTAMP cast. Test count: 333→351. |
 | v4.2 | 2025-12-22 | Added Section 10: Differential Test Coverage Gaps. Updated test count (266→333). Documented untested operations: date/time functions, join types, set operations, distinct, conditional expressions. Recommended ~90-100 new tests. |
 | v4.1 | 2025-12-17 | Added ToSchema relation (M49). DataFrame.to(schema) for column reordering, projection, type casting. 13 E2E tests. **Relation coverage: 95% (38/40).** |
