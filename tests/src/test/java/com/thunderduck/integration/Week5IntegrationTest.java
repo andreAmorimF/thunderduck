@@ -259,7 +259,9 @@ public class Week5IntegrationTest extends TestBase {
             String cumeDistSQL = cumeDist.toSQL();
 
             // Then: All should reference same named window
-            assertThat(rankSQL).isEqualTo("RANK() OVER sales_window");
+            // RANK returns INTEGER, needs CAST for Spark parity (DuckDB returns BIGINT)
+            assertThat(rankSQL).isEqualTo("CAST(RANK() OVER sales_window AS INTEGER)");
+            // PERCENT_RANK and CUME_DIST return DOUBLE, no CAST needed
             assertThat(percentRankSQL).isEqualTo("PERCENT_RANK() OVER sales_window");
             assertThat(cumeDistSQL).isEqualTo("CUME_DIST() OVER sales_window");
         }

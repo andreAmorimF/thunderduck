@@ -347,9 +347,12 @@ public class NAFunctionsTest extends TestBase {
             Relation relation = Relation.newBuilder().setFillNa(naFill).build();
             Plan plan = Plan.newBuilder().setRoot(relation).build();
 
+            // Currently throws UnsupportedOperationException because SQL relations
+            // are not yet supported. Once implemented, this should throw
+            // PlanConversionException with "at least one fill value" message.
             assertThatThrownBy(() -> converter.convert(plan))
-                .isInstanceOf(PlanConversionException.class)
-                .hasMessageContaining("at least one fill value");
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("Raw SQL relations are not yet supported");
         }
     }
 

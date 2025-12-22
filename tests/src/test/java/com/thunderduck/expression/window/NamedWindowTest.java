@@ -242,8 +242,8 @@ public class NamedWindowTest extends TestBase {
             // When: Generate SQL
             String sql = rankFunc.toSQL();
 
-            // Then: Should generate RANK() OVER w
-            assertThat(sql).isEqualTo("RANK() OVER w");
+            // Then: Should generate CAST(RANK() OVER w AS INTEGER) for Spark parity
+            assertThat(sql).isEqualTo("CAST(RANK() OVER w AS INTEGER)");
         }
 
         @Test
@@ -275,9 +275,9 @@ public class NamedWindowTest extends TestBase {
             String rowNumSQL = rowNumber.toSQL();
             String avgSQL = avg.toSQL();
 
-            // Then: All should reference same window
-            assertThat(rankSQL).isEqualTo("RANK() OVER w_salary");
-            assertThat(rowNumSQL).isEqualTo("ROW_NUMBER() OVER w_salary");
+            // Then: All should reference same window (ranking functions get CAST for Spark parity)
+            assertThat(rankSQL).isEqualTo("CAST(RANK() OVER w_salary AS INTEGER)");
+            assertThat(rowNumSQL).isEqualTo("CAST(ROW_NUMBER() OVER w_salary AS INTEGER)");
             assertThat(avgSQL).isEqualTo("AVG(salary) OVER w_salary");
         }
     }

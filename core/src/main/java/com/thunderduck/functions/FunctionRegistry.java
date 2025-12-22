@@ -366,7 +366,9 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("size", "len");
         DIRECT_MAPPINGS.put("explode", "unnest");
         DIRECT_MAPPINGS.put("flatten", "flatten");
-        DIRECT_MAPPINGS.put("reverse", "list_reverse");
+        // Note: "reverse" for strings is mapped above (line 128) to DuckDB's reverse()
+        // For arrays, use array_reverse explicitly
+        DIRECT_MAPPINGS.put("array_reverse", "list_reverse");
         DIRECT_MAPPINGS.put("array_position", "list_position");
         DIRECT_MAPPINGS.put("element_at", "list_extract");
         DIRECT_MAPPINGS.put("slice", "list_slice");
