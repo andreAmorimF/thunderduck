@@ -1,9 +1,9 @@
 # Spark Connect 4.0.x Gap Analysis for Thunderduck
 
-**Version:** 4.5
+**Version:** 4.6
 **Date:** 2025-12-22
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
-**Validation:** 389 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
+**Validation:** 403 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
 
 ---
 
@@ -515,6 +515,7 @@ This section documents operations that are implemented but NOT covered by differ
 | Lambda/HOF | test_lambda_differential.py | 18 | Good |
 | **Joins (ON)** | test_joins_differential.py | **15** | **NEW (M56)** |
 | **Joins (USING)** | test_using_joins_differential.py | **11** | **FIXED (M56)** |
+| **Set Operations** | test_set_operations_differential.py | **14** | **NEW (M57)** |
 | Statistics | test_statistics_differential.py | 16 | Good |
 | Catalog Operations | test_catalog_operations.py | 13 | Good |
 | Temp Views | test_temp_views.py | 7 | Limited |
@@ -547,10 +548,13 @@ All join types now have differential test coverage:
 - ✅ USING joins (single/multi-column, all join types)
 - ✅ **BUG FIXED**: USING join column deduplication now works correctly
 
-#### Set Operations - NO COVERAGE
-- `df.union()`, `df.unionAll()`, `df.unionByName()`
-- `df.intersect()`, `df.intersectAll()`
-- `df.except()`, `df.exceptAll()`, `df.subtract()`
+#### Set Operations - ✅ COVERED (M57)
+All set operations now have differential test coverage:
+- ✅ `df.union()`, `df.unionAll()` - UNION ALL (keeps duplicates)
+- ✅ `df.unionByName()` - Union by column name (not position), with column reordering
+- ✅ `df.intersect()`, `df.intersectAll()` - INTERSECT and INTERSECT ALL
+- ✅ `df.except()`, `df.exceptAll()`, `df.subtract()` - EXCEPT and EXCEPT ALL
+- ✅ Edge cases: nulls, chained operations, empty DataFrames
 
 #### Distinct Operations - NO COVERAGE
 - `df.distinct()`
@@ -577,12 +581,12 @@ All join types now have differential test coverage:
 | ~~High~~ | ~~test_datetime_functions_differential.py~~ | ~~Date/time functions~~ | ~~20~~ | ✅ **DONE (M54)** |
 | ~~High~~ | ~~test_conditional_differential.py~~ | ~~when/otherwise~~ | ~~10~~ | ✅ **DONE (M55)** |
 | ~~High~~ | ~~test_joins_differential.py~~ | ~~All join types~~ | ~~15~~ | ✅ **DONE (M56)** |
-| High | test_set_operations_differential.py | union, intersect, except | ~12 | Pending |
+| ~~High~~ | ~~test_set_operations_differential.py~~ | ~~union, intersect, except~~ | ~~14~~ | ✅ **DONE (M57)** |
 | Medium | test_type_casting_differential.py | Explicit casts | ~15 | Pending |
 | Medium | Expand test_dataframe_ops | distinct, dropDuplicates | ~8 | Pending |
 | Medium | Expand test_multidim_aggregations | countDistinct, collect_* | ~10 | Pending |
 
-**Total estimated new tests: ~45** (datetime + conditional + joins complete)
+**Total estimated new tests: ~30** (datetime + conditional + joins + set operations complete)
 
 ---
 
@@ -717,7 +721,7 @@ spark.udf.register(...)                       # User-defined functions not suppo
 
 ---
 
-**Document Version:** 4.5
+**Document Version:** 4.6
 **Last Updated:** 2025-12-22
 **Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 
@@ -725,6 +729,7 @@ spark.udf.register(...)                       # User-defined functions not suppo
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v4.6 | 2025-12-22 | Added set operations differential tests (M57). 14 tests covering union (basic, duplicates, distinct), unionByName, intersect/intersectAll, except/exceptAll, subtract, edge cases (nulls, chaining, empty DataFrames). **NEW FEATURE**: unionByName column reordering - right DataFrame columns now reordered to match left DataFrame column names. Test count: 389→403. |
 | v4.5 | 2025-12-22 | Added joins differential tests (M56). 15 tests for ON-clause joins (all types), 11 tests for USING joins. **BUG FIX**: USING join column deduplication - join columns now appear once (not duplicated), proper column ordering matching Spark, COALESCE for RIGHT/FULL outer USING joins. Test count: 363→389. |
 | v4.4 | 2025-12-22 | Added conditional expressions differential tests (M55). 12 tests covering basic when/otherwise, chained conditions, type coercion, null handling, nested CASE WHEN, aggregation. Test count: 351→363. |
 | v4.3 | 2025-12-22 | Added date/time differential tests (M54). 18 tests covering extraction, arithmetic, formatting, truncation. Fixed Arrow DATE/TIMESTAMP type handling, dayofweek offset, datediff arg order, date_trunc TIMESTAMP cast. Test count: 333→351. |

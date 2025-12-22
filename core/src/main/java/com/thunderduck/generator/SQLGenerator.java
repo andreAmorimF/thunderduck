@@ -5,6 +5,7 @@ import com.thunderduck.logical.*;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.BinaryExpression;
 import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.types.StructType;
 import java.util.*;
 
 import static com.thunderduck.generator.SQLQuoting.*;
@@ -152,6 +153,10 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             visitJoin((Join) plan);
         } else if (plan instanceof Union) {
             visitUnion((Union) plan);
+        } else if (plan instanceof Intersect) {
+            visitIntersect((Intersect) plan);
+        } else if (plan instanceof Except) {
+            visitExcept((Except) plan);
         } else if (plan instanceof InMemoryRelation) {
             visitInMemoryRelation((InMemoryRelation) plan);
         } else if (plan instanceof LocalRelation) {
@@ -1298,10 +1303,18 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     /**
      * Visits a Union node.
      * Builds SQL directly in buffer.
+     * Wraps children in parentheses for correct precedence in chained operations.
      */
     private void visitUnion(Union plan) {
-        // Left side
+        if (plan.byName()) {
+            visitUnionByName(plan);
+            return;
+        }
+
+        // Left side (wrapped for precedence)
+        sql.append("(");
         visit(plan.left());
+        sql.append(")");
 
         // UNION operator
         if (plan.all()) {
@@ -1310,8 +1323,152 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(" UNION ");
         }
 
-        // Right side
+        // Right side (wrapped for precedence)
+        sql.append("(");
         visit(plan.right());
+        sql.append(")");
+    }
+
+    /**
+     * Visits a Union node with byName=true.
+     * Reorders right side columns to match left side column order by name.
+     */
+    private void visitUnionByName(Union plan) {
+        StructType leftSchema = plan.left().schema();
+        StructType rightSchema = plan.right().schema();
+
+        if (leftSchema == null || rightSchema == null) {
+            throw new UnsupportedOperationException(
+                "unionByName requires schema information. Ensure both DataFrames have known schemas.");
+        }
+
+        // Left side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.left());
+        sql.append(")");
+
+        // UNION operator
+        if (plan.all()) {
+            sql.append(" UNION ALL ");
+        } else {
+            sql.append(" UNION ");
+        }
+
+        // Right side: SELECT columns in left schema order FROM (right)
+        sql.append("(SELECT ");
+
+        // Extract field names from schemas
+        List<String> leftColNames = new ArrayList<>();
+        for (int i = 0; i < leftSchema.size(); i++) {
+            leftColNames.add(leftSchema.fieldAt(i).name());
+        }
+        List<String> rightColNames = new ArrayList<>();
+        for (int i = 0; i < rightSchema.size(); i++) {
+            rightColNames.add(rightSchema.fieldAt(i).name());
+        }
+
+        for (int i = 0; i < leftColNames.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            String leftColName = leftColNames.get(i);
+
+            // Check if right side has this column (case-insensitive match)
+            String matchedRightCol = findMatchingColumn(leftColName, rightColNames);
+
+            if (matchedRightCol != null) {
+                // Column exists in right side, select it
+                sql.append(SQLQuoting.quoteIdentifier(matchedRightCol));
+                // Alias to left column name if case differs
+                if (!matchedRightCol.equals(leftColName)) {
+                    sql.append(" AS ");
+                    sql.append(SQLQuoting.quoteIdentifier(leftColName));
+                }
+            } else if (plan.allowMissingColumns()) {
+                // Column missing in right side, fill with NULL
+                sql.append("NULL AS ");
+                sql.append(SQLQuoting.quoteIdentifier(leftColName));
+            } else {
+                throw new IllegalArgumentException(
+                    "Column '" + leftColName + "' not found in right DataFrame. " +
+                    "Use allowMissingColumns=true to fill missing columns with NULL.");
+            }
+        }
+
+        sql.append(" FROM (");
+        visit(plan.right());
+        sql.append(") AS _union_by_name)");
+    }
+
+    /**
+     * Finds a matching column name in the list (case-insensitive).
+     *
+     * @param target the column name to find
+     * @param candidates the list of candidate column names
+     * @return the matching column name, or null if not found
+     */
+    private String findMatchingColumn(String target, List<String> candidates) {
+        // First try exact match
+        for (String candidate : candidates) {
+            if (candidate.equals(target)) {
+                return candidate;
+            }
+        }
+        // Then try case-insensitive match
+        for (String candidate : candidates) {
+            if (candidate.equalsIgnoreCase(target)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Visits an Intersect node.
+     * Builds SQL directly in buffer.
+     * Wraps children in parentheses for correct precedence in chained operations.
+     */
+    private void visitIntersect(Intersect plan) {
+        // Left side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.left());
+        sql.append(")");
+
+        // INTERSECT operator
+        if (plan.distinct()) {
+            sql.append(" INTERSECT ");
+        } else {
+            sql.append(" INTERSECT ALL ");
+        }
+
+        // Right side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.right());
+        sql.append(")");
+    }
+
+    /**
+     * Visits an Except node.
+     * Builds SQL directly in buffer.
+     * Wraps children in parentheses for correct precedence in chained operations.
+     */
+    private void visitExcept(Except plan) {
+        // Left side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.left());
+        sql.append(")");
+
+        // EXCEPT operator
+        if (plan.distinct()) {
+            sql.append(" EXCEPT ");
+        } else {
+            sql.append(" EXCEPT ALL ");
+        }
+
+        // Right side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.right());
+        sql.append(")");
     }
 
     /**

@@ -1068,13 +1068,23 @@ public class RelationConverter {
         LogicalPlan left = convert(setOp.getLeftInput());
         LogicalPlan right = convert(setOp.getRightInput());
 
+        // Note: In Spark Connect protocol, isAll=true means keep duplicates (ALL variant)
+        // Union: isAll=true → UNION ALL, isAll=false → UNION (distinct)
+        // Intersect: isAll=true → INTERSECT ALL, isAll=false → INTERSECT (distinct)
+        // Except: isAll=true → EXCEPT ALL, isAll=false → EXCEPT (distinct)
+        boolean keepDuplicates = setOp.getIsAll();
+
+        // Union-specific options for unionByName
+        boolean byName = setOp.getByName();
+        boolean allowMissingColumns = setOp.getAllowMissingColumns();
+
         switch (setOp.getSetOpType()) {
             case SET_OP_TYPE_UNION:
-                return new Union(left, right, !setOp.getIsAll());
+                return new Union(left, right, keepDuplicates, byName, allowMissingColumns);
             case SET_OP_TYPE_INTERSECT:
-                return new Intersect(left, right, !setOp.getIsAll());
+                return new Intersect(left, right, !keepDuplicates);  // Intersect uses 'distinct' flag (inverted)
             case SET_OP_TYPE_EXCEPT:
-                return new Except(left, right, !setOp.getIsAll());
+                return new Except(left, right, !keepDuplicates);  // Except uses 'distinct' flag (inverted)
             default:
                 throw new PlanConversionException("Unsupported set operation: " + setOp.getSetOpType());
         }
