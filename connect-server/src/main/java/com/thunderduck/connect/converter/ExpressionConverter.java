@@ -496,6 +496,29 @@ public class ExpressionConverter {
             return LongType.get();
         }
 
+        // Date/time functions with specific return types
+        if (lower.equals("months_between")) {
+            return DoubleType.get();
+        }
+        if (lower.matches("to_date|last_day|next_day")) {
+            return DateType.get();
+        }
+        if (lower.matches("to_timestamp|date_trunc")) {
+            return TimestampType.get();
+        }
+        if (lower.equals("unix_timestamp")) {
+            return LongType.get();
+        }
+        if (lower.equals("from_unixtime")) {
+            return StringType.get();
+        }
+        if (lower.matches("date_add|date_sub|add_months")) {
+            return DateType.get();
+        }
+        if (lower.equals("datediff")) {
+            return IntegerType.get();
+        }
+
         // Default to UnresolvedType for unknown functions
         // This will be resolved during schema inference if possible
         return UnresolvedType.functionReturn();

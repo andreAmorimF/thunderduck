@@ -251,12 +251,11 @@ public class FunctionRegistry {
     // ==================== Date/Time Functions ====================
 
     private static void initializeDateFunctions() {
-        // Extract components
+        // Extract components - direct mappings
         DIRECT_MAPPINGS.put("year", "year");
         DIRECT_MAPPINGS.put("month", "month");
         DIRECT_MAPPINGS.put("day", "day");
         DIRECT_MAPPINGS.put("dayofmonth", "day");
-        DIRECT_MAPPINGS.put("dayofweek", "dayofweek");
         DIRECT_MAPPINGS.put("dayofyear", "dayofyear");
         DIRECT_MAPPINGS.put("hour", "hour");
         DIRECT_MAPPINGS.put("minute", "minute");
@@ -264,31 +263,173 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("quarter", "quarter");
         DIRECT_MAPPINGS.put("weekofyear", "weekofyear");
 
-        // Date arithmetic
-        DIRECT_MAPPINGS.put("date_add", "date_add");
-        DIRECT_MAPPINGS.put("date_sub", "date_sub");
-        DIRECT_MAPPINGS.put("datediff", "datediff");
-        DIRECT_MAPPINGS.put("add_months", "add_months");
+        // dayofweek: Spark returns 1=Sunday...7=Saturday; DuckDB returns 0=Sunday...6=Saturday
+        // Need to add 1 to DuckDB result
+        CUSTOM_TRANSLATORS.put("dayofweek", args -> "dayofweek(" + args[0] + ") + 1");
 
-        // Date formatting
-        DIRECT_MAPPINGS.put("date_format", "strftime");
-        DIRECT_MAPPINGS.put("to_date", "cast");
-        DIRECT_MAPPINGS.put("to_timestamp", "cast");
+        // Date arithmetic - date_add works directly
+        DIRECT_MAPPINGS.put("date_add", "date_add");
+
+        // date_sub: Spark date_sub(date, days)
+        // DuckDB doesn't have date_sub(date, int) - use date - INTERVAL 'n days'
+        CUSTOM_TRANSLATORS.put("date_sub", args ->
+            "CAST((" + args[0] + " - INTERVAL '" + args[1] + " days') AS DATE)");
+
+        // datediff: Spark datediff(end, start) returns days
+        // DuckDB datediff('day', start, end) - different arg order!
+        CUSTOM_TRANSLATORS.put("datediff", args ->
+            "datediff('day', " + args[1] + ", " + args[0] + ")");
+
+        // add_months: Spark add_months(date, months)
+        // DuckDB: date + INTERVAL 'n months'
+        CUSTOM_TRANSLATORS.put("add_months", args ->
+            "CAST((" + args[0] + " + INTERVAL '" + args[1] + " months') AS DATE)");
+
+        // months_between: Spark months_between(date1, date2, roundOff)
+        // DuckDB: datediff('month', date2, date1) for approximate
+        CUSTOM_TRANSLATORS.put("months_between", args -> {
+            if (args.length >= 2) {
+                // Compute the fractional months: (date1 - date2) / 31.0
+                // This is an approximation; for exact Spark parity, more complex logic needed
+                return "CAST(datediff('day', " + args[1] + ", " + args[0] + ") AS DOUBLE) / 31.0";
+            }
+            return "0.0";
+        });
+
+        // Date formatting - need format string conversion
+        // Spark uses Java SimpleDateFormat (yyyy-MM-dd), DuckDB uses strftime (%Y-%m-%d)
+        CUSTOM_TRANSLATORS.put("date_format", args -> {
+            if (args.length >= 2) {
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "strftime(" + args[0] + ", " + format + ")";
+            }
+            return "strftime(" + args[0] + ", '%Y-%m-%d')";
+        });
+
+        // to_date: Spark to_date(string) or to_date(string, format)
+        CUSTOM_TRANSLATORS.put("to_date", args -> {
+            if (args.length == 1) {
+                return "CAST(" + args[0] + " AS DATE)";
+            } else {
+                // to_date with format - use strptime then CAST
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "CAST(strptime(" + args[0] + ", " + format + ") AS DATE)";
+            }
+        });
+
+        // to_timestamp: Spark to_timestamp(string) or to_timestamp(string, format)
+        CUSTOM_TRANSLATORS.put("to_timestamp", args -> {
+            if (args.length == 1) {
+                return "CAST(" + args[0] + " AS TIMESTAMP)";
+            } else {
+                // to_timestamp with format - use strptime then CAST
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "CAST(strptime(" + args[0] + ", " + format + ") AS TIMESTAMP)";
+            }
+        });
 
         // Current date/time
         DIRECT_MAPPINGS.put("current_date", "current_date");
         DIRECT_MAPPINGS.put("current_timestamp", "current_timestamp");
         DIRECT_MAPPINGS.put("now", "now");
 
-        // Date truncation
-        DIRECT_MAPPINGS.put("date_trunc", "date_trunc");
-        DIRECT_MAPPINGS.put("trunc", "date_trunc");
+        // Date truncation - Spark always returns TIMESTAMP, DuckDB may return DATE
+        // Cast result to TIMESTAMP to match Spark behavior
+        CUSTOM_TRANSLATORS.put("date_trunc", args ->
+            "CAST(date_trunc(" + String.join(", ", args) + ") AS TIMESTAMP)");
+        CUSTOM_TRANSLATORS.put("trunc", args ->
+            "CAST(date_trunc(" + String.join(", ", args) + ") AS TIMESTAMP)");
 
-        // Other date functions
+        // last_day: same in both
         DIRECT_MAPPINGS.put("last_day", "last_day");
+
+        // next_day: Spark uses day names, DuckDB same
+        // Spark: next_day(date, 'Monday')
+        // DuckDB: next_day(date, 'monday') - case insensitive
         DIRECT_MAPPINGS.put("next_day", "next_day");
-        DIRECT_MAPPINGS.put("unix_timestamp", "epoch");
-        DIRECT_MAPPINGS.put("from_unixtime", "to_timestamp");
+
+        // unix_timestamp: Spark unix_timestamp() or unix_timestamp(timestamp) or unix_timestamp(string, format)
+        // DuckDB: epoch(timestamp) or epoch(strptime(string, format))
+        CUSTOM_TRANSLATORS.put("unix_timestamp", args -> {
+            if (args.length == 0) {
+                return "epoch(current_timestamp)";
+            } else if (args.length == 1) {
+                return "epoch(" + args[0] + ")";
+            } else {
+                // unix_timestamp(expr, format)
+                // If expr is a string literal (single quotes in SQL), parse it with strptime
+                // Otherwise, assume it's already a date/timestamp column and just use epoch
+                // Note: Double quotes are identifiers in SQL (column names), not string literals
+                String expr = args[0].trim();
+                if (expr.startsWith("'") && !expr.startsWith("''")) {
+                    // It's a string literal - needs parsing
+                    String format = convertSparkDateFormatToDuckDB(args[1]);
+                    return "epoch(strptime(" + args[0] + ", " + format + "))";
+                } else {
+                    // It's a column reference, identifier, or timestamp expression
+                    // Just use epoch() directly - the format is ignored for non-string inputs
+                    return "epoch(" + args[0] + ")";
+                }
+            }
+        });
+
+        // from_unixtime: Convert epoch seconds to timestamp string
+        // Spark: from_unixtime(epoch) or from_unixtime(epoch, format)
+        // DuckDB: strftime(to_timestamp(epoch), format)
+        CUSTOM_TRANSLATORS.put("from_unixtime", args -> {
+            if (args.length == 1) {
+                return "strftime(to_timestamp(" + args[0] + "), '%Y-%m-%d %H:%M:%S')";
+            } else {
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "strftime(to_timestamp(" + args[0] + "), " + format + ")";
+            }
+        });
+    }
+
+    /**
+     * Converts Spark/Java SimpleDateFormat patterns to DuckDB strftime patterns.
+     * Common patterns:
+     * - yyyy -> %Y (4-digit year)
+     * - yy -> %y (2-digit year)
+     * - MM -> %m (month 01-12)
+     * - dd -> %d (day 01-31)
+     * - HH -> %H (hour 00-23)
+     * - hh -> %I (hour 01-12)
+     * - mm -> %M (minute 00-59)
+     * - ss -> %S (second 00-59)
+     * - a -> %p (AM/PM)
+     * - E -> %a (abbreviated weekday)
+     * - EEEE -> %A (full weekday)
+     */
+    private static String convertSparkDateFormatToDuckDB(String sparkFormat) {
+        if (sparkFormat == null || sparkFormat.isEmpty()) {
+            return "'%Y-%m-%d %H:%M:%S'";
+        }
+
+        // Remove surrounding quotes if present
+        String format = sparkFormat;
+        if (format.startsWith("'") && format.endsWith("'")) {
+            format = format.substring(1, format.length() - 1);
+        }
+
+        // Convert patterns (order matters - longer patterns first)
+        format = format.replace("yyyy", "%Y");
+        format = format.replace("yy", "%y");
+        format = format.replace("MMMM", "%B");  // Full month name
+        format = format.replace("MMM", "%b");   // Abbreviated month name
+        format = format.replace("MM", "%m");
+        format = format.replace("dd", "%d");
+        format = format.replace("HH", "%H");
+        format = format.replace("hh", "%I");
+        format = format.replace("mm", "%M");
+        format = format.replace("ss", "%S");
+        format = format.replace("SSS", "%f");   // Milliseconds
+        format = format.replace("EEEE", "%A");  // Full weekday
+        format = format.replace("EEE", "%a");   // Abbreviated weekday
+        format = format.replace("E", "%a");     // Abbreviated weekday
+        format = format.replace("a", "%p");     // AM/PM
+
+        return "'" + format + "'";
     }
 
     // ==================== Aggregate Functions ====================
@@ -669,6 +810,56 @@ public class FunctionRegistry {
             .duckdbName("isnotnull")
             .returnType(FunctionMetadata.constantType(BooleanType.get()))
             .nullable(FunctionMetadata.alwaysNonNull())
+            .build());
+
+        // Date/time functions with specific return types
+        // Note: These use CUSTOM_TRANSLATORS for SQL generation, but need metadata for type inference
+        FUNCTION_METADATA.put("months_between", FunctionMetadata.builder("months_between")
+            .duckdbName("datediff")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(DoubleType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("to_date", FunctionMetadata.builder("to_date")
+            .duckdbName("cast")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(DateType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("to_timestamp", FunctionMetadata.builder("to_timestamp")
+            .duckdbName("cast")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(TimestampType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("unix_timestamp", FunctionMetadata.builder("unix_timestamp")
+            .duckdbName("epoch")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(LongType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("date_trunc", FunctionMetadata.builder("date_trunc")
+            .duckdbName("date_trunc")
+            .returnType(FunctionMetadata.constantType(TimestampType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("last_day", FunctionMetadata.builder("last_day")
+            .duckdbName("last_day")
+            .returnType(FunctionMetadata.constantType(DateType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("next_day", FunctionMetadata.builder("next_day")
+            .duckdbName("next_day")
+            .returnType(FunctionMetadata.constantType(DateType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("from_unixtime", FunctionMetadata.builder("from_unixtime")
+            .duckdbName("strftime")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
             .build());
     }
 

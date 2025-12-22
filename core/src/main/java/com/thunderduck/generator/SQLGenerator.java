@@ -1698,9 +1698,42 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         } else if (vector instanceof org.apache.arrow.vector.DateDayVector) {
             int days = ((org.apache.arrow.vector.DateDayVector) vector).get(index);
             return java.time.LocalDate.ofEpochDay(days);
+        } else if (vector instanceof org.apache.arrow.vector.DateMilliVector) {
+            // Date stored as milliseconds since epoch
+            long millis = ((org.apache.arrow.vector.DateMilliVector) vector).get(index);
+            return java.time.LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000L));
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampMicroTZVector) {
+            // Timestamp with timezone in microseconds
+            long micros = ((org.apache.arrow.vector.TimeStampMicroTZVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(micros / 1_000_000, (micros % 1_000_000) * 1000);
         } else if (vector instanceof org.apache.arrow.vector.TimeStampMicroVector) {
+            // Timestamp without timezone in microseconds
             long micros = ((org.apache.arrow.vector.TimeStampMicroVector) vector).get(index);
-            return new java.sql.Timestamp(micros / 1000);
+            return java.time.Instant.ofEpochSecond(micros / 1_000_000, (micros % 1_000_000) * 1000);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampMilliTZVector) {
+            // Timestamp with timezone in milliseconds
+            long millis = ((org.apache.arrow.vector.TimeStampMilliTZVector) vector).get(index);
+            return java.time.Instant.ofEpochMilli(millis);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampMilliVector) {
+            // Timestamp without timezone in milliseconds
+            long millis = ((org.apache.arrow.vector.TimeStampMilliVector) vector).get(index);
+            return java.time.Instant.ofEpochMilli(millis);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampNanoTZVector) {
+            // Timestamp with timezone in nanoseconds
+            long nanos = ((org.apache.arrow.vector.TimeStampNanoTZVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(nanos / 1_000_000_000, nanos % 1_000_000_000);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampNanoVector) {
+            // Timestamp without timezone in nanoseconds
+            long nanos = ((org.apache.arrow.vector.TimeStampNanoVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(nanos / 1_000_000_000, nanos % 1_000_000_000);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampSecTZVector) {
+            // Timestamp with timezone in seconds
+            long secs = ((org.apache.arrow.vector.TimeStampSecTZVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(secs);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampSecVector) {
+            // Timestamp without timezone in seconds
+            long secs = ((org.apache.arrow.vector.TimeStampSecVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(secs);
         } else if (vector instanceof org.apache.arrow.vector.complex.ListVector) {
             // Handle array/list types - return as List to preserve structure
             org.apache.arrow.vector.complex.ListVector listVector = (org.apache.arrow.vector.complex.ListVector) vector;
@@ -1740,6 +1773,14 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             return "DATE '" + value.toString() + "'";
         } else if (value instanceof java.sql.Timestamp) {
             return "TIMESTAMP '" + value.toString() + "'";
+        } else if (value instanceof java.time.Instant) {
+            // Format Instant as TIMESTAMP literal
+            java.time.Instant instant = (java.time.Instant) value;
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC);
+            return "TIMESTAMP '" + ldt.toString().replace("T", " ") + "'";
+        } else if (value instanceof java.time.LocalDateTime) {
+            // Format LocalDateTime as TIMESTAMP literal
+            return "TIMESTAMP '" + value.toString().replace("T", " ") + "'";
         } else if (value instanceof java.util.List) {
             // Format as DuckDB array literal: [elem1, elem2, ...]
             java.util.List<?> list = (java.util.List<?>) value;

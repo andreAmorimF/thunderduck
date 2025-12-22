@@ -1,9 +1,9 @@
 # Spark Connect 4.0.x Gap Analysis for Thunderduck
 
-**Version:** 4.1
-**Date:** 2025-12-17
+**Version:** 4.3
+**Date:** 2025-12-22
 **Purpose:** Comprehensive analysis of Spark Connect operator support in Thunderduck
-**Validation:** 266 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
+**Validation:** 351 differential tests (all passing) - see [Differential Testing Architecture](docs/architect/DIFFERENTIAL_TESTING_ARCHITECTURE.md)
 
 ---
 
@@ -495,6 +495,92 @@ Features intentionally not supported due to Spark/DuckDB architectural differenc
 
 ---
 
+## 10. Differential Test Coverage Gaps
+
+This section documents operations that are implemented but NOT covered by differential tests.
+
+### 10.1 Current Test Summary: 351 tests across 18 files
+
+| Category | Test File | Tests | Status |
+|----------|-----------|-------|--------|
+| Array Functions | test_dataframe_functions.py | 18 | Good |
+| Map Functions | test_dataframe_functions.py | 8 | Good |
+| String Functions | test_dataframe_functions.py | 14 | Good |
+| Math Functions | test_dataframe_functions.py | 11 | Good |
+| Null Handling | test_dataframe_functions.py | 9 | Good |
+| Window Functions | test_window_functions.py | 35 | Good |
+| Complex Types | test_complex_types + test_type_literals | 47 | Good |
+| DataFrame Operations | test_dataframe_ops + test_empty_dataframe | 40 | Good |
+| Multi-dim Aggregations | test_multidim_aggregations.py | 21 | Good |
+| Lambda/HOF | test_lambda_differential.py | 18 | Good |
+| Joins | test_using_joins_differential.py | 11 | **Gap: USING only** |
+| Statistics | test_statistics_differential.py | 16 | Good |
+| Catalog Operations | test_catalog_operations.py | 13 | Good |
+| Temp Views | test_temp_views.py | 7 | Limited |
+| Schema Operations | test_to_schema_differential.py | 12 | Good |
+| TPC-DS DataFrame | test_tpcds_dataframe_differential.py | 33 | Good |
+| **Date/Time Functions** | test_datetime_functions_differential.py | **18** | **NEW (M54)** |
+
+### 10.2 Operations NOT Differentially Tested
+
+#### Date/Time Functions - ✅ COVERED (M54)
+All major date/time functions now have differential test coverage:
+- ✅ Extraction: `year()`, `month()`, `day()`, `hour()`, `minute()`, `second()`, `dayofweek()`, `dayofyear()`, `weekofyear()`, `quarter()`
+- ✅ Arithmetic: `date_add()`, `date_sub()`, `datediff()`, `add_months()`
+- ✅ Formatting: `date_format()`, `to_date()`, `to_timestamp()`, `unix_timestamp()`, `from_unixtime()`
+- ✅ Truncation: `date_trunc()`, `last_day()`
+- ⏳ Pending: `months_between()` (complex fractional calculation), `next_day()` (DuckDB doesn't have native function)
+
+#### Conditional Expressions - NO COVERAGE
+- `when().otherwise()` (CASE WHEN)
+- `if()` / `iff()`
+
+#### Join Types - ONLY USING JOINS TESTED
+- Inner join with ON condition
+- Left/Right/Full outer joins
+- Left/Right semi joins
+- Left/Right anti joins
+- Cross join, Self joins
+
+#### Set Operations - NO COVERAGE
+- `df.union()`, `df.unionAll()`, `df.unionByName()`
+- `df.intersect()`, `df.intersectAll()`
+- `df.except()`, `df.exceptAll()`, `df.subtract()`
+
+#### Distinct Operations - NO COVERAGE
+- `df.distinct()`
+- `df.dropDuplicates()`, `df.dropDuplicates(subset=[...])`
+
+#### Type Casting - MINIMAL COVERAGE
+- Explicit `cast()` function
+- Decimal precision/scale handling
+- String to numeric conversions
+
+#### Sorting Edge Cases - NO COVERAGE
+- `nullsFirst` / `nullsLast` options
+- Multi-column sorting with mixed asc/desc
+
+#### Additional Aggregation Functions - NO COVERAGE
+- `countDistinct()`
+- `collect_list()` / `collect_set()`
+- `first()` / `last()` with ignoreNulls
+
+### 10.3 Recommended Test Additions
+
+| Priority | New Test File | Coverage | Est. Tests | Status |
+|----------|---------------|----------|------------|--------|
+| ~~High~~ | ~~test_datetime_functions_differential.py~~ | ~~Date/time functions~~ | ~~20~~ | ✅ **DONE (M54)** |
+| High | test_conditional_differential.py | when/otherwise, if | ~10 | Pending |
+| High | test_joins_differential.py | All join types | ~15 | Pending |
+| High | test_set_operations_differential.py | union, intersect, except | ~12 | Pending |
+| Medium | test_type_casting_differential.py | Explicit casts | ~15 | Pending |
+| Medium | Expand test_dataframe_ops | distinct, dropDuplicates | ~8 | Pending |
+| Medium | Expand test_multidim_aggregations | countDistinct, collect_* | ~10 | Pending |
+
+**Total estimated new tests: ~70-80** (datetime complete)
+
+---
+
 ## Appendix A: Quick Reference - What Works
 
 ```python
@@ -626,14 +712,16 @@ spark.udf.register(...)                       # User-defined functions not suppo
 
 ---
 
-**Document Version:** 4.1
-**Last Updated:** 2025-12-17
+**Document Version:** 4.3
+**Last Updated:** 2025-12-22
 **Author:** Analysis generated from Spark Connect 4.0.x protobuf definitions
 
 ### Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v4.3 | 2025-12-22 | Added date/time differential tests (M54). 18 tests covering extraction, arithmetic, formatting, truncation. Fixed Arrow DATE/TIMESTAMP type handling, dayofweek offset, datediff arg order, date_trunc TIMESTAMP cast. Test count: 333→351. |
+| v4.2 | 2025-12-22 | Added Section 10: Differential Test Coverage Gaps. Updated test count (266→333). Documented untested operations: date/time functions, join types, set operations, distinct, conditional expressions. Recommended ~90-100 new tests. |
 | v4.1 | 2025-12-17 | Added ToSchema relation (M49). DataFrame.to(schema) for column reordering, projection, type casting. 13 E2E tests. **Relation coverage: 95% (38/40).** |
 | v4.0 | 2025-12-17 | Added all remaining type literals (M48): TimestampNTZ, CalendarInterval, YearMonthInterval, DayTimeInterval, Array, Map, Struct. 32 E2E tests. **100% literal type coverage achieved.** |
 | v3.9 | 2025-12-17 | Added UnresolvedExtractValue, UnresolvedRegex, UpdateFields expressions (M47). Supports struct.field, arr[index], map[key] access. 21 E2E tests. **Expression coverage: 94% (15/16).** |

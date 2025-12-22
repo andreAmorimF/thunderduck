@@ -9,11 +9,19 @@
 #
 # Test groups:
 #   all         - Run all differential tests (default)
-#   tpch        - TPC-H SQL and DataFrame tests (27 tests)
-#   tpcds       - TPC-DS SQL and DataFrame tests (126 tests)
-#   functions   - DataFrame function parity tests (57 tests)
-#   aggregations - Multi-dimensional aggregation tests (21 tests)
-#   window      - Window function tests (35 tests)
+#   tpch        - TPC-H SQL and DataFrame tests
+#   tpcds       - TPC-DS SQL and DataFrame tests
+#   functions   - DataFrame function parity tests
+#   aggregations - Multi-dimensional aggregation tests
+#   window      - Window function tests
+#   datetime    - Date/time function tests
+#   operations  - DataFrame operations tests
+#   lambda      - Lambda/HOF function tests
+#   joins       - USING join tests
+#   statistics  - Statistics operations
+#   types       - Complex types and type literals
+#   schema      - ToSchema tests
+#   dataframe   - TPC-DS DataFrame API tests
 #
 # Environment variables (all optional):
 #   SPARK_PORT=15003              - Spark Reference server port
@@ -109,6 +117,9 @@ get_test_files() {
         dataframe)
             echo "differential/test_tpcds_dataframe_differential.py"
             ;;
+        datetime)
+            echo "differential/test_datetime_functions_differential.py"
+            ;;
         all)
             echo "differential/"
             ;;
@@ -155,6 +166,9 @@ get_test_description() {
             ;;
         dataframe)
             echo "TPC-DS DataFrame API tests"
+            ;;
+        datetime)
+            echo "Date/time function tests"
             ;;
         all)
             echo "All differential tests"
