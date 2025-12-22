@@ -5,6 +5,7 @@ import com.thunderduck.logical.*;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.BinaryExpression;
 import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
 import java.util.*;
 
@@ -696,18 +697,103 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
     /**
      * Visits a WithColumns node (add/replace columns).
-     * Builds SQL directly in buffer to avoid corruption from generate() calls.
+     * Generates SQL that preserves column order when replacing existing columns.
      */
     private void visitWithColumns(WithColumns plan) {
-        // Get child schema for type-aware SQL generation
-        com.thunderduck.types.StructType childSchema = null;
+        // Get child schema for column ordering and type-aware SQL generation
+        StructType childSchema = null;
         try {
             childSchema = plan.child().schema();
         } catch (Exception e) {
-            // Child schema unavailable - proceed without type-specific handling
+            // Child schema unavailable - fall back to legacy approach
         }
 
-        // Build SQL directly - no intermediate StringBuilders needed
+        if (childSchema == null) {
+            // Fall back to legacy COLUMNS() approach when schema unavailable
+            visitWithColumnsLegacy(plan, null);
+            return;
+        }
+
+        // Build map of columns being modified for O(1) lookup
+        Map<String, Integer> modifiedCols = new HashMap<>();
+        for (int i = 0; i < plan.columnNames().size(); i++) {
+            modifiedCols.put(plan.columnNames().get(i), i);
+        }
+
+        // Track which columns exist in child schema (for identifying new columns)
+        Set<String> childColumnNames = new HashSet<>();
+        for (StructField field : childSchema.fields()) {
+            childColumnNames.add(field.name());
+        }
+
+        sql.append("SELECT ");
+        boolean first = true;
+
+        // Iterate through child columns IN ORDER to preserve column positions
+        for (StructField field : childSchema.fields()) {
+            if (!first) sql.append(", ");
+            first = false;
+
+            if (modifiedCols.containsKey(field.name())) {
+                // Output modified expression at this position
+                int idx = modifiedCols.get(field.name());
+                Expression expr = plan.columnExpressions().get(idx);
+                String exprSQL = generateExpressionWithCast(expr, childSchema);
+                sql.append(exprSQL).append(" AS ").append(SQLQuoting.quoteIdentifier(field.name()));
+            } else {
+                // Keep original column
+                sql.append(SQLQuoting.quoteIdentifier(field.name()));
+            }
+        }
+
+        // Add any NEW columns (columns not in child schema) at end
+        for (int i = 0; i < plan.columnNames().size(); i++) {
+            String name = plan.columnNames().get(i);
+            if (!childColumnNames.contains(name)) {
+                // This is a new column, not a replacement
+                if (!first) sql.append(", ");
+                first = false;
+                Expression expr = plan.columnExpressions().get(i);
+                String exprSQL = generateExpressionWithCast(expr, childSchema);
+                sql.append(exprSQL).append(" AS ").append(SQLQuoting.quoteIdentifier(name));
+            }
+        }
+
+        sql.append(" FROM (");
+        subqueryDepth++;
+        visit(plan.child());
+        subqueryDepth--;
+        sql.append(") AS _withcol_subquery");
+    }
+
+    /**
+     * Generates expression SQL with optional CAST for decimal division results.
+     */
+    private String generateExpressionWithCast(Expression expr, StructType childSchema) {
+        String exprSQL = expr.toSQL();
+
+        // Check if expression contains a division that should produce DecimalType
+        // DuckDB calculates decimal division differently than Spark, so we need CAST
+        if (childSchema != null) {
+            com.thunderduck.types.DataType resolvedType =
+                com.thunderduck.types.TypeInferenceEngine.resolveType(expr, childSchema);
+            if (resolvedType instanceof com.thunderduck.types.DecimalType) {
+                com.thunderduck.types.DecimalType decType =
+                    (com.thunderduck.types.DecimalType) resolvedType;
+                if (containsDivision(expr)) {
+                    exprSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        exprSQL, decType.precision(), decType.scale());
+                }
+            }
+        }
+        return exprSQL;
+    }
+
+    /**
+     * Legacy COLUMNS()-based approach for WithColumns when schema is unavailable.
+     * This places modified columns at the end but works without schema information.
+     */
+    private void visitWithColumnsLegacy(WithColumns plan, StructType childSchema) {
         sql.append("SELECT COLUMNS(c -> c NOT IN (");
         for (int i = 0; i < plan.columnNames().size(); i++) {
             if (i > 0) sql.append(", ");
@@ -715,41 +801,17 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         }
         sql.append(")), ");
 
-        // Append new column expressions with type-aware CAST for divisions
         for (int i = 0; i < plan.columnNames().size(); i++) {
             if (i > 0) sql.append(", ");
-
             Expression expr = plan.columnExpressions().get(i);
-            String exprSQL = expr.toSQL();
-
-            // Check if expression contains a division that should produce DecimalType
-            // DuckDB calculates decimal division differently than Spark, so we need CAST
-            if (childSchema != null) {
-                com.thunderduck.types.DataType resolvedType =
-                    com.thunderduck.types.TypeInferenceEngine.resolveType(expr, childSchema);
-                if (resolvedType instanceof com.thunderduck.types.DecimalType) {
-                    com.thunderduck.types.DecimalType decType =
-                        (com.thunderduck.types.DecimalType) resolvedType;
-                    // Check if expression contains division (either BinaryExpression or in nested expressions)
-                    if (containsDivision(expr)) {
-                        exprSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
-                            exprSQL, decType.precision(), decType.scale());
-                    }
-                }
-            }
-
-            sql.append(exprSQL);
-            sql.append(" AS ");
-            sql.append(SQLQuoting.quoteIdentifier(plan.columnNames().get(i)));
+            String exprSQL = generateExpressionWithCast(expr, childSchema);
+            sql.append(exprSQL).append(" AS ").append(SQLQuoting.quoteIdentifier(plan.columnNames().get(i)));
         }
 
         sql.append(" FROM (");
-
-        // Visit child
         subqueryDepth++;
         visit(plan.child());
         subqueryDepth--;
-
         sql.append(") AS _withcol_subquery");
     }
 

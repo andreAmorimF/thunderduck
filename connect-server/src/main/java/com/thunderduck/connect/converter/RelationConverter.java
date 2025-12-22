@@ -19,9 +19,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -1285,8 +1287,35 @@ public class RelationConverter {
         String sql = String.format("SELECT * EXCLUDE (%s) FROM (%s) AS _drop_subquery",
             excludeList.toString(), inputSql);
 
+        // Build output schema by removing dropped columns from input schema
+        StructType inputSchema = input.schema();
+        StructType outputSchema = null;
+        if (inputSchema != null && !inputSchema.fields().isEmpty()) {
+            Set<String> droppedCols = new HashSet<>(columnsToDrop);
+            List<StructField> outputFields = new ArrayList<>();
+            for (StructField field : inputSchema.fields()) {
+                if (!droppedCols.contains(field.name())) {
+                    outputFields.add(field);
+                }
+            }
+            outputSchema = new StructType(outputFields);
+        } else if (schemaInferrer != null) {
+            // Fallback: infer schema from DuckDB
+            StructType fullSchema = schemaInferrer.inferSchema(inputSql);
+            if (fullSchema != null) {
+                Set<String> droppedCols = new HashSet<>(columnsToDrop);
+                List<StructField> outputFields = new ArrayList<>();
+                for (StructField field : fullSchema.fields()) {
+                    if (!droppedCols.contains(field.name())) {
+                        outputFields.add(field);
+                    }
+                }
+                outputSchema = new StructType(outputFields);
+            }
+        }
+
         logger.debug("Creating Drop SQL: {}", sql);
-        return new SQLRelation(sql);
+        return new SQLRelation(sql, outputSchema);
     }
 
     /**
@@ -1318,45 +1347,58 @@ public class RelationConverter {
             return input;
         }
 
-        // Generate SQL using COLUMNS() with lambdas for renaming
-        // DuckDB supports: SELECT COLUMNS(c -> IF(c='old', 'new', c)) FROM ...
-        // But a simpler approach is to use explicit aliasing with COLUMNS(*) replacement
-        //
-        // For renaming columns, we use DuckDB's COLUMNS expression with CASE:
-        // SELECT COLUMNS(*) AS (CASE WHEN c.name = 'old' THEN 'new' ELSE c.name END)
-        //
-        // Actually the cleanest approach for renaming is:
-        // SELECT * EXCLUDE (old_col), old_col AS new_col FROM ...
         SQLGenerator generator = new SQLGenerator();
         String inputSql = generator.generate(input);
 
-        // Build the SELECT clause with exclusions and renamed columns
-        StringBuilder excludeList = new StringBuilder();
-        StringBuilder selectAdditions = new StringBuilder();
-        int i = 0;
-        for (Map.Entry<String, String> entry : renameMap.entrySet()) {
-            String oldName = entry.getKey();
-            String newName = entry.getValue();
+        // Compute output schema first so we can generate SQL preserving column order
+        StructType inputSchema = input.schema();
+        String sql;
 
-            if (i > 0) {
-                excludeList.append(", ");
-                selectAdditions.append(", ");
+        if (inputSchema != null && !inputSchema.fields().isEmpty()) {
+            // Generate explicit SELECT list preserving column order
+            StringBuilder selectList = new StringBuilder();
+            for (int i = 0; i < inputSchema.fields().size(); i++) {
+                if (i > 0) selectList.append(", ");
+                StructField field = inputSchema.fieldAt(i);
+
+                if (renameMap.containsKey(field.name())) {
+                    // Rename: output old_col AS new_col at this position
+                    String newName = renameMap.get(field.name());
+                    selectList.append(SQLQuoting.quoteIdentifier(field.name()))
+                              .append(" AS ")
+                              .append(SQLQuoting.quoteIdentifier(newName));
+                } else {
+                    // Keep original column name
+                    selectList.append(SQLQuoting.quoteIdentifier(field.name()));
+                }
             }
-            excludeList.append(SQLQuoting.quoteIdentifier(oldName));
-            selectAdditions.append(SQLQuoting.quoteIdentifier(oldName));
-            selectAdditions.append(" AS ");
-            selectAdditions.append(SQLQuoting.quoteIdentifier(newName));
-            i++;
+            sql = String.format("SELECT %s FROM (%s) AS _rename_subquery",
+                selectList.toString(), inputSql);
+        } else {
+            // Fallback: use EXCLUDE approach when schema unavailable (renamed columns at end)
+            StringBuilder excludeList = new StringBuilder();
+            StringBuilder selectAdditions = new StringBuilder();
+            int i = 0;
+            for (Map.Entry<String, String> entry : renameMap.entrySet()) {
+                String oldName = entry.getKey();
+                String newName = entry.getValue();
+                if (i > 0) {
+                    excludeList.append(", ");
+                    selectAdditions.append(", ");
+                }
+                excludeList.append(SQLQuoting.quoteIdentifier(oldName));
+                selectAdditions.append(SQLQuoting.quoteIdentifier(oldName));
+                selectAdditions.append(" AS ");
+                selectAdditions.append(SQLQuoting.quoteIdentifier(newName));
+                i++;
+            }
+            sql = String.format("SELECT * EXCLUDE (%s), %s FROM (%s) AS _rename_subquery",
+                excludeList.toString(), selectAdditions.toString(), inputSql);
         }
-
-        // SELECT * EXCLUDE (old_cols), old_col AS new_col, ... FROM ...
-        String sql = String.format("SELECT * EXCLUDE (%s), %s FROM (%s) AS _rename_subquery",
-            excludeList.toString(), selectAdditions.toString(), inputSql);
 
         logger.debug("Creating WithColumnsRenamed SQL: {}", sql);
 
         // Compute output schema by applying renames to input schema
-        StructType inputSchema = input.schema();
         StructType outputSchema = null;
         if (inputSchema != null && !inputSchema.fields().isEmpty()) {
             List<StructField> outputFields = new ArrayList<>();
@@ -1688,6 +1730,9 @@ public class RelationConverter {
                 "NAFill requires schema inference, but no connection available");
         }
 
+        // Track which columns actually get COALESCE applied (for nullable inference)
+        Set<String> filledCols = new HashSet<>();
+
         StringBuilder selectList = new StringBuilder();
         for (int i = 0; i < schema.fields().size(); i++) {
             if (i > 0) {
@@ -1702,9 +1747,11 @@ public class RelationConverter {
                 if (values.size() == 1) {
                     // Single value for all columns
                     fillValue = fillValuesSql.get(0);
+                    filledCols.add(colName);
                 } else if (colIndex < fillValuesSql.size()) {
                     // Multiple values matched by position
                     fillValue = fillValuesSql.get(colIndex);
+                    filledCols.add(colName);
                 } else {
                     // Not enough values, don't fill this column
                     selectList.append(SQLQuoting.quoteIdentifier(colName));
@@ -1725,8 +1772,22 @@ public class RelationConverter {
         String sql = String.format("SELECT %s FROM (%s) AS _nafill_subquery",
             selectList.toString(), inputSql);
 
+        // Build output schema with filled columns marked as non-nullable
+        // COALESCE(col, literal) is guaranteed to never return null
+        List<StructField> outputFields = new ArrayList<>();
+        for (StructField field : schema.fields()) {
+            if (filledCols.contains(field.name())) {
+                // Filled column is now non-nullable
+                outputFields.add(new StructField(field.name(), field.dataType(), false));
+            } else {
+                // Keep original nullability
+                outputFields.add(field);
+            }
+        }
+        StructType outputSchema = new StructType(outputFields);
+
         logger.debug("Creating NAFill SQL: {}", sql);
-        return new SQLRelation(sql);
+        return new SQLRelation(sql, outputSchema);
     }
 
     /**
@@ -1956,8 +2017,45 @@ public class RelationConverter {
             valueColList.toString()
         );
 
+        // Build output schema for unpivot
+        // Output columns are: ID columns + variable column + value column
+        StructType outputSchema = null;
+        if (schemaInferrer != null) {
+            StructType inputSchema = schemaInferrer.inferSchema(inputSql);
+            List<StructField> outputFields = new ArrayList<>();
+
+            // 1. ID columns keep their original type/nullable from input
+            for (String idCol : idCols) {
+                for (StructField field : inputSchema.fields()) {
+                    if (field.name().equals(idCol)) {
+                        outputFields.add(field);
+                        break;
+                    }
+                }
+            }
+
+            // 2. Variable column (contains column names as strings) - always non-null
+            outputFields.add(new StructField(variableColumnName,
+                com.thunderduck.types.StringType.get(), false));
+
+            // 3. Value column - determine type from value columns, nullable if any was nullable
+            com.thunderduck.types.DataType valueType = com.thunderduck.types.LongType.get(); // default
+            boolean valueNullable = false;
+            for (StructField field : inputSchema.fields()) {
+                if (valueCols.contains(field.name())) {
+                    valueType = field.dataType(); // Use first value column's type
+                    if (field.nullable()) {
+                        valueNullable = true;
+                    }
+                }
+            }
+            outputFields.add(new StructField(valueColumnName, valueType, valueNullable));
+
+            outputSchema = new StructType(outputFields);
+        }
+
         logger.debug("Creating Unpivot SQL: {}", sql);
-        return new SQLRelation(sql);
+        return new SQLRelation(sql, outputSchema);
     }
 
     /**

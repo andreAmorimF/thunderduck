@@ -260,7 +260,8 @@ class TestHintAndRepartition_Differential:
         """Test repartition operation (no-op passthrough)"""
         def run_test(spark):
             df = spark.read.parquet(str(tpch_data_dir / "nation.parquet"))
-            return df.repartition(4)
+            # Add ORDER BY since repartition doesn't guarantee row order
+            return df.repartition(4).orderBy("n_nationkey")
 
         ref_result = run_test(spark_reference)
         test_result = run_test(spark_thunderduck)

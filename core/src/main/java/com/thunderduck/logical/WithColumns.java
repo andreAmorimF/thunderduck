@@ -8,8 +8,10 @@ import com.thunderduck.types.TypeInferenceEngine;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -113,28 +115,46 @@ public class WithColumns extends LogicalPlan {
             return null;
         }
 
-        // Build set of column names being replaced
-        Set<String> replacedColumns = new HashSet<>(columnNames);
+        // Build map of column names being replaced to their index
+        // This allows O(1) lookup and tracks which columns are replacements vs new
+        Map<String, Integer> replacementIndex = new HashMap<>();
+        for (int i = 0; i < columnNames.size(); i++) {
+            replacementIndex.put(columnNames.get(i), i);
+        }
+
+        // Track which columns exist in child schema
+        Set<String> childColumnNames = new HashSet<>();
+        for (StructField field : childSchema.fields()) {
+            childColumnNames.add(field.name());
+        }
 
         List<StructField> fields = new ArrayList<>();
 
-        // Add all child columns except those being replaced
+        // Iterate through child columns IN ORDER to preserve column positions
         for (StructField field : childSchema.fields()) {
-            if (!replacedColumns.contains(field.name())) {
+            if (replacementIndex.containsKey(field.name())) {
+                // Replace this column at its original position
+                int idx = replacementIndex.get(field.name());
+                Expression expr = columnExpressions.get(idx);
+                DataType type = resolveExpressionType(expr, childSchema);
+                boolean nullable = resolveNullable(expr, childSchema);
+                fields.add(new StructField(field.name(), type, nullable));
+            } else {
+                // Keep original column
                 fields.add(field);
             }
         }
 
-        // Add new/replaced columns
+        // Add any NEW columns (columns that don't exist in child schema) at end
         for (int i = 0; i < columnNames.size(); i++) {
             String name = columnNames.get(i);
-            Expression expr = columnExpressions.get(i);
-
-            // Get type and nullable from expression, resolving against child schema
-            DataType type = resolveExpressionType(expr, childSchema);
-            boolean nullable = resolveNullable(expr, childSchema);
-
-            fields.add(new StructField(name, type, nullable));
+            if (!childColumnNames.contains(name)) {
+                // This is a new column, not a replacement
+                Expression expr = columnExpressions.get(i);
+                DataType type = resolveExpressionType(expr, childSchema);
+                boolean nullable = resolveNullable(expr, childSchema);
+                fields.add(new StructField(name, type, nullable));
+            }
         }
 
         return new StructType(fields);
