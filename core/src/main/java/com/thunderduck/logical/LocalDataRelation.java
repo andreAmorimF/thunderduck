@@ -1,5 +1,6 @@
 package com.thunderduck.logical;
 
+import com.thunderduck.runtime.ArrowInterchange;
 import com.thunderduck.types.SchemaParser;
 import com.thunderduck.types.StructType;
 import org.apache.arrow.memory.RootAllocator;
@@ -160,15 +161,16 @@ public class LocalDataRelation extends LogicalPlan {
             return schema;
         }
 
-        // Try to infer from Arrow data
+        // Try to infer from Arrow data first (preserves nullable flags correctly)
         VectorSchemaRoot root = deserializeArrowData();
         if (root != null) {
-            // Convert Arrow schema to StructType
-            // TODO: Implement Arrow to StructType conversion
-            logger.warn("Schema inference from Arrow not yet implemented");
+            schema = ArrowInterchange.arrowSchemaToStructType(root.getSchema());
+            logger.debug("Inferred schema from Arrow data: {}", schema);
+            return schema;
         }
 
-        // Try to parse schema string (Spark struct format: struct<name:type,...>)
+        // Fallback to schema string parsing
+        // Note: DDL format (struct<name:type>) loses nullable info - JSON format preserves it
         if (schemaStr != null && !schemaStr.isEmpty()) {
             try {
                 schema = SchemaParser.parse(schemaStr);

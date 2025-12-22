@@ -44,7 +44,7 @@ class TestNullOrdering:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "asc_nulls_first", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "asc_nulls_first")
 
     @pytest.mark.timeout(30)
     def test_asc_nulls_last(self, spark_reference, spark_thunderduck):
@@ -60,7 +60,7 @@ class TestNullOrdering:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "asc_nulls_last", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "asc_nulls_last")
 
     @pytest.mark.timeout(30)
     def test_desc_nulls_first(self, spark_reference, spark_thunderduck):
@@ -76,7 +76,7 @@ class TestNullOrdering:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "desc_nulls_first", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "desc_nulls_first")
 
     @pytest.mark.timeout(30)
     def test_desc_nulls_last(self, spark_reference, spark_thunderduck):
@@ -92,7 +92,7 @@ class TestNullOrdering:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "desc_nulls_last", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "desc_nulls_last")
 
     @pytest.mark.timeout(30)
     def test_string_nulls_first(self, spark_reference, spark_thunderduck):
@@ -108,7 +108,7 @@ class TestNullOrdering:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "string_nulls_first", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "string_nulls_first")
 
 
 # =============================================================================
@@ -141,7 +141,7 @@ class TestMultiColumnSorting:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "multi_column_mixed_asc_desc", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "multi_column_mixed_asc_desc")
 
     @pytest.mark.timeout(30)
     def test_multi_column_mixed_nulls(self, spark_reference, spark_thunderduck):
@@ -167,7 +167,7 @@ class TestMultiColumnSorting:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "multi_column_mixed_nulls", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "multi_column_mixed_nulls")
 
     @pytest.mark.timeout(30)
     def test_three_column_sort(self, spark_reference, spark_thunderduck):
@@ -196,7 +196,7 @@ class TestMultiColumnSorting:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "three_column_sort", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "three_column_sort")
 
 
 # =============================================================================
@@ -223,7 +223,7 @@ class TestSortingEdgeCases:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "sort_all_nulls", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "sort_all_nulls")
 
     @pytest.mark.timeout(30)
     def test_sort_with_ties_and_nulls(self, spark_reference, spark_thunderduck):
@@ -249,7 +249,7 @@ class TestSortingEdgeCases:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "sort_with_ties_and_nulls", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "sort_with_ties_and_nulls")
 
     @pytest.mark.timeout(30)
     def test_sort_empty_dataframe(self, spark_reference, spark_thunderduck):
@@ -264,7 +264,7 @@ class TestSortingEdgeCases:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "sort_empty_dataframe", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "sort_empty_dataframe")
 
     @pytest.mark.timeout(30)
     def test_sort_single_row(self, spark_reference, spark_thunderduck):
@@ -280,4 +280,4 @@ class TestSortingEdgeCases:
 
         ref = run_test(spark_reference)
         td = run_test(spark_thunderduck)
-        assert_dataframes_equal(ref, td, "sort_single_row", ignore_nullable=True)
+        assert_dataframes_equal(ref, td, "sort_single_row")

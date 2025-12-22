@@ -636,7 +636,13 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         // whose return types depend on DuckDB execution, not static type inference.
                         LogicalPlan logicalPlan = createPlanConverter(session).convert(plan);
                         sql = sqlGenerator.generate(logicalPlan);
-                        schema = inferSchemaFromDuckDB(sql, sessionId);
+                        com.thunderduck.types.StructType duckDBSchema = inferSchemaFromDuckDB(sql, sessionId);
+
+                        // Merge: use DuckDB types but preserve nullable flags from logical plan
+                        // DuckDB returns all columns as nullable=true, but the logical plan
+                        // has correct nullable info from input schemas (e.g., LocalDataRelation)
+                        com.thunderduck.types.StructType logicalSchema = logicalPlan.schema();
+                        schema = mergeSchemas(duckDBSchema, logicalSchema);
                     }
 
                     // Convert to Spark Connect proto DataType
@@ -2002,6 +2008,44 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             logger.debug("Inferred schema with {} fields", fields.size());
             return new com.thunderduck.types.StructType(fields);
         }
+    }
+
+    /**
+     * Merges two schemas: uses types from duckDBSchema but nullable flags from logicalSchema.
+     *
+     * <p>DuckDB returns all columns as nullable=true. The logical plan has correct nullable
+     * info from input schemas (e.g., LocalDataRelation with Arrow data from PySpark).
+     * This method preserves the DuckDB data types (important for aggregates) while using
+     * the logical plan's nullable flags (important for schema fidelity).
+     *
+     * @param duckDBSchema Schema from DuckDB execution (correct types, all nullable)
+     * @param logicalSchema Schema from logical plan (correct nullable, may have different types)
+     * @return Merged schema with DuckDB types and logical plan nullable flags
+     */
+    private com.thunderduck.types.StructType mergeSchemas(
+            com.thunderduck.types.StructType duckDBSchema,
+            com.thunderduck.types.StructType logicalSchema) {
+
+        if (logicalSchema == null || logicalSchema.size() != duckDBSchema.size()) {
+            // Can't merge if schemas have different sizes - just return DuckDB schema
+            logger.debug("Schema sizes differ, returning DuckDB schema");
+            return duckDBSchema;
+        }
+
+        java.util.List<com.thunderduck.types.StructField> mergedFields = new java.util.ArrayList<>();
+        for (int i = 0; i < duckDBSchema.size(); i++) {
+            com.thunderduck.types.StructField duckField = duckDBSchema.fields().get(i);
+            com.thunderduck.types.StructField logicalField = logicalSchema.fields().get(i);
+
+            // Use DuckDB's type (correct for aggregates) but logical plan's nullable
+            mergedFields.add(new com.thunderduck.types.StructField(
+                duckField.name(),
+                duckField.dataType(),
+                logicalField.nullable()
+            ));
+        }
+
+        return new com.thunderduck.types.StructType(mergedFields);
     }
 
     /**

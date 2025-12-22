@@ -1,5 +1,6 @@
 package com.thunderduck.runtime;
 
+import com.thunderduck.types.*;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.*;
 import org.apache.arrow.vector.types.pojo.*;
@@ -197,6 +198,120 @@ public class ArrowInterchange {
             case Decimal: return "DECIMAL";
             default: return "VARCHAR";
         }
+    }
+
+    /**
+     * Converts Arrow Schema to thunderduck StructType, preserving nullable flags.
+     *
+     * <p>This method correctly extracts the nullable flag from each Arrow Field,
+     * which is important for schema fidelity when PySpark sends DataFrames with
+     * explicit nullable=False fields.
+     *
+     * @param arrowSchema the Arrow schema
+     * @return the thunderduck StructType with correct nullable flags
+     */
+    public static StructType arrowSchemaToStructType(Schema arrowSchema) {
+        List<StructField> fields = new ArrayList<>();
+        for (Field arrowField : arrowSchema.getFields()) {
+            DataType fieldType = arrowFieldToDataType(arrowField);
+            fields.add(new StructField(
+                arrowField.getName(),
+                fieldType,
+                arrowField.isNullable()
+            ));
+        }
+        return new StructType(fields);
+    }
+
+    /**
+     * Converts Arrow Field to thunderduck DataType.
+     *
+     * <p>Handles complex types (List, Map, Struct) by recursively converting child fields.
+     *
+     * @param arrowField the Arrow field
+     * @return the thunderduck DataType
+     */
+    public static DataType arrowFieldToDataType(Field arrowField) {
+        ArrowType arrowType = arrowField.getType();
+        List<Field> children = arrowField.getChildren();
+
+        // Handle complex types first (they need access to children)
+        if (arrowType instanceof ArrowType.List) {
+            // Arrow List has one child field (the element type)
+            if (children != null && !children.isEmpty()) {
+                Field elementField = children.get(0);
+                DataType elementType = arrowFieldToDataType(elementField);
+                boolean containsNull = elementField.isNullable();
+                return new ArrayType(elementType, containsNull);
+            }
+            // Fallback for empty list - default to string element
+            return new ArrayType(StringType.get(), true);
+        } else if (arrowType instanceof ArrowType.Map) {
+            // Arrow Map has one child field (entries struct with key and value fields)
+            if (children != null && !children.isEmpty()) {
+                Field entriesField = children.get(0);
+                List<Field> entryChildren = entriesField.getChildren();
+                if (entryChildren != null && entryChildren.size() >= 2) {
+                    DataType keyType = arrowFieldToDataType(entryChildren.get(0));
+                    DataType valueType = arrowFieldToDataType(entryChildren.get(1));
+                    boolean valueContainsNull = entryChildren.get(1).isNullable();
+                    return new MapType(keyType, valueType, valueContainsNull);
+                }
+            }
+            // Fallback
+            return new MapType(StringType.get(), StringType.get(), true);
+        } else if (arrowType instanceof ArrowType.Struct) {
+            // Arrow Struct has child fields for each struct field
+            List<StructField> structFields = new ArrayList<>();
+            if (children != null) {
+                for (Field child : children) {
+                    DataType childType = arrowFieldToDataType(child);
+                    structFields.add(new StructField(
+                        child.getName(),
+                        childType,
+                        child.isNullable()
+                    ));
+                }
+            }
+            return new StructType(structFields);
+        }
+
+        // Handle primitive types
+        if (arrowType instanceof ArrowType.Int) {
+            ArrowType.Int intType = (ArrowType.Int) arrowType;
+            if (intType.getBitWidth() == 32) {
+                return IntegerType.get();
+            } else if (intType.getBitWidth() == 64) {
+                return LongType.get();
+            } else if (intType.getBitWidth() == 16) {
+                return ShortType.get();
+            } else if (intType.getBitWidth() == 8) {
+                return ByteType.get();
+            }
+        } else if (arrowType instanceof ArrowType.FloatingPoint) {
+            ArrowType.FloatingPoint fpType = (ArrowType.FloatingPoint) arrowType;
+            if (fpType.getPrecision() == FloatingPointPrecision.DOUBLE) {
+                return DoubleType.get();
+            } else if (fpType.getPrecision() == FloatingPointPrecision.SINGLE) {
+                return FloatType.get();
+            }
+        } else if (arrowType instanceof ArrowType.Utf8 || arrowType instanceof ArrowType.LargeUtf8) {
+            return StringType.get();
+        } else if (arrowType instanceof ArrowType.Bool) {
+            return BooleanType.get();
+        } else if (arrowType instanceof ArrowType.Date) {
+            return DateType.get();
+        } else if (arrowType instanceof ArrowType.Timestamp) {
+            return TimestampType.get();
+        } else if (arrowType instanceof ArrowType.Decimal) {
+            ArrowType.Decimal decimalType = (ArrowType.Decimal) arrowType;
+            return new DecimalType(decimalType.getPrecision(), decimalType.getScale());
+        } else if (arrowType instanceof ArrowType.Binary || arrowType instanceof ArrowType.LargeBinary) {
+            return BinaryType.get();
+        }
+
+        // Default to string for unknown types
+        return StringType.get();
     }
 
     /**
