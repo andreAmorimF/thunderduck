@@ -1088,15 +1088,18 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             collectPlanIds(plan.left(), leftAlias, planIdToAlias);
             collectPlanIds(plan.right(), rightAlias, planIdToAlias);
 
+            // Generate SELECT clause - use explicit column list for USING joins to deduplicate
+            String selectClause = generateJoinSelectClause(plan, leftAlias, rightAlias);
+
             // LEFT SIDE - use direct aliasing for TableScan, handle AliasedRelation, wrap others
             if (leftPlan instanceof AliasedRelation) {
                 // User provided an alias - generate SQL using that alias directly
                 AliasedRelation aliased = (AliasedRelation) leftPlan;
                 String childSource = getDirectlyAliasableSource(aliased.child());
                 if (childSource != null) {
-                    sql.append("SELECT * FROM ").append(childSource).append(" AS ").append(leftAlias);
+                    sql.append(selectClause).append(" FROM ").append(childSource).append(" AS ").append(leftAlias);
                 } else {
-                    sql.append("SELECT * FROM (");
+                    sql.append(selectClause).append(" FROM (");
                     subqueryDepth++;
                     visit(aliased.child());
                     subqueryDepth--;
@@ -1105,9 +1108,9 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             } else {
                 String leftSource = getDirectlyAliasableSource(leftPlan);
                 if (leftSource != null) {
-                    sql.append("SELECT * FROM ").append(leftSource).append(" AS ").append(leftAlias);
+                    sql.append(selectClause).append(" FROM ").append(leftSource).append(" AS ").append(leftAlias);
                 } else {
-                    sql.append("SELECT * FROM (");
+                    sql.append(selectClause).append(" FROM (");
                     subqueryDepth++;
                     visit(leftPlan);
                     subqueryDepth--;
@@ -1874,5 +1877,77 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      */
     public int getSubqueryDepth() {
         return subqueryDepth;
+    }
+
+    /**
+     * Generates the SELECT clause for a join.
+     *
+     * <p>For USING joins, generates an explicit column list to deduplicate
+     * the join columns. For regular joins (ON clause), returns "SELECT *".
+     *
+     * <p>For RIGHT and FULL outer joins with USING columns, we use COALESCE
+     * to ensure the join column value comes from whichever side has a non-NULL
+     * value, since the left side may be NULL.
+     *
+     * @param plan the Join plan
+     * @param leftAlias the alias for the left side
+     * @param rightAlias the alias for the right side
+     * @return the SELECT clause (without trailing space)
+     */
+    private String generateJoinSelectClause(Join plan, String leftAlias, String rightAlias) {
+        List<String> usingColumns = plan.usingColumns();
+
+        // For non-USING joins, just return SELECT *
+        if (usingColumns == null || usingColumns.isEmpty()) {
+            return "SELECT *";
+        }
+
+        // Get schemas for building explicit column list
+        com.thunderduck.types.StructType leftSchema = plan.left().schema();
+        com.thunderduck.types.StructType rightSchema = plan.right().schema();
+
+        // If schemas aren't available or empty, fall back to SELECT *
+        if (leftSchema == null || rightSchema == null ||
+            leftSchema.fields().isEmpty() || rightSchema.fields().isEmpty()) {
+            return "SELECT *";
+        }
+
+        // Build explicit column list for USING joins
+        // Spark column order: USING columns first, then non-USING left, then non-USING right
+        Set<String> usingSet = new HashSet<>(usingColumns);
+        List<String> selectItems = new ArrayList<>();
+
+        // Determine if we need COALESCE for USING columns (RIGHT/FULL outer joins)
+        boolean needsCoalesce = (plan.joinType() == Join.JoinType.RIGHT ||
+                                 plan.joinType() == Join.JoinType.FULL);
+
+        // 1. First, add USING columns (in the order they appear in usingColumns list)
+        for (String usingCol : usingColumns) {
+            String quotedName = SQLQuoting.quoteIdentifier(usingCol);
+            if (needsCoalesce) {
+                // For RIGHT/FULL joins, use COALESCE to get value from whichever side has it
+                selectItems.add(String.format("COALESCE(%s.%s, %s.%s) AS %s",
+                    leftAlias, quotedName, rightAlias, quotedName, quotedName));
+            } else {
+                selectItems.add(leftAlias + "." + quotedName);
+            }
+        }
+
+        // 2. Add non-USING columns from left side
+        for (com.thunderduck.types.StructField field : leftSchema.fields()) {
+            if (!usingSet.contains(field.name())) {
+                selectItems.add(leftAlias + "." + SQLQuoting.quoteIdentifier(field.name()));
+            }
+        }
+
+        // 3. Add non-USING columns from right side
+        for (com.thunderduck.types.StructField field : rightSchema.fields()) {
+            if (!usingSet.contains(field.name())) {
+                selectItems.add(rightAlias + "." +
+                    SQLQuoting.quoteIdentifier(field.name()));
+            }
+        }
+
+        return "SELECT " + String.join(", ", selectItems);
     }
 }

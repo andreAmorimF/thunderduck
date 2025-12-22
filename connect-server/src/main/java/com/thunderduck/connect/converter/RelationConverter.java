@@ -974,6 +974,7 @@ public class RelationConverter {
         LogicalPlan right = convert(join.getRight());
 
         Expression condition = null;
+        List<String> usingColumnNames = java.util.Collections.emptyList();
 
         // Pattern 1: Explicit join condition
         if (join.hasJoinCondition()) {
@@ -981,7 +982,8 @@ public class RelationConverter {
         }
         // Pattern 2: USING columns - build equality condition from column names
         else if (join.getUsingColumnsCount() > 0) {
-            condition = buildUsingCondition(join.getUsingColumnsList(), left, right);
+            usingColumnNames = join.getUsingColumnsList();
+            condition = buildUsingCondition(usingColumnNames, left, right);
         }
 
         // Map join type
@@ -989,7 +991,8 @@ public class RelationConverter {
 
         logger.debug("Creating Join of type: {} with {} using columns",
                      joinType, join.getUsingColumnsCount());
-        return new com.thunderduck.logical.Join(left, right, joinType, condition);
+        // Pass usingColumnNames for USING join column deduplication
+        return new com.thunderduck.logical.Join(left, right, joinType, condition, usingColumnNames);
     }
 
     /**
@@ -1298,7 +1301,20 @@ public class RelationConverter {
             excludeList.toString(), selectAdditions.toString(), inputSql);
 
         logger.debug("Creating WithColumnsRenamed SQL: {}", sql);
-        return new SQLRelation(sql);
+
+        // Compute output schema by applying renames to input schema
+        StructType inputSchema = input.schema();
+        StructType outputSchema = null;
+        if (inputSchema != null && !inputSchema.fields().isEmpty()) {
+            List<StructField> outputFields = new ArrayList<>();
+            for (StructField field : inputSchema.fields()) {
+                String newName = renameMap.getOrDefault(field.name(), field.name());
+                outputFields.add(new StructField(newName, field.dataType(), field.nullable()));
+            }
+            outputSchema = new StructType(outputFields);
+        }
+
+        return new SQLRelation(sql, outputSchema);
     }
 
     /**
