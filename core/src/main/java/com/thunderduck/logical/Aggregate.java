@@ -399,36 +399,47 @@ public class Aggregate extends LogicalPlan {
 
         @Override
         public String toSQL() {
-            StringBuilder sql = new StringBuilder();
-            sql.append(function.toUpperCase());
-            sql.append("(");
-
-            // Add DISTINCT keyword if specified
-            if (distinct) {
-                sql.append("DISTINCT ");
-            }
-
-            // Add argument or * for COUNT(*)
+            // Build argument SQL first
+            String argSQL;
             if (argument != null) {
                 // Special case: COUNT(*) where * is passed as a Literal
                 if (function.equalsIgnoreCase("COUNT") &&
                     argument instanceof com.thunderduck.expression.Literal &&
                     "*".equals(((com.thunderduck.expression.Literal) argument).value())) {
-                    sql.append("*");
+                    argSQL = "*";
                 } else {
-                    sql.append(argument.toSQL());
+                    argSQL = argument.toSQL();
                 }
             } else {
                 // COUNT(*) case - DISTINCT not allowed with *
-                if (!distinct) {
-                    sql.append("*");
-                }
-                // If distinct is true and argument is null, we don't add *
-                // This should be validated elsewhere as an error case
+                argSQL = distinct ? null : "*";
             }
 
-            sql.append(")");
-            return sql.toString();
+            // Add DISTINCT prefix if specified
+            String finalArgSQL = argSQL;
+            if (distinct && argSQL != null) {
+                finalArgSQL = "DISTINCT " + argSQL;
+            }
+
+            // Translate function name using registry (handles sort_array -> list_sort, etc.)
+            try {
+                if (finalArgSQL != null) {
+                    return com.thunderduck.functions.FunctionRegistry.translate(function, finalArgSQL);
+                } else {
+                    // No argument case - translate with empty args
+                    return com.thunderduck.functions.FunctionRegistry.translate(function);
+                }
+            } catch (UnsupportedOperationException e) {
+                // Fallback to uppercase function name if not in registry
+                StringBuilder sql = new StringBuilder();
+                sql.append(function.toUpperCase());
+                sql.append("(");
+                if (finalArgSQL != null) {
+                    sql.append(finalArgSQL);
+                }
+                sql.append(")");
+                return sql.toString();
+            }
         }
 
         @Override

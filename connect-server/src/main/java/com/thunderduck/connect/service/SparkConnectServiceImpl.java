@@ -631,16 +631,12 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         schema = inferSchemaFromDuckDB(sql, sessionId);
 
                     } else {
-                        // Regular plan - deserialize and extract schema
+                        // Regular plan - convert to SQL and infer schema from DuckDB
+                        // This ensures correct types for aggregate functions (collect_list, countDistinct, etc.)
+                        // whose return types depend on DuckDB execution, not static type inference.
                         LogicalPlan logicalPlan = createPlanConverter(session).convert(plan);
-                        schema = logicalPlan.schema();
-
-                        if (schema == null || schema.size() == 0) {
-                            // Infer schema from generated SQL when plan doesn't provide schema
-                            // (e.g., SQLRelation returns empty schema since it can't infer without DuckDB)
-                            sql = sqlGenerator.generate(logicalPlan);
-                            schema = inferSchemaFromDuckDB(sql, sessionId);
-                        }
+                        sql = sqlGenerator.generate(logicalPlan);
+                        schema = inferSchemaFromDuckDB(sql, sessionId);
                     }
 
                     // Convert to Spark Connect proto DataType
@@ -2022,11 +2018,13 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             if (children != null && !children.isEmpty()) {
                 org.apache.arrow.vector.types.pojo.Field elementField = children.get(0);
                 com.thunderduck.types.DataType elementType = convertArrowFieldToDataType(elementField);
-                boolean containsNull = elementField.isNullable();
+                // Use containsNull=false to match Spark's collect_list/collect_set behavior
+                // DuckDB marks list elements as nullable, but Spark uses non-nullable
+                boolean containsNull = false;
                 return new com.thunderduck.types.ArrayType(elementType, containsNull);
             }
             // Fallback for empty list - default to string element
-            return new com.thunderduck.types.ArrayType(com.thunderduck.types.StringType.get(), true);
+            return new com.thunderduck.types.ArrayType(com.thunderduck.types.StringType.get(), false);
         } else if (arrowType instanceof org.apache.arrow.vector.types.pojo.ArrowType.Map) {
             // Arrow Map has one child field (entries struct with key and value fields)
             if (children != null && !children.isEmpty()) {

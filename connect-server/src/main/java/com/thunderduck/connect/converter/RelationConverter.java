@@ -337,7 +337,50 @@ public class RelationConverter {
             if (expr instanceof FunctionCall) {
                 FunctionCall func = (FunctionCall) expr;
                 functionName = func.functionName();
-                argument = func.arguments().isEmpty() ? null : func.arguments().get(0);
+
+                // Handle multi-argument aggregate functions
+                List<Expression> args = func.arguments();
+                if (args.isEmpty()) {
+                    argument = null;
+                } else if (args.size() == 1) {
+                    argument = args.get(0);
+                } else {
+                    // Multiple arguments - for countDistinct, wrap in ROW() for proper tuple semantics
+                    // DuckDB's COUNT(DISTINCT col1, col2) only counts distinct col1 (wrong!)
+                    // Instead, use COUNT(DISTINCT ROW(col1, col2)) to count distinct tuples
+                    String funcLower = functionName.toLowerCase();
+                    if (funcLower.equals("count_distinct") || funcLower.equals("countdistinct")) {
+                        // Create an inline expression that outputs ROW(col1, col2, ...)
+                        final List<Expression> capturedArgs = args;
+                        argument = new Expression() {
+                            @Override
+                            public com.thunderduck.types.DataType dataType() {
+                                return com.thunderduck.types.StringType.get(); // Placeholder
+                            }
+                            @Override
+                            public boolean nullable() {
+                                return true;
+                            }
+                            @Override
+                            public String toSQL() {
+                                String argsSQL = capturedArgs.stream()
+                                    .map(Expression::toSQL)
+                                    .collect(Collectors.joining(", "));
+                                return "ROW(" + argsSQL + ")";
+                            }
+                            @Override
+                            public String toString() {
+                                return toSQL();
+                            }
+                        };
+                        logger.debug("Wrapped {} arguments in ROW() for countDistinct", args.size());
+                    } else {
+                        // For other multi-arg functions, just use the first argument
+                        // (may need to handle more cases in the future)
+                        argument = args.get(0);
+                        logger.warn("Multi-argument aggregate {} only using first argument", functionName);
+                    }
+                }
             } else {
                 logger.warn("Unexpected aggregate expression type: {}", expr.getClass().getSimpleName());
                 continue;

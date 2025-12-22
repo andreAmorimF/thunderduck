@@ -89,6 +89,11 @@ public class SchemaInferrer {
             return parseDecimalType(upper);
         }
 
+        // Handle LIST types: LIST(INTEGER), INTEGER[], VARCHAR[]
+        if (upper.startsWith("LIST(") || upper.endsWith("[]")) {
+            return parseListType(upper);
+        }
+
         // Normalize: uppercase and remove size specifiers like VARCHAR(255)
         String normalized = upper.replaceAll("\\(.*\\)", "").trim();
 
@@ -183,13 +188,38 @@ public class SchemaInferrer {
                 return StringType.get();
 
             default:
-                // For complex types like STRUCT, LIST, MAP - return STRING for now
-                if (normalized.startsWith("STRUCT") || normalized.startsWith("MAP") ||
-                    normalized.startsWith("LIST") || normalized.contains("[]")) {
+                // For complex types like STRUCT, MAP - return STRING for now
+                // Note: LIST types are now handled separately above
+                if (normalized.startsWith("STRUCT") || normalized.startsWith("MAP")) {
                     return StringType.get();
                 }
                 return StringType.get(); // Safe fallback
         }
+    }
+
+    /**
+     * Parses a LIST type string to an ArrayType.
+     *
+     * @param typeStr the type string like "LIST(INTEGER)" or "INTEGER[]"
+     * @return the ArrayType with the correct element type
+     */
+    private static DataType parseListType(String typeStr) {
+        String elementTypeStr;
+
+        if (typeStr.endsWith("[]")) {
+            // Format: INTEGER[], VARCHAR[], etc.
+            elementTypeStr = typeStr.substring(0, typeStr.length() - 2).trim();
+        } else if (typeStr.startsWith("LIST(") && typeStr.endsWith(")")) {
+            // Format: LIST(INTEGER), LIST(VARCHAR), etc.
+            elementTypeStr = typeStr.substring(5, typeStr.length() - 1).trim();
+        } else {
+            // Fallback - shouldn't happen but return default ArrayType
+            return new ArrayType(StringType.get(), true);
+        }
+
+        // Recursively resolve element type (handles nested arrays)
+        DataType elementType = mapDuckDBType(elementTypeStr);
+        return new ArrayType(elementType, true);
     }
 
     /**

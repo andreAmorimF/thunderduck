@@ -436,7 +436,14 @@ public class FunctionRegistry {
 
     private static void initializeAggregateFunctions() {
         // Basic aggregates
-        DIRECT_MAPPINGS.put("sum", "sum");
+        // SUM needs special handling: DuckDB returns DECIMAL(38,0) for integer inputs,
+        // but Spark returns BIGINT. Cast to BIGINT for Spark compatibility.
+        CUSTOM_TRANSLATORS.put("sum", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("sum requires at least 1 argument");
+            }
+            return "CAST(SUM(" + args[0] + ") AS BIGINT)";
+        });
         DIRECT_MAPPINGS.put("avg", "avg");
         DIRECT_MAPPINGS.put("mean", "avg");
         DIRECT_MAPPINGS.put("min", "min");
@@ -452,10 +459,32 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("var_pop", "var_pop");
 
         // Collection aggregates
-        DIRECT_MAPPINGS.put("collect_list", "list");
-        DIRECT_MAPPINGS.put("collect_set", "list_distinct");
+        // Note: collect_list and collect_set use custom translators (see below)
+        // collect_list maps to list() but needs FILTER to exclude NULLs (matching Spark semantics)
         DIRECT_MAPPINGS.put("first", "first");
         DIRECT_MAPPINGS.put("last", "last");
+
+        // collect_list: DuckDB's list() includes NULLs, but Spark excludes them
+        // Use FILTER clause to match Spark semantics
+        CUSTOM_TRANSLATORS.put("collect_list", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("collect_list requires at least 1 argument");
+            }
+            String arg = args[0];
+            // Use FILTER clause to exclude NULLs (matching Spark semantics)
+            return "list(" + arg + ") FILTER (WHERE " + arg + " IS NOT NULL)";
+        });
+
+        // collect_set requires wrapping: list_distinct(list(arg))
+        // DuckDB's list() aggregates all values, list_distinct() removes duplicates
+        // Also use FILTER clause to exclude NULLs (matching Spark semantics)
+        CUSTOM_TRANSLATORS.put("collect_set", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("collect_set requires at least 1 argument");
+            }
+            String arg = args[0];
+            return "list_distinct(list(" + arg + ") FILTER (WHERE " + arg + " IS NOT NULL))";
+        });
 
         // Other aggregates
         DIRECT_MAPPINGS.put("approx_count_distinct", "approx_count_distinct");
@@ -466,8 +495,17 @@ public class FunctionRegistry {
         // DISTINCT aggregate functions - DISTINCT keyword goes inside parentheses
         // These handle Spark's countDistinct(), sumDistinct() etc. which arrive as
         // "count_distinct", "sum_distinct" after ExpressionConverter appends "_DISTINCT"
-        CUSTOM_TRANSLATORS.put("count_distinct", args ->
-            "COUNT(DISTINCT " + String.join(", ", args) + ")");
+        CUSTOM_TRANSLATORS.put("count_distinct", args -> {
+            if (args.length == 1) {
+                return "COUNT(DISTINCT " + args[0] + ")";
+            } else {
+                // Multiple columns: wrap in ROW() for DuckDB tuple semantics
+                // Spark: COUNT(DISTINCT col1, col2) counts distinct (col1, col2) pairs
+                // DuckDB: COUNT(DISTINCT col1, col2) only counts distinct col1 (WRONG!)
+                // Solution: COUNT(DISTINCT ROW(col1, col2)) counts distinct tuples
+                return "COUNT(DISTINCT ROW(" + String.join(", ", args) + "))";
+            }
+        });
         CUSTOM_TRANSLATORS.put("sum_distinct", args ->
             "SUM(DISTINCT " + String.join(", ", args) + ")");
         CUSTOM_TRANSLATORS.put("avg_distinct", args ->
@@ -504,7 +542,7 @@ public class FunctionRegistry {
         // Note: array_sort and sort_array use custom translators (see below)
         DIRECT_MAPPINGS.put("array_max", "list_max");
         DIRECT_MAPPINGS.put("array_min", "list_min");
-        DIRECT_MAPPINGS.put("size", "len");
+        // Note: size uses custom translator to cast to INT (see below)
         DIRECT_MAPPINGS.put("explode", "unnest");
         DIRECT_MAPPINGS.put("flatten", "flatten");
         // Note: "reverse" for strings is mapped above (line 128) to DuckDB's reverse()
@@ -537,6 +575,14 @@ public class FunctionRegistry {
         });
         // Note: exists, forall require special handling in ExpressionConverter
         // as they need to wrap list_transform with list_any/list_all
+
+        // size() returns INT in Spark but DuckDB len() returns BIGINT - need CAST
+        CUSTOM_TRANSLATORS.put("size", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("size requires at least 1 argument");
+            }
+            return "CAST(len(" + args[0] + ") AS INTEGER)";
+        });
 
         // Custom translators for sort_array/array_sort
         // Spark uses boolean (TRUE=asc, FALSE=desc), DuckDB uses string ('ASC'/'DESC')

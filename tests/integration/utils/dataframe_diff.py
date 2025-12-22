@@ -71,7 +71,8 @@ class DataFrameDiff:
         test_df: DataFrame,
         query_name: str = "Query",
         max_diff_rows: int = 10,
-        timeout: int = 30
+        timeout: int = 30,
+        ignore_nullable: bool = False
     ) -> Tuple[bool, str, dict]:
         """
         Compare two DataFrames and produce detailed diff
@@ -82,6 +83,7 @@ class DataFrameDiff:
             query_name: Name of the query for logging
             max_diff_rows: Maximum number of diff rows to show
             timeout: Timeout in seconds for each collect() operation (default: 30)
+            ignore_nullable: If True, ignore nullable mismatches between schemas
 
         Returns:
             Tuple of (passed: bool, message: str, stats: dict)
@@ -101,7 +103,7 @@ class DataFrameDiff:
 
         # 1. Compare schemas
         schema_match, schema_msg = self._compare_schemas(
-            reference_df.schema, test_df.schema
+            reference_df.schema, test_df.schema, ignore_nullable
         )
         stats['schemas_match'] = schema_match
 
@@ -163,10 +165,16 @@ class DataFrameDiff:
         return True, "Results match perfectly", stats
 
     def _compare_schemas(
-        self, reference_schema: StructType, test_schema: StructType
+        self, reference_schema: StructType, test_schema: StructType,
+        ignore_nullable: bool = False
     ) -> Tuple[bool, str]:
         """
         Compare two schemas
+
+        Args:
+            reference_schema: The reference schema (Spark)
+            test_schema: The test schema (Thunderduck)
+            ignore_nullable: If True, ignore nullable mismatches (DuckDB vs Spark differences)
 
         Returns:
             Tuple of (match: bool, message: str)
@@ -193,7 +201,7 @@ class DataFrameDiff:
                     f"  Column '{ref_name}': type mismatch - Reference={ref_type}, Test={test_type}"
                 )
 
-            if ref_nullable != test_nullable:
+            if ref_nullable != test_nullable and not ignore_nullable:
                 mismatches.append(
                     f"  Column '{ref_name}': nullable mismatch - Reference={ref_nullable}, Test={test_nullable}"
                 )
@@ -338,7 +346,8 @@ def assert_dataframes_equal(
     epsilon: float = 1e-6,
     max_diff_rows: int = 10,
     timeout: int = 30,
-    orchestrator=None
+    orchestrator=None,
+    ignore_nullable: bool = False
 ):
     """
     Assert that two DataFrames are equal, with detailed diff on failure.
@@ -358,6 +367,7 @@ def assert_dataframes_equal(
         max_diff_rows: Maximum number of diff rows to show
         timeout: Timeout in seconds for each collect() operation (default: 30)
         orchestrator: Optional TestOrchestrator instance for timing and health checks
+        ignore_nullable: If True, ignore nullable mismatches (DuckDB vs Spark differences)
 
     Raises:
         AssertionError: If DataFrames don't match
@@ -375,7 +385,8 @@ def assert_dataframes_equal(
                 query_name=query_name,
                 timeout=timeout,
                 epsilon=epsilon,
-                max_diff_rows=max_diff_rows
+                max_diff_rows=max_diff_rows,
+                ignore_nullable=ignore_nullable
             )
         except ResultMismatchError as e:
             raise AssertionError(str(e)) from e
@@ -383,7 +394,7 @@ def assert_dataframes_equal(
         # Use basic path (existing behavior)
         diff = DataFrameDiff(epsilon=epsilon)
         passed, message, stats = diff.compare(
-            reference_df, test_df, query_name, max_diff_rows, timeout
+            reference_df, test_df, query_name, max_diff_rows, timeout, ignore_nullable
         )
 
         if not passed:

@@ -333,6 +333,15 @@ public class ExpressionConverter {
             return LongType.get();
         }
 
+        // Collection aggregates - return ArrayType of element type
+        if (lower.matches("collect_list|collect_set|list|list_distinct")) {
+            if (!args.isEmpty()) {
+                DataType argType = args.get(0).dataType();
+                return new ArrayType(argType, true);
+            }
+            return new ArrayType(StringType.get(), true);
+        }
+
         // Date extraction functions return Integer
         if (lower.matches("year|month|day|dayofmonth|dayofweek|dayofyear|" +
                           "hour|minute|second|quarter|weekofyear|week")) {

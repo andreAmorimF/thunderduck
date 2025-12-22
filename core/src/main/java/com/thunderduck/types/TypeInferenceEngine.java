@@ -845,6 +845,20 @@ public final class TypeInferenceEngine {
             case "LAST":
                 return argType != null ? argType : StringType.get();
 
+            // Count distinct always returns Long (same as COUNT)
+            case "COUNT_DISTINCT":
+                return LongType.get();
+
+            // Collection aggregates return ArrayType of the argument type
+            case "COLLECT_LIST":
+            case "COLLECT_SET":
+            case "LIST":           // DuckDB function name for collect_list
+            case "LIST_DISTINCT":  // DuckDB function name for collect_set
+                if (argType != null) {
+                    return new ArrayType(argType, true);
+                }
+                return new ArrayType(StringType.get(), true);
+
             default:
                 return argType != null ? argType : StringType.get();
         }
