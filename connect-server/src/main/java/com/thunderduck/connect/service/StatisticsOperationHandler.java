@@ -1124,8 +1124,9 @@ public class StatisticsOperationHandler {
      */
     private void executeAndStreamDataFrame(String sql, Session session,
                                            StreamObserver<ExecutePlanResponse> responseObserver) throws Exception {
-        try (ArrowStreamingExecutor executor = new ArrowStreamingExecutor(session.getRuntime());
-             ArrowBatchIterator iterator = executor.executeStreaming(sql)) {
+        // Use cached executor from session (reuses shared allocator)
+        ArrowStreamingExecutor executor = session.getStreamingExecutor();
+        try (ArrowBatchIterator iterator = executor.executeStreaming(sql)) {
             StreamingResultHandler handler = new StreamingResultHandler(
                 responseObserver,
                 session.getSessionId(),
@@ -1133,6 +1134,7 @@ public class StatisticsOperationHandler {
             );
             handler.streamResults(iterator);
         }
+        // Executor is NOT closed - session manages its lifecycle
     }
 
     /**

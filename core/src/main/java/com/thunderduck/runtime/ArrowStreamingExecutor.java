@@ -39,19 +39,27 @@ public class ArrowStreamingExecutor implements StreamingQueryExecutor, AutoClose
     private final DuckDBRuntime runtime;
     private final BufferAllocator allocator;
     private final int defaultBatchSize;
+    private final boolean ownsAllocator;
     private volatile boolean closed = false;
 
     /**
      * Create executor with specified runtime.
      *
+     * <p>This constructor creates and owns its own RootAllocator, which will be
+     * closed when the executor is closed.
+     *
      * @param runtime the DuckDB runtime (typically from a session)
      */
     public ArrowStreamingExecutor(DuckDBRuntime runtime) {
-        this(runtime, new RootAllocator(Long.MAX_VALUE), StreamingConfig.DEFAULT_BATCH_SIZE);
+        this(runtime, new RootAllocator(Long.MAX_VALUE), StreamingConfig.DEFAULT_BATCH_SIZE, true);
     }
 
     /**
      * Create executor with custom allocator and batch size.
+     *
+     * <p>This constructor does NOT take ownership of the allocator. The caller
+     * is responsible for closing the allocator after the executor is closed.
+     * This allows sharing a single allocator across multiple executors.
      *
      * @param runtime DuckDB runtime
      * @param allocator Arrow memory allocator (caller retains ownership)
@@ -60,11 +68,28 @@ public class ArrowStreamingExecutor implements StreamingQueryExecutor, AutoClose
     public ArrowStreamingExecutor(DuckDBRuntime runtime,
                                   BufferAllocator allocator,
                                   int defaultBatchSize) {
+        this(runtime, allocator, defaultBatchSize, false);
+    }
+
+    /**
+     * Private constructor with explicit allocator ownership flag.
+     *
+     * @param runtime DuckDB runtime
+     * @param allocator Arrow memory allocator
+     * @param defaultBatchSize default rows per batch
+     * @param ownsAllocator true if this executor should close the allocator on close()
+     */
+    private ArrowStreamingExecutor(DuckDBRuntime runtime,
+                                   BufferAllocator allocator,
+                                   int defaultBatchSize,
+                                   boolean ownsAllocator) {
         this.runtime = runtime;
         this.allocator = allocator;
         this.defaultBatchSize = StreamingConfig.normalizeBatchSize(defaultBatchSize);
+        this.ownsAllocator = ownsAllocator;
 
-        logger.info("ArrowStreamingExecutor created with defaultBatchSize={}", this.defaultBatchSize);
+        logger.info("ArrowStreamingExecutor created with defaultBatchSize={}, ownsAllocator={}",
+            this.defaultBatchSize, this.ownsAllocator);
     }
 
     @Override
@@ -136,10 +161,11 @@ public class ArrowStreamingExecutor implements StreamingQueryExecutor, AutoClose
         }
         closed = true;
 
-        logger.info("Closing ArrowStreamingExecutor");
+        logger.info("Closing ArrowStreamingExecutor (ownsAllocator={})", ownsAllocator);
 
-        // Close the allocator if we own it (created with default constructor)
-        if (allocator != null) {
+        // Only close the allocator if we own it (created with default constructor)
+        // When allocator is provided externally (3-arg constructor), caller is responsible
+        if (ownsAllocator && allocator != null) {
             try {
                 allocator.close();
             } catch (Exception e) {
