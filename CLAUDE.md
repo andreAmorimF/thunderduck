@@ -2,6 +2,49 @@
 
 This file contains project-specific rules and guidelines for working with thunderduck.
 
+## Project Vision and Value Proposition
+
+**Critical Context**: Understand this before working on Thunderduck.
+
+### The Core Insight
+
+Analysis of hundreds of thousands of real-world Spark workloads reveals that **most don't actually need distributed computing**. They could run faster and cheaper on a single large server node.
+
+### Why This Matters Now
+
+The economics of computing have fundamentally shifted:
+- **Past**: 2x hardware = 4x+ cost → distributed computing made economic sense
+- **Today**: Linear pricing at cloud providers → 200 CPU / 1TB RAM machines are cost-effective
+- **Result**: Single-node compute eliminates shuffles, network bottlenecks, and coordination overhead
+
+### The Problem
+
+Organizations have massive investments in Spark codebases but:
+- Their workloads don't need distributed compute
+- Spark local mode is slow (JVM overhead, row-based processing, poor utilization)
+- Rewriting to a different system is prohibitively expensive
+
+### Thunderduck's Value Proposition
+
+**Keep your Spark API, get single-node DuckDB performance.**
+
+Thunderduck is a migration path for the "post-Big Data" era:
+- Drop-in Spark Connect server (works with existing PySpark/Scala code)
+- Translates Spark operations to DuckDB SQL
+- 5-10x faster than Spark local mode, 6-8x better memory efficiency
+- Zero code changes required for compatible workloads
+
+### Target Audience
+
+Organizations that:
+1. Have existing Spark codebases (significant investment)
+2. Discovered their workloads fit on a single node
+3. Want better performance without rewriting everything
+
+**This is NOT for**: Workloads that genuinely require distributed compute (100TB+ datasets, streaming at scale).
+
+**Last Updated**: 2025-12-17
+
 ## Documentation Structure Rules
 
 **Permanent Rule**: The thunderduck project follows a focused documentation structure:
@@ -138,9 +181,9 @@ When comparing results with potential ties:
 
 **Reason**: This prevents bundling Spark's pre-compiled protobuf classes which were compiled with a different protobuf version, avoiding runtime `VerifyError`.
 
-### Apache Arrow on ARM64 Platforms
+### Apache Arrow JVM Requirements (Spark 4.0.x)
 
-**Issue**: Apache Arrow 17.0.0 requires special JVM flags on ARM64 platforms (AWS Graviton, Apple Silicon) to access internal Java NIO classes.
+**Issue**: Apache Arrow requires special JVM flags on ALL platforms to access internal Java NIO classes. As of Spark 4.0.x, these flags are required everywhere (not just ARM64).
 
 **Required JVM Flags**:
 ```bash
@@ -172,8 +215,66 @@ You must start Java with `--add-opens=java.base/java.nio=org.apache.arrow.memory
 
 1. **Always use clean builds** when diagnosing server issues: `mvn clean compile` or `mvn clean package`
 2. **Dependency scoping matters**: `compile` vs `provided` scope can cause runtime class conflicts
-3. **Platform-specific requirements**: ARM64 platforms have special requirements for Apache Arrow
-4. **Test with actual client**: Always test with PySpark client after server changes
+3. **JVM flags required on ALL platforms**: As of Spark 4.0.x, `--add-opens` flags are needed everywhere
+4. **Test with actual client**: Always test with PySpark 4.0.x client after server changes
 
-**Last Updated**: 2025-11-05
+### Server Process Cleanup (IMPORTANT)
+
+**Critical Rule**: After running E2E tests or any tests that start the Thunderduck server, ALWAYS kill the server process when done.
+
+**Why**: Background server processes can accumulate and cause port conflicts, resource exhaustion, and confusing test failures.
+
+**How to cleanup**:
+```bash
+# Kill all thunderduck server processes
+pkill -9 -f thunderduck-connect-server
+
+# Or kill all java processes (more aggressive)
+pkill -9 -f java
+```
+
+**Best Practice**: When running tests:
+1. Kill any existing server before starting a new one
+2. After tests complete, kill the server
+3. Periodically check for dangling processes: `ps aux | grep thunderduck`
+
+**Last Updated**: 2025-12-16
 **Fix Applied**: See `/workspace/docs/PROTOBUF_FIX_REPORT.md` for detailed resolution history
+- Always do a full clean and rebuild before testing, you keep making the mistake to test with old build and be surprised that code changes have had no effect
+
+## Git Commit Workflow
+
+**Critical Rule**: NEVER commit code without user review first.
+
+### Commit Process
+
+1. **Show changes first**: Always show the user a summary of changes before committing
+2. **Wait for approval**: Do NOT commit until the user explicitly approves
+3. **Only commit when asked**: The user must explicitly request a commit (e.g., "commit this", "let's commit")
+
+### What This Means
+
+- After implementing features or making changes, STOP and summarize what was done
+- Let the user review the code/changes before committing
+- If the user says "commit" or asks to commit, THEN proceed with the commit
+- Do NOT assume that completing a task means you should commit
+
+### Examples
+
+**WRONG**:
+```
+User: "Add function X"
+Claude: *implements function X*
+Claude: *immediately commits without asking*
+```
+
+**CORRECT**:
+```
+User: "Add function X"
+Claude: *implements function X*
+Claude: "I've added function X. Here's what changed: [summary]. Let me know when you'd like to commit."
+User: "looks good, commit it"
+Claude: *commits the changes*
+```
+
+**Last Updated**: 2025-12-16

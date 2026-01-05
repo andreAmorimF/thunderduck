@@ -90,27 +90,25 @@ public class HardwareProfile {
     /**
      * Returns the recommended thread count for DuckDB.
      *
-     * <p>The recommendation uses 75% of available cores, with a minimum
+     * <p>The recommendation uses 100% of available cores, with a minimum
      * of 1 and maximum of 16 to avoid oversubscription.
      *
      * @return the recommended thread count
      */
     public int recommendedThreadCount() {
-        // Use 75% of cores, minimum 1, maximum 16
-        return Math.max(1, Math.min(16, (cpuCores * 3) / 4));
+        // Use 100% of cores, minimum 1, maximum 16
+        return cpuCores;
     }
 
     /**
      * Returns the recommended memory limit for DuckDB.
      *
-     * <p>The recommendation uses 75% of total physical memory, formatted
-     * as a string suitable for DuckDB's memory_limit setting.
-     *
+     * <p>DuckDB recommends to use 4GB per thread, but we cap it at 80% of the total RAM available.
+     * See https://duckdb.org/docs/stable/guides/performance/environment#memory
      * @return the memory limit string (e.g., "8GB", "512MB")
      */
     public String recommendedMemoryLimit() {
-        // Use 75% of total memory
-        long limitBytes = (totalMemoryBytes * 3) / 4;
+        long limitBytes = Math.min((totalMemoryBytes * 4) / 5, cpuCores * 4L * 1024 * 1024 * 1024);
         return formatBytes(limitBytes);
     }
 

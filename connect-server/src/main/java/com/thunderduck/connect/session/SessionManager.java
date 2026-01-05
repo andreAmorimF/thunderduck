@@ -6,6 +6,10 @@ import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -47,6 +51,12 @@ public class SessionManager {
     /** System property for max execution time */
     private static final String PROP_MAX_EXECUTION_TIME_MS = "thunderduck.maxExecutionTimeMs";
 
+    /** System property for sessions directory */
+    private static final String PROP_SESSIONS_DIR = "duckdb.sessions.dir";
+
+    /** Default sessions directory */
+    private static final String DEFAULT_SESSIONS_DIR = "./thunderduck_sessions";
+
     /** Current execution state (atomic for CAS operations) */
     private final AtomicReference<ExecutionState> executionState =
         new AtomicReference<>(ExecutionState.IDLE);
@@ -62,6 +72,12 @@ public class SessionManager {
 
     /** Flag to track shutdown state */
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+
+    /** Cache of sessions by session ID - ensures same session ID reuses same DuckDB runtime */
+    private final ConcurrentHashMap<String, Session> sessionCache = new ConcurrentHashMap<>();
+
+    /** Directory for persistent session database files */
+    private final Path sessionsDir;
 
     /**
      * Create SessionManager with default configuration.
@@ -88,11 +104,24 @@ public class SessionManager {
     public SessionManager(int maxQueueSize, long maxExecutionTimeMs) {
         this.waitQueue = new LinkedBlockingQueue<>(maxQueueSize);
         this.maxExecutionTimeMs = maxExecutionTimeMs;
+        this.sessionsDir = Paths.get(getConfiguredSessionsDir());
         this.watchdog = Executors.newScheduledThreadPool(1, r -> {
             Thread t = new Thread(r, "session-watchdog");
             t.setDaemon(true);
             return t;
         });
+
+        // Create sessions directory for persistent databases
+        try {
+            Files.createDirectories(sessionsDir);
+            logger.info("Sessions directory: {}", sessionsDir.toAbsolutePath());
+        } catch (IOException e) {
+            logger.warn("Failed to create sessions directory: {}, falling back to in-memory sessions",
+                sessionsDir, e);
+        }
+
+        // Clean up orphaned session files from previous runs
+        cleanupOrphanedSessions();
 
         // Start watchdog to check for execution timeout
         watchdog.scheduleAtFixedRate(
@@ -100,8 +129,8 @@ public class SessionManager {
             10, 10, TimeUnit.SECONDS
         );
 
-        logger.info("SessionManager initialized: maxQueueSize={}, maxExecutionTimeMs={}",
-            maxQueueSize, maxExecutionTimeMs);
+        logger.info("SessionManager initialized: maxQueueSize={}, maxExecutionTimeMs={}, sessionsDir={}",
+            maxQueueSize, maxExecutionTimeMs, sessionsDir);
     }
 
     /**
@@ -149,8 +178,8 @@ public class SessionManager {
             ExecutionState current = executionState.get();
 
             if (current.isIdle()) {
-                // Idle - acquire slot with new or reused session
-                Session session = new Session(sessionId);
+                // Idle - acquire slot with cached or new session
+                Session session = getOrCreateCachedSession(sessionId);
                 ExecutionState next = ExecutionState.executing(sessionId, session);
 
                 if (executionState.compareAndSet(current, next)) {
@@ -171,6 +200,30 @@ public class SessionManager {
             // Different session and busy - need to wait
             return null;
         }
+    }
+
+    /**
+     * Get or create a cached session for the given session ID.
+     *
+     * <p>Sessions are cached by ID to ensure the same DuckDB runtime is reused
+     * for all requests with the same session ID. Sessions use persistent on-disk
+     * databases to preserve tables across reconnects.
+     *
+     * @param sessionId Session ID
+     * @return Cached or newly created session
+     */
+    private Session getOrCreateCachedSession(String sessionId) {
+        return sessionCache.computeIfAbsent(sessionId, id -> {
+            logger.debug("Creating new cached session: {}", id);
+            // Create persistent session if sessions directory exists
+            if (Files.isDirectory(sessionsDir)) {
+                return new Session(id, sessionsDir);
+            } else {
+                // Fall back to in-memory if directory not available
+                logger.warn("Sessions directory not available, using in-memory database for session: {}", id);
+                return new Session(id);
+            }
+        });
     }
 
     /**
@@ -398,9 +451,9 @@ public class SessionManager {
             return current.getSession();
         }
 
-        // Return a new session for metadata operations
-        // This doesn't affect execution state - it's just for config/analyze
-        return new Session(sessionId);
+        // Return cached or new session for metadata operations
+        // This ensures temp views and other session state persist
+        return getOrCreateCachedSession(sessionId);
     }
 
     /**
@@ -421,7 +474,8 @@ public class SessionManager {
     /**
      * Shutdown the session manager.
      *
-     * <p>Cancels current execution and rejects all waiting clients.
+     * <p>Cancels current execution, rejects all waiting clients, and cleans up
+     * all session database files.
      */
     public void shutdown() {
         logger.info("Shutting down SessionManager");
@@ -435,6 +489,16 @@ public class SessionManager {
         while ((waiter = waitQueue.poll()) != null) {
             waiter.cancel();
         }
+
+        // Clean up all cached sessions
+        for (Session session : sessionCache.values()) {
+            try {
+                session.cleanup();
+            } catch (Exception e) {
+                logger.warn("Error cleaning up session {}: {}", session.getSessionId(), e.getMessage());
+            }
+        }
+        sessionCache.clear();
 
         // Shutdown watchdog
         watchdog.shutdown();
@@ -480,6 +544,45 @@ public class SessionManager {
             }
         }
         return DEFAULT_MAX_EXECUTION_TIME_MS;
+    }
+
+    private static String getConfiguredSessionsDir() {
+        String value = System.getProperty(PROP_SESSIONS_DIR);
+        if (value != null && !value.isEmpty()) {
+            return value;
+        }
+        return DEFAULT_SESSIONS_DIR;
+    }
+
+    /**
+     * Clean up orphaned session database files from previous runs.
+     *
+     * <p>This method removes any .duckdb files in the sessions directory that
+     * don't have active sessions. Called on startup to clean up from crashed
+     * or ungraceful shutdowns.
+     */
+    private void cleanupOrphanedSessions() {
+        if (!Files.isDirectory(sessionsDir)) {
+            return;
+        }
+
+        try {
+            Files.list(sessionsDir)
+                .filter(path -> path.toString().endsWith(".duckdb"))
+                .forEach(dbFile -> {
+                    try {
+                        Files.deleteIfExists(dbFile);
+                        // Also delete associated WAL and temp files
+                        Files.deleteIfExists(Paths.get(dbFile.toString() + ".wal"));
+                        Files.deleteIfExists(Paths.get(dbFile.toString() + ".tmp"));
+                        logger.info("Cleaned up orphaned session database: {}", dbFile.getFileName());
+                    } catch (IOException e) {
+                        logger.warn("Failed to delete orphaned database file: {}", dbFile, e);
+                    }
+                });
+        } catch (IOException e) {
+            logger.warn("Failed to list sessions directory for cleanup: {}", sessionsDir, e);
+        }
     }
 
     // ========== Session Info ==========

@@ -1,84 +1,0 @@
-Setting default log level to "WARN".
-To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
-25/10/30 22:53:26 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
-25/10/30 22:53:28 WARN SparkStringUtils: Truncated the string representation of a plan since it was too large. This behavior can be adjusted by setting 'spark.sql.debug.maxToStringFields'.
-INFO:__main__:Registered table: call_center
-INFO:__main__:Registered table: catalog_page
-INFO:__main__:Registered table: catalog_returns
-INFO:__main__:Registered table: catalog_sales
-INFO:__main__:Registered table: customer
-INFO:__main__:Registered table: customer_address
-INFO:__main__:Registered table: customer_demographics
-INFO:__main__:Registered table: date_dim
-INFO:__main__:Registered table: household_demographics
-INFO:__main__:Registered table: income_band
-INFO:__main__:Registered table: inventory
-INFO:__main__:Registered table: item
-INFO:__main__:Registered table: promotion
-INFO:__main__:Registered table: reason
-INFO:__main__:Registered table: ship_mode
-INFO:__main__:Registered table: store
-INFO:__main__:Registered table: store_returns
-INFO:__main__:Registered table: store_sales
-INFO:__main__:Registered table: time_dim
-INFO:__main__:Registered table: warehouse
-INFO:__main__:Registered table: web_page
-INFO:__main__:Registered table: web_returns
-INFO:__main__:Registered table: web_sales
-INFO:__main__:Registered table: web_site
-INFO:__main__:Starting validation of 7 DataFrame-compatible queries
-INFO:__main__:Queries to validate: [3, 7, 12, 13, 15, 19, 20]
-INFO:__main__:Validating Query 3...
-[Stage 25:>                                                       (0 + 10) / 10][Stage 27:==========>                                           (39 + 10) / 200][Stage 27:====================>                                  (75 + 9) / 200][Stage 27:==========================>                           (99 + 10) / 200][Stage 27:================================>                    (121 + 10) / 200][Stage 27:======================================>              (145 + 10) / 200][Stage 27:===========================================>         (163 + 10) / 200][Stage 28:==============================================>      (174 + 10) / 200]                                                                                [Stage 34:===============================>                     (120 + 11) / 200][Stage 34:==============================================>      (177 + 10) / 200]                                                                                [Stage 41:===========================================>         (166 + 10) / 200]                                                                                INFO:__main__:  Query 3: ✅ PASS (8.59s)
-INFO:__main__:Validating Query 7...
-[Stage 54:=========================================>           (158 + 10) / 200][Stage 56:===============================>                     (117 + 10) / 200][Stage 56:===========================================>         (165 + 10) / 200]                                                                                [Stage 75:===================================================>     (9 + 1) / 10][Stage 77:======================================>              (147 + 10) / 200][Stage 79:================================>                    (121 + 11) / 200][Stage 79:===========================================>         (164 + 10) / 200]                                                                                INFO:__main__:  Query 7: ✅ PASS (10.69s)
-INFO:__main__:Validating Query 12...
-[Stage 98:===============================>                     (117 + 10) / 200][Stage 98:==========================================>          (160 + 10) / 200]                                                                                [Stage 106:==========================>                         (101 + 10) / 200][Stage 106:=================================>                  (128 + 10) / 200][Stage 106:====================================>               (140 + 10) / 200][Stage 106:=============================================>      (176 + 10) / 200]                                                                                [Stage 114:==========================================>         (164 + 10) / 200]                                                                                [Stage 122:=======================>                             (89 + 10) / 200][Stage 122:==============================>                     (118 + 10) / 200][Stage 122:========================================>           (155 + 10) / 200]                                                                                INFO:__main__:  Query 12: ✅ PASS (7.91s)
-INFO:__main__:Validating Query 13...
-INFO:__main__:  Query 13: ✅ PASS (2.76s)
-INFO:__main__:Validating Query 15...
-[Stage 155:=========================================>          (160 + 10) / 200]                                                                                [Stage 164:===============================>                    (120 + 10) / 200][Stage 164:==========================================>         (165 + 10) / 200]                                                                                INFO:__main__:  Query 15: ✅ PASS (3.73s)
-INFO:__main__:Validating Query 19...
-INFO:__main__:  Query 19: ✅ PASS (2.52s)
-INFO:__main__:Validating Query 20...
-[Stage 198:=========================>                           (98 + 10) / 200][Stage 198:====================================>               (142 + 10) / 200][Stage 198:================================================>   (185 + 10) / 200]                                                                                [Stage 206:======================>                              (85 + 10) / 200][Stage 206:================================>                   (125 + 10) / 200][Stage 206:==========================================>         (164 + 10) / 200]                                                                                [Stage 215:==================================>                 (132 + 10) / 200][Stage 215:==============================================>     (179 + 10) / 200]                                                                                [Stage 223:=============================>                      (115 + 10) / 200][Stage 223:=========================================>          (158 + 10) / 200]                                                                                INFO:__main__:  Query 20: ✅ PASS (7.46s)
-INFO:__main__:
-Validation Complete:
-INFO:__main__:  Total Compatible: 34
-INFO:__main__:  Total Incompatible: 65
-INFO:__main__:  Tested: 7
-INFO:__main__:  Passed: 7
-INFO:__main__:  Failed: 0
-INFO:__main__:Results saved to dataframe_validation_20251030_225412.json
-================================================================================
-TPC-DS DataFrame API Validation
-Testing Pure DataFrame Implementations Only
-================================================================================
-
-DataFrame API Compatibility:
-  Compatible queries: 34 / 99
-  Incompatible queries: 65 / 99
-
-Compatible queries: [3, 7, 9, 12, 13, 15, 17, 19, 20, 25, 26, 29, 32, 37, 40, 41, 42, 43, 45, 48, 50, 52, 55, 62, 71, 72, 82, 84, 85, 91, 92, 96, 98, 99]
-
-Testing sample queries: [3, 7, 12, 13, 15, 19, 20]
-
-================================================================================
-VALIDATION RESULTS
-================================================================================
-Query   3: ✅ PASS
-Query   7: ✅ PASS
-Query  12: ✅ PASS
-Query  13: ✅ PASS
-Query  15: ✅ PASS
-Query  19: ✅ PASS
-Query  20: ✅ PASS
-
-================================================================================
-SUMMARY
-================================================================================
-Total DataFrame-compatible queries: 34
-Queries tested: 7
-Passed: 7
-Failed: 0
-INFO:py4j.clientserver:Closing down clientserver connection

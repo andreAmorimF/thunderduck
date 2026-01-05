@@ -21,6 +21,18 @@ public class Intersect extends LogicalPlan {
         this.distinct = distinct;
     }
 
+    public LogicalPlan left() {
+        return left;
+    }
+
+    public LogicalPlan right() {
+        return right;
+    }
+
+    public boolean distinct() {
+        return distinct;
+    }
+
     @Override
     public String toSQL(SQLGenerator generator) {
         String leftSql = generator.generate(left);

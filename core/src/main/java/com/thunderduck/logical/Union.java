@@ -27,6 +27,8 @@ public class Union extends LogicalPlan {
     private final LogicalPlan left;
     private final LogicalPlan right;
     private final boolean all;
+    private final boolean byName;
+    private final boolean allowMissingColumns;
 
     /**
      * Creates a union node.
@@ -36,16 +38,32 @@ public class Union extends LogicalPlan {
      * @param all true for UNION ALL (keep duplicates), false for UNION (remove duplicates)
      */
     public Union(LogicalPlan left, LogicalPlan right, boolean all) {
+        this(left, right, all, false, false);
+    }
+
+    /**
+     * Creates a union node with byName and allowMissingColumns options.
+     *
+     * @param left the left relation
+     * @param right the right relation
+     * @param all true for UNION ALL (keep duplicates), false for UNION (remove duplicates)
+     * @param byName true to match columns by name instead of position
+     * @param allowMissingColumns true to allow missing columns (fill with NULL)
+     */
+    public Union(LogicalPlan left, LogicalPlan right, boolean all,
+                 boolean byName, boolean allowMissingColumns) {
         super(Arrays.asList(left, right));
         this.left = Objects.requireNonNull(left, "left must not be null");
         this.right = Objects.requireNonNull(right, "right must not be null");
         this.all = all;
+        this.byName = byName;
+        this.allowMissingColumns = allowMissingColumns;
 
         // Verify schemas are compatible (if available)
         StructType leftSchema = left.schema();
         StructType rightSchema = right.schema();
         if (leftSchema != null && rightSchema != null) {
-            if (leftSchema.size() != rightSchema.size()) {
+            if (!byName && leftSchema.size() != rightSchema.size()) {
                 throw new IllegalArgumentException(
                     String.format("Union requires same number of columns: left has %d, right has %d",
                                 leftSchema.size(), rightSchema.size()));
@@ -89,6 +107,24 @@ public class Union extends LogicalPlan {
      */
     public boolean all() {
         return all;
+    }
+
+    /**
+     * Returns whether this union matches columns by name instead of position.
+     *
+     * @return true for unionByName, false for positional union
+     */
+    public boolean byName() {
+        return byName;
+    }
+
+    /**
+     * Returns whether missing columns are allowed (filled with NULL).
+     *
+     * @return true to allow missing columns, false to require all columns
+     */
+    public boolean allowMissingColumns() {
+        return allowMissingColumns;
     }
 
     @Override

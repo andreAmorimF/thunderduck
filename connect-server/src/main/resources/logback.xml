@@ -28,8 +28,12 @@
 
     <!-- Component-specific logging -->
     <logger name="com.thunderduck.connect" level="DEBUG" />
+    <logger name="com.thunderduck.logical" level="DEBUG" />
     <logger name="com.thunderduck.runtime" level="INFO" />
     <logger name="io.grpc" level="WARN" />
     <logger name="org.apache.arrow" level="WARN" />
     <logger name="org.duckdb" level="WARN" />
+
+    <!-- Query timing instrumentation (set to WARN to disable timing logs) -->
+    <logger name="com.thunderduck.connect.service.SparkConnectServiceImpl" level="INFO" />
 </configuration>

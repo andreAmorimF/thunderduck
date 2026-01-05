@@ -1,8 +1,10 @@
 package com.thunderduck.logical;
 
 import com.thunderduck.expression.Expression;
+import com.thunderduck.types.DataType;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
+import com.thunderduck.types.TypeInferenceEngine;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -118,14 +120,47 @@ public class Project extends LogicalPlan {
 
     @Override
     public StructType inferSchema() {
+        // Get child schema for resolving column types
+        StructType childSchema = null;
+        try {
+            childSchema = child().schema();
+        } catch (Exception e) {
+            // Child schema resolution failed - return null to trigger DuckDB inference
+            return null;
+        }
+
+        // If child schema is null, return null to trigger DuckDB-based inference
+        if (childSchema == null) {
+            return null;
+        }
+
         List<StructField> fields = new ArrayList<>();
         for (int i = 0; i < projections.size(); i++) {
             Expression expr = projections.get(i);
             String alias = aliases.get(i);
             String fieldName = (alias != null) ? alias : ("col_" + i);
-            fields.add(new StructField(fieldName, expr.dataType(), expr.nullable()));
+
+            // Resolve data type and nullable from child schema
+            DataType resolvedType = resolveDataType(expr, childSchema);
+            boolean resolvedNullable = resolveNullable(expr, childSchema);
+
+            fields.add(new StructField(fieldName, resolvedType, resolvedNullable));
         }
         return new StructType(fields);
+    }
+
+    /**
+     * Resolves the data type of an expression using the centralized TypeInferenceEngine.
+     */
+    private DataType resolveDataType(Expression expr, StructType childSchema) {
+        return TypeInferenceEngine.resolveType(expr, childSchema);
+    }
+
+    /**
+     * Resolves the nullability of an expression using the centralized TypeInferenceEngine.
+     */
+    private boolean resolveNullable(Expression expr, StructType childSchema) {
+        return TypeInferenceEngine.resolveNullable(expr, childSchema);
     }
 
     @Override

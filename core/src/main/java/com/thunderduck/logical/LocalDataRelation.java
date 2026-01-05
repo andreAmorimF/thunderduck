@@ -1,5 +1,7 @@
 package com.thunderduck.logical;
 
+import com.thunderduck.runtime.ArrowInterchange;
+import com.thunderduck.types.SchemaParser;
 import com.thunderduck.types.StructType;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -159,21 +161,28 @@ public class LocalDataRelation extends LogicalPlan {
             return schema;
         }
 
-        // Try to infer from Arrow data
+        // Try to infer from Arrow data first (preserves nullable flags correctly)
         VectorSchemaRoot root = deserializeArrowData();
         if (root != null) {
-            // Convert Arrow schema to StructType
-            // TODO: Implement Arrow to StructType conversion
-            logger.warn("Schema inference from Arrow not yet implemented");
+            schema = ArrowInterchange.arrowSchemaToStructType(root.getSchema());
+            logger.debug("Inferred schema from Arrow data: {}", schema);
+            return schema;
         }
 
-        // Try to parse schema string
-        if (schemaStr != null) {
-            // TODO: Parse DDL or JSON schema string
-            logger.warn("Schema parsing from string not yet implemented: {}", schemaStr);
+        // Fallback to schema string parsing
+        // Note: DDL format (struct<name:type>) loses nullable info - JSON format preserves it
+        if (schemaStr != null && !schemaStr.isEmpty()) {
+            try {
+                schema = SchemaParser.parse(schemaStr);
+                logger.debug("Parsed schema from string: {}", schema);
+                return schema;
+            } catch (Exception e) {
+                logger.warn("Failed to parse schema string '{}': {}", schemaStr, e.getMessage());
+            }
         }
 
         // Return empty schema as fallback
+        logger.warn("Could not infer schema - returning empty StructType");
         return new StructType(new java.util.ArrayList<>());
     }
 

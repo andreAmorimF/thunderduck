@@ -1,93 +1,0 @@
-Setting default log level to "WARN".
-To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
-25/10/30 23:06:32 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
-25/10/30 23:06:34 WARN SparkStringUtils: Truncated the string representation of a plan since it was too large. This behavior can be adjusted by setting 'spark.sql.debug.maxToStringFields'.
-INFO:dataframe_validation_runner:Registered table: call_center
-INFO:dataframe_validation_runner:Registered table: catalog_page
-INFO:dataframe_validation_runner:Registered table: catalog_returns
-INFO:dataframe_validation_runner:Registered table: catalog_sales
-INFO:dataframe_validation_runner:Registered table: customer
-INFO:dataframe_validation_runner:Registered table: customer_address
-INFO:dataframe_validation_runner:Registered table: customer_demographics
-INFO:dataframe_validation_runner:Registered table: date_dim
-INFO:dataframe_validation_runner:Registered table: household_demographics
-INFO:dataframe_validation_runner:Registered table: income_band
-INFO:dataframe_validation_runner:Registered table: inventory
-INFO:dataframe_validation_runner:Registered table: item
-INFO:dataframe_validation_runner:Registered table: promotion
-INFO:dataframe_validation_runner:Registered table: reason
-INFO:dataframe_validation_runner:Registered table: ship_mode
-INFO:dataframe_validation_runner:Registered table: store
-INFO:dataframe_validation_runner:Registered table: store_returns
-INFO:dataframe_validation_runner:Registered table: store_sales
-INFO:dataframe_validation_runner:Registered table: time_dim
-INFO:dataframe_validation_runner:Registered table: warehouse
-INFO:dataframe_validation_runner:Registered table: web_page
-INFO:dataframe_validation_runner:Registered table: web_returns
-INFO:dataframe_validation_runner:Registered table: web_sales
-INFO:dataframe_validation_runner:Registered table: web_site
-INFO:dataframe_validation_runner:Starting validation of 6 DataFrame-compatible queries
-INFO:dataframe_validation_runner:Queries to validate: [9, 32, 42, 72, 91, 92]
-INFO:dataframe_validation_runner:Validating Query 9...
-ERROR:dataframe_validation_runner:Failed to run DataFrame query 9: [MISSING_GROUP_BY] The query does not include a GROUP BY clause. Add GROUP BY or turn it into the window functions using OVER clauses.;
-Aggregate [CASE WHEN ((ss_quantity#570L >= cast(1 as bigint)) AND (ss_quantity#570L <= cast(20 as bigint))) THEN 1 WHEN ((ss_quantity#570L >= cast(21 as bigint)) AND (ss_quantity#570L <= cast(40 as bigint))) THEN 2 WHEN ((ss_quantity#570L >= cast(41 as bigint)) AND (ss_quantity#570L <= cast(60 as bigint))) THEN 3 WHEN ((ss_quantity#570L >= cast(61 as bigint)) AND (ss_quantity#570L <= cast(80 as bigint))) THEN 4 WHEN ((ss_quantity#570L >= cast(81 as bigint)) AND (ss_quantity#570L <= cast(100 as bigint))) THEN 5 ELSE 6 END AS bucket1#876, count(1) AS cnt1#878L, avg(ss_ext_discount_amt#574) AS avg1#880]
-+- Filter ((ss_quantity#570L >= cast(1 as bigint)) AND (ss_quantity#570L <= cast(20 as bigint)))
-   +- SubqueryAlias store_sales
-      +- View (`store_sales`, [ss_sold_date_sk#560L,ss_sold_time_sk#561L,ss_item_sk#562L,ss_customer_sk#563L,ss_cdemo_sk#564L,ss_hdemo_sk#565L,ss_addr_sk#566L,ss_store_sk#567L,ss_promo_sk#568L,ss_ticket_number#569L,ss_quantity#570L,ss_wholesale_cost#571,ss_list_price#572,ss_sales_price#573,ss_ext_discount_amt#574,ss_ext_sales_price#575,ss_ext_wholesale_cost#576,ss_ext_list_price#577,ss_ext_tax#578,ss_coupon_amt#579,ss_net_paid#580,ss_net_paid_inc_tax#581,ss_net_profit#582])
-         +- Relation [ss_sold_date_sk#560L,ss_sold_time_sk#561L,ss_item_sk#562L,ss_customer_sk#563L,ss_cdemo_sk#564L,ss_hdemo_sk#565L,ss_addr_sk#566L,ss_store_sk#567L,ss_promo_sk#568L,ss_ticket_number#569L,ss_quantity#570L,ss_wholesale_cost#571,ss_list_price#572,ss_sales_price#573,ss_ext_discount_amt#574,ss_ext_sales_price#575,ss_ext_wholesale_cost#576,ss_ext_list_price#577,ss_ext_tax#578,ss_coupon_amt#579,ss_net_paid#580,ss_net_paid_inc_tax#581,ss_net_profit#582] parquet
-
-ERROR:dataframe_validation_runner:  Query 9: ❌ ERROR - [MISSING_GROUP_BY] The query does not include a GROUP BY clause. Add GROUP BY or turn it into the window functions using OVER clauses.;
-Aggregate [CASE WHEN ((ss_quantity#570L >= cast(1 as bigint)) AND (ss_quantity#570L <= cast(20 as bigint))) THEN 1 WHEN ((ss_quantity#570L >= cast(21 as bigint)) AND (ss_quantity#570L <= cast(40 as bigint))) THEN 2 WHEN ((ss_quantity#570L >= cast(41 as bigint)) AND (ss_quantity#570L <= cast(60 as bigint))) THEN 3 WHEN ((ss_quantity#570L >= cast(61 as bigint)) AND (ss_quantity#570L <= cast(80 as bigint))) THEN 4 WHEN ((ss_quantity#570L >= cast(81 as bigint)) AND (ss_quantity#570L <= cast(100 as bigint))) THEN 5 ELSE 6 END AS bucket1#876, count(1) AS cnt1#878L, avg(ss_ext_discount_amt#574) AS avg1#880]
-+- Filter ((ss_quantity#570L >= cast(1 as bigint)) AND (ss_quantity#570L <= cast(20 as bigint)))
-   +- SubqueryAlias store_sales
-      +- View (`store_sales`, [ss_sold_date_sk#560L,ss_sold_time_sk#561L,ss_item_sk#562L,ss_customer_sk#563L,ss_cdemo_sk#564L,ss_hdemo_sk#565L,ss_addr_sk#566L,ss_store_sk#567L,ss_promo_sk#568L,ss_ticket_number#569L,ss_quantity#570L,ss_wholesale_cost#571,ss_list_price#572,ss_sales_price#573,ss_ext_discount_amt#574,ss_ext_sales_price#575,ss_ext_wholesale_cost#576,ss_ext_list_price#577,ss_ext_tax#578,ss_coupon_amt#579,ss_net_paid#580,ss_net_paid_inc_tax#581,ss_net_profit#582])
-         +- Relation [ss_sold_date_sk#560L,ss_sold_time_sk#561L,ss_item_sk#562L,ss_customer_sk#563L,ss_cdemo_sk#564L,ss_hdemo_sk#565L,ss_addr_sk#566L,ss_store_sk#567L,ss_promo_sk#568L,ss_ticket_number#569L,ss_quantity#570L,ss_wholesale_cost#571,ss_list_price#572,ss_sales_price#573,ss_ext_discount_amt#574,ss_ext_sales_price#575,ss_ext_wholesale_cost#576,ss_ext_list_price#577,ss_ext_tax#578,ss_coupon_amt#579,ss_net_paid#580,ss_net_paid_inc_tax#581,ss_net_profit#582] parquet
-
-INFO:dataframe_validation_runner:Validating Query 32...
-[Stage 27:====================>                                 (76 + 11) / 200][Stage 27:===========================>                         (102 + 10) / 200][Stage 27:===================================>                 (134 + 11) / 200][Stage 27:=================================================>   (187 + 12) / 200]                                                                                [Stage 40:====================================================> (193 + 7) / 200]                                                                                INFO:dataframe_validation_runner:  Query 32: ✅ PASS (5.53s)
-INFO:dataframe_validation_runner:Validating Query 42...
-INFO:dataframe_validation_runner:  Query 42: ✅ PASS (2.17s)
-INFO:dataframe_validation_runner:Validating Query 72...
-ERROR:dataframe_validation_runner:Failed to run DataFrame query 72: 'str' object has no attribute 'desc'
-ERROR:dataframe_validation_runner:  Query 72: ❌ ERROR - 'str' object has no attribute 'desc'
-INFO:dataframe_validation_runner:Validating Query 91...
-ERROR:dataframe_validation_runner:Failed to run DataFrame query 91: 'str' object has no attribute 'desc'
-ERROR:dataframe_validation_runner:  Query 91: ❌ ERROR - 'str' object has no attribute 'desc'
-INFO:dataframe_validation_runner:Validating Query 92...
-INFO:dataframe_validation_runner:  Query 92: ✅ PASS (1.85s)
-INFO:dataframe_validation_runner:
-Validation Complete:
-INFO:dataframe_validation_runner:  Total Compatible: 34
-INFO:dataframe_validation_runner:  Total Incompatible: 65
-INFO:dataframe_validation_runner:  Tested: 6
-INFO:dataframe_validation_runner:  Passed: 3
-INFO:dataframe_validation_runner:  Failed: 3
-================================================================================
-Testing Fixed Queries
-================================================================================
-
-Testing 6 fixed queries: [9, 32, 42, 72, 91, 92]
-
-
-================================================================================
-RESULTS FOR FIXED QUERIES
-================================================================================
-Query   9: ❌ FAIL - [MISSING_GROUP_BY] The query does not include a GROUP BY clause. Add GROUP BY or turn it into the window functions using OVER clauses.;
-Aggregate [CASE WHEN ((ss_quantity#570L >= cast(1 as bigint)) AND (ss_quantity#570L <= cast(20 as bigint))) THEN 1 WHEN ((ss_quantity#570L >= cast(21 as bigint)) AND (ss_quantity#570L <= cast(40 as bigint))) THEN 2 WHEN ((ss_quantity#570L >= cast(41 as bigint)) AND (ss_quantity#570L <= cast(60 as bigint))) THEN 3 WHEN ((ss_quantity#570L >= cast(61 as bigint)) AND (ss_quantity#570L <= cast(80 as bigint))) THEN 4 WHEN ((ss_quantity#570L >= cast(81 as bigint)) AND (ss_quantity#570L <= cast(100 as bigint))) THEN 5 ELSE 6 END AS bucket1#876, count(1) AS cnt1#878L, avg(ss_ext_discount_amt#574) AS avg1#880]
-+- Filter ((ss_quantity#570L >= cast(1 as bigint)) AND (ss_quantity#570L <= cast(20 as bigint)))
-   +- SubqueryAlias store_sales
-      +- View (`store_sales`, [ss_sold_date_sk#560L,ss_sold_time_sk#561L,ss_item_sk#562L,ss_customer_sk#563L,ss_cdemo_sk#564L,ss_hdemo_sk#565L,ss_addr_sk#566L,ss_store_sk#567L,ss_promo_sk#568L,ss_ticket_number#569L,ss_quantity#570L,ss_wholesale_cost#571,ss_list_price#572,ss_sales_price#573,ss_ext_discount_amt#574,ss_ext_sales_price#575,ss_ext_wholesale_cost#576,ss_ext_list_price#577,ss_ext_tax#578,ss_coupon_amt#579,ss_net_paid#580,ss_net_paid_inc_tax#581,ss_net_profit#582])
-         +- Relation [ss_sold_date_sk#560L,ss_sold_time_sk#561L,ss_item_sk#562L,ss_customer_sk#563L,ss_cdemo_sk#564L,ss_hdemo_sk#565L,ss_addr_sk#566L,ss_store_sk#567L,ss_promo_sk#568L,ss_ticket_number#569L,ss_quantity#570L,ss_wholesale_cost#571,ss_list_price#572,ss_sales_price#573,ss_ext_discount_amt#574,ss_ext_sales_price#575,ss_ext_wholesale_cost#576,ss_ext_list_price#577,ss_ext_tax#578,ss_coupon_amt#579,ss_net_paid#580,ss_net_paid_inc_tax#581,ss_net_profit#582] parquet
-
-Query  32: ✅ PASS (5.53s)
-Query  42: ✅ PASS (2.17s)
-Query  72: ❌ FAIL - 'str' object has no attribute 'desc'
-Query  91: ❌ FAIL - 'str' object has no attribute 'desc'
-Query  92: ✅ PASS (1.85s)
-
-Total: 6
-Passed: 3
-Failed: 3
-
-⚠️  Still have 3 failing queries
-INFO:py4j.clientserver:Closing down clientserver connection

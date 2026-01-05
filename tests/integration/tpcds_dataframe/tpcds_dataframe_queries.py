@@ -470,7 +470,7 @@ class TpcdsDataFrameQueries:
 
         return result
 
-    
+
     @staticmethod
     def q26(spark: SparkSession) -> DataFrame:
         """Query 26: Catalog sales promotional analysis"""
@@ -556,7 +556,7 @@ class TpcdsDataFrameQueries:
 
         return result
 
-    
+
     @staticmethod
     def q32(spark: SparkSession) -> DataFrame:
         """Query 32: Excess discount amount"""
@@ -1215,13 +1215,13 @@ class TpcdsDataFrameQueries:
             )
             .groupBy("cc_call_center_id", "cc_name", "cc_manager", "cd_marital_status", "cd_education_status")
             .agg(count("cr_returning_customer_sk").alias("returns_count"))
-            .orderBy(col("returns_count").desc())
+            .orderBy(col("returns_count").desc(), "cc_call_center_id", "cc_name", "cc_manager", "cd_marital_status", "cd_education_status")
             .limit(100)
         )
 
         return result
 
-    
+
     @staticmethod
     def q92(spark: SparkSession) -> DataFrame:
         """Query 92: Web sales discount analysis"""
@@ -1365,8 +1365,8 @@ class TpcdsDataFrameQueries:
         )
 
         return result
-# Dictionary of compatible queries
-COMPATIBLE_QUERIES = [3, 7, 9, 12, 13, 15, 17, 19, 20, 25, 26, 29, 32, 37, 40, 41, 42, 43, 45, 48, 50, 52, 55, 62, 71, 72, 82, 84, 85, 91, 92, 96, 98, 99]
+# Dictionary of compatible queries (Q72 excluded - causes Spark OOM)
+COMPATIBLE_QUERIES = [3, 7, 9, 12, 13, 15, 17, 19, 20, 25, 26, 29, 32, 37, 40, 41, 42, 43, 45, 48, 50, 52, 55, 62, 71, 82, 84, 85, 91, 92, 96, 98, 99]
 
 # Query implementations mapping
 QUERY_IMPLEMENTATIONS: Dict[int, Callable] = {
@@ -1395,7 +1395,7 @@ QUERY_IMPLEMENTATIONS: Dict[int, Callable] = {
     55: TpcdsDataFrameQueries.q55,
     62: TpcdsDataFrameQueries.q62,
     71: TpcdsDataFrameQueries.q71,
-    72: TpcdsDataFrameQueries.q72,
+    # 72: excluded - causes Spark OOM
     82: TpcdsDataFrameQueries.q82,
     84: TpcdsDataFrameQueries.q84,
     85: TpcdsDataFrameQueries.q85,

@@ -3,6 +3,9 @@ package com.thunderduck.expression;
 import com.thunderduck.expression.window.WindowFrame;
 import com.thunderduck.logical.Sort;
 import com.thunderduck.types.DataType;
+import com.thunderduck.types.DoubleType;
+import com.thunderduck.types.IntegerType;
+import com.thunderduck.types.LongType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -175,13 +178,75 @@ public class WindowFunction extends Expression {
 
     @Override
     public DataType dataType() {
-        // Type depends on function - will be refined during implementation
-        return null;
+        // Type depends on function
+        String funcUpper = function.toUpperCase();
+        switch (funcUpper) {
+            case "ROW_NUMBER":
+            case "RANK":
+            case "DENSE_RANK":
+            case "NTILE":
+                return IntegerType.get();  // Spark returns INT for ranking functions
+            case "COUNT":
+                return LongType.get();
+            case "LAG":
+            case "LEAD":
+            case "FIRST":
+            case "FIRST_VALUE":
+            case "LAST":
+            case "LAST_VALUE":
+            case "NTH_VALUE":
+                // These return the type of their argument
+                if (!arguments.isEmpty()) {
+                    return arguments.get(0).dataType();
+                }
+                return LongType.get();
+            case "SUM":
+            case "AVG":
+                // Aggregate window functions - return type depends on input
+                if (!arguments.isEmpty() && arguments.get(0).dataType() != null) {
+                    return arguments.get(0).dataType();
+                }
+                return DoubleType.get();
+            case "MIN":
+            case "MAX":
+                if (!arguments.isEmpty() && arguments.get(0).dataType() != null) {
+                    return arguments.get(0).dataType();
+                }
+                return LongType.get();
+            case "PERCENT_RANK":
+            case "CUME_DIST":
+                return DoubleType.get();
+            default:
+                // Default to BIGINT for unknown window functions
+                return LongType.get();
+        }
     }
 
     @Override
     public boolean nullable() {
-        // Window functions can generally produce nulls
+        String funcUpper = function.toUpperCase();
+
+        // Ranking functions always return non-null values
+        if (funcUpper.equals("ROW_NUMBER") ||
+            funcUpper.equals("RANK") ||
+            funcUpper.equals("DENSE_RANK") ||
+            funcUpper.equals("NTILE") ||
+            funcUpper.equals("PERCENT_RANK") ||
+            funcUpper.equals("CUME_DIST")) {
+            return false;
+        }
+
+        // COUNT always returns non-null (0 for empty groups)
+        if (funcUpper.equals("COUNT")) {
+            return false;
+        }
+
+        // LAG/LEAD with default value (3rd argument) are non-nullable
+        if ((funcUpper.equals("LAG") || funcUpper.equals("LEAD")) && arguments.size() >= 3) {
+            return false;
+        }
+
+        // All other window functions can return null
         return true;
     }
 
@@ -189,9 +254,39 @@ public class WindowFunction extends Expression {
     public String toSQL() {
         StringBuilder sql = new StringBuilder();
 
-        // Function name and arguments
-        sql.append(function.toUpperCase());
+        // Function name - map to DuckDB equivalent
+        String duckDbFunction = getDuckDbFunctionName(function);
+        sql.append(duckDbFunction);
         sql.append("(");
+
+        // Determine how to handle arguments based on function type
+        String funcUpper = function.toUpperCase();
+        boolean isFirstLast = funcUpper.equals("FIRST") || funcUpper.equals("FIRST_VALUE") ||
+                              funcUpper.equals("LAST") || funcUpper.equals("LAST_VALUE");
+        boolean isNthValue = funcUpper.equals("NTH_VALUE");
+        boolean ignoreNulls = false;
+        int argsToOutput = arguments.size();
+
+        // Handle ignoreNulls parameter for FIRST/LAST/NTH_VALUE
+        // Spark: first(col, ignoreNulls) → DuckDB: FIRST_VALUE(col) [IGNORE NULLS]
+        // Spark: nth_value(col, n, ignoreNulls) → DuckDB: NTH_VALUE(col, n) [IGNORE NULLS]
+        if (isFirstLast && arguments.size() >= 2) {
+            // Second argument is ignoreNulls boolean
+            Expression ignoreNullsArg = arguments.get(1);
+            if (ignoreNullsArg instanceof Literal) {
+                Object val = ((Literal) ignoreNullsArg).value();
+                ignoreNulls = Boolean.TRUE.equals(val) || "true".equalsIgnoreCase(String.valueOf(val));
+            }
+            argsToOutput = 1;  // Only output the first argument
+        } else if (isNthValue && arguments.size() >= 3) {
+            // Third argument is ignoreNulls boolean
+            Expression ignoreNullsArg = arguments.get(2);
+            if (ignoreNullsArg instanceof Literal) {
+                Object val = ((Literal) ignoreNullsArg).value();
+                ignoreNulls = Boolean.TRUE.equals(val) || "true".equalsIgnoreCase(String.valueOf(val));
+            }
+            argsToOutput = 2;  // Output first two arguments (expr, n)
+        }
 
         // Add arguments
         // Special case: COUNT(*) - output * without quotes
@@ -201,7 +296,7 @@ public class WindowFunction extends Expression {
             "*".equals(((Literal) arguments.get(0)).value())) {
             sql.append("*");
         } else {
-            for (int i = 0; i < arguments.size(); i++) {
+            for (int i = 0; i < argsToOutput; i++) {
                 if (i > 0) {
                     sql.append(", ");
                 }
@@ -211,13 +306,18 @@ public class WindowFunction extends Expression {
 
         sql.append(")");
 
+        // Add IGNORE NULLS if specified (must come after closing paren, before OVER)
+        if (ignoreNulls && (isFirstLast || isNthValue)) {
+            sql.append(" IGNORE NULLS");
+        }
+
         // OVER clause
         sql.append(" OVER ");
 
         // If using named window, just reference the name
         if (windowName != null) {
             sql.append(windowName);
-            return sql.toString();
+            return wrapWithCastIfRankingFunction(sql.toString());
         }
 
         // Otherwise, inline window specification
@@ -277,12 +377,55 @@ public class WindowFunction extends Expression {
 
         sql.append(")");
 
-        return sql.toString();
+        return wrapWithCastIfRankingFunction(sql.toString());
     }
 
-    @Override
-    public String toString() {
-        return String.format("WindowFunction(%s, partitionBy=%s, orderBy=%s, frame=%s)",
-                           function, partitionBy, orderBy, frame);
+    /**
+     * Maps Spark function names to their DuckDB equivalents for window functions.
+     *
+     * <p>Some functions have different names in Spark vs DuckDB:
+     * <ul>
+     *   <li>{@code first} → {@code first_value} (DuckDB's aggregate first() doesn't work with OVER)</li>
+     *   <li>{@code last} → {@code last_value} (DuckDB's aggregate last() doesn't work with OVER)</li>
+     * </ul>
+     *
+     * @param sparkFunctionName the Spark function name
+     * @return the equivalent DuckDB function name
+     */
+    private String getDuckDbFunctionName(String sparkFunctionName) {
+        String funcUpper = sparkFunctionName.toUpperCase();
+        switch (funcUpper) {
+            case "FIRST":
+                return "FIRST_VALUE";
+            case "LAST":
+                return "LAST_VALUE";
+            default:
+                return funcUpper;
+        }
     }
+
+    /**
+     * Wraps the SQL with CAST to INTEGER if this is a ranking function.
+     *
+     * <p>DuckDB returns BIGINT for ranking functions, but Spark returns INTEGER.
+     * This method wraps the SQL with a CAST to ensure type compatibility.
+     *
+     * @param sql the generated window function SQL
+     * @return the SQL wrapped with CAST for ranking functions, or unchanged for others
+     */
+    private String wrapWithCastIfRankingFunction(String sql) {
+        String funcUpper = function.toUpperCase();
+        if (funcUpper.equals("ROW_NUMBER") ||
+            funcUpper.equals("RANK") ||
+            funcUpper.equals("DENSE_RANK") ||
+            funcUpper.equals("NTILE")) {
+            return "CAST(" + sql + " AS INTEGER)";
+        }
+        return sql;
+    }
+
+    // Note: toString() is intentionally NOT overridden here.
+    // The base class Expression.toString() delegates to toSQL(), which is the correct behavior.
+    // Having a debug-style toString() would cause incorrect SQL generation when WindowFunction
+    // is used in string interpolation contexts.
 }

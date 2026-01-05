@@ -3,6 +3,10 @@ package com.thunderduck.generator;
 import com.thunderduck.exception.SQLGenerationException;
 import com.thunderduck.logical.*;
 import com.thunderduck.expression.Expression;
+import com.thunderduck.expression.BinaryExpression;
+import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.types.StructField;
+import com.thunderduck.types.StructType;
 import java.util.*;
 
 import static com.thunderduck.generator.SQLQuoting.*;
@@ -150,6 +154,10 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             visitJoin((Join) plan);
         } else if (plan instanceof Union) {
             visitUnion((Union) plan);
+        } else if (plan instanceof Intersect) {
+            visitIntersect((Intersect) plan);
+        } else if (plan instanceof Except) {
+            visitExcept((Except) plan);
         } else if (plan instanceof InMemoryRelation) {
             visitInMemoryRelation((InMemoryRelation) plan);
         } else if (plan instanceof LocalRelation) {
@@ -158,10 +166,20 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             visitLocalDataRelation((LocalDataRelation) plan);
         } else if (plan instanceof SQLRelation) {
             visitSQLRelation((SQLRelation) plan);
+        } else if (plan instanceof AliasedRelation) {
+            visitAliasedRelation((AliasedRelation) plan);
         } else if (plan instanceof Distinct) {
             visitDistinct((Distinct) plan);
         } else if (plan instanceof RangeRelation) {
             visitRangeRelation((RangeRelation) plan);
+        } else if (plan instanceof Tail) {
+            visitTail((Tail) plan);
+        } else if (plan instanceof Sample) {
+            visitSample((Sample) plan);
+        } else if (plan instanceof WithColumns) {
+            visitWithColumns((WithColumns) plan);
+        } else if (plan instanceof ToDF) {
+            visitToDF((ToDF) plan);
         } else {
             throw new UnsupportedOperationException(
                 "SQL generation not implemented for: " + plan.getClass().getSimpleName());
@@ -176,9 +194,50 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
+     * Visits an AliasedRelation node.
+     *
+     * <p>Generates SQL with the user-provided alias. When used in joins,
+     * the alias allows join conditions to reference it directly.
+     *
+     * <p>Note: We must NOT call plan.toSQL(this) because that would call
+     * generator.generate(child) which resets the StringBuilder, losing
+     * all previously appended content.
+     */
+    private void visitAliasedRelation(AliasedRelation plan) {
+        String childSource = getDirectlyAliasableSource(plan.child());
+        if (childSource != null) {
+            // Direct table reference with user alias - no subquery needed
+            sql.append("SELECT * FROM ");
+            sql.append(childSource);
+            sql.append(" AS ");
+            sql.append(SQLQuoting.quoteIdentifier(plan.alias()));
+        } else {
+            // Complex child needs wrapping
+            sql.append("SELECT * FROM (");
+            subqueryDepth++;
+            visit(plan.child());
+            subqueryDepth--;
+            sql.append(") AS ");
+            sql.append(SQLQuoting.quoteIdentifier(plan.alias()));
+        }
+    }
+
+    /**
      * Visits a Project node (SELECT clause).
      */
     private void visitProject(Project plan) {
+        LogicalPlan child = plan.child();
+
+        // Special case: Project on Filter on Join with aliased relations
+        // Generate flat SQL to preserve alias visibility
+        if (child instanceof Filter) {
+            Filter filter = (Filter) child;
+            if (filter.child() instanceof Join && hasAliasedRelation(filter.child())) {
+                generateProjectOnFilterJoin(plan, filter, (Join) filter.child());
+                return;
+            }
+        }
+
         sql.append("SELECT ");
 
         List<Expression> projections = plan.projections();
@@ -201,16 +260,164 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             }
         }
 
-        // Add FROM clause from child
-        sql.append(" FROM (");
-        subqueryDepth++;
-        visit(plan.child());
-        subqueryDepth--;
-        sql.append(")");
+        // Add FROM clause from child - check for direct source optimization
+        String childSource = getDirectlyAliasableSource(plan.child());
+        if (childSource != null) {
+            sql.append(" FROM ").append(childSource);
+            if (subqueryDepth > 0) {
+                sql.append(" AS ").append(generateSubqueryAlias());
+            }
+        } else {
+            sql.append(" FROM (");
+            subqueryDepth++;
+            visit(plan.child());
+            subqueryDepth--;
+            sql.append(")");
+            // Add subquery alias if needed
+            if (subqueryDepth > 0) {
+                sql.append(" AS ").append(generateSubqueryAlias());
+            }
+        }
+    }
 
-        // Add subquery alias if needed
-        if (subqueryDepth > 0) {
-            sql.append(" AS ").append(generateSubqueryAlias());
+    /**
+     * Generates flat SQL for Project on Filter on Join with aliased relations.
+     * This preserves alias visibility by not wrapping intermediate results in subqueries.
+     */
+    private void generateProjectOnFilterJoin(Project project, Filter filter, Join join) {
+        sql.append("SELECT ");
+
+        List<Expression> projections = project.projections();
+        List<String> aliases = project.aliases();
+
+        for (int i = 0; i < projections.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+
+            Expression expr = projections.get(i);
+            sql.append(expr.toSQL());
+
+            String alias = aliases.get(i);
+            if (alias != null && !alias.isEmpty()) {
+                sql.append(" AS ");
+                sql.append(SQLQuoting.quoteIdentifier(alias));
+            }
+        }
+
+        sql.append(" FROM ");
+
+        // Generate flat join chain
+        generateFlatJoinChain(join);
+
+        // Add WHERE clause from filter
+        sql.append(" WHERE ");
+        sql.append(filter.condition().toSQL());
+    }
+
+    /**
+     * Generates a flat join chain without nested subqueries.
+     * This preserves table aliases so they can be referenced in WHERE clauses.
+     */
+    private void generateFlatJoinChain(Join join) {
+        // Collect all joins in the chain
+        List<JoinPart> joinParts = new java.util.ArrayList<>();
+        LogicalPlan leftmost = collectJoinParts(join, joinParts);
+
+        // Generate leftmost table/subquery
+        generateJoinSource(leftmost);
+
+        // Generate each join in sequence
+        for (JoinPart part : joinParts) {
+            sql.append(" ");
+            sql.append(getJoinKeyword(part.joinType));
+            sql.append(" ");
+            generateJoinSource(part.right);
+            if (part.condition != null) {
+                sql.append(" ON ");
+                sql.append(part.condition.toSQL());
+            }
+        }
+    }
+
+    /**
+     * Collects join parts from a join chain, returning the leftmost non-join plan.
+     */
+    private LogicalPlan collectJoinParts(Join join, List<JoinPart> parts) {
+        LogicalPlan left = join.left();
+        if (left instanceof Join) {
+            // Recursively collect from nested join
+            LogicalPlan leftmost = collectJoinParts((Join) left, parts);
+            // Add this join's right side
+            parts.add(new JoinPart(join.right(), join.joinType(), join.condition()));
+            return leftmost;
+        } else {
+            // Left is not a join, this is the leftmost table
+            // Add this join's right side as the first join
+            parts.add(new JoinPart(join.right(), join.joinType(), join.condition()));
+            return left;
+        }
+    }
+
+    /**
+     * Generates SQL for a join source (table, aliased relation, or subquery).
+     */
+    private void generateJoinSource(LogicalPlan plan) {
+        if (plan instanceof AliasedRelation) {
+            AliasedRelation aliased = (AliasedRelation) plan;
+            String childSource = getDirectlyAliasableSource(aliased.child());
+            if (childSource != null) {
+                sql.append(childSource);
+            } else {
+                sql.append("(");
+                visit(aliased.child());
+                sql.append(")");
+            }
+            sql.append(" AS ");
+            sql.append(SQLQuoting.quoteIdentifier(aliased.alias()));
+        } else {
+            String source = getDirectlyAliasableSource(plan);
+            if (source != null) {
+                sql.append(source);
+                sql.append(" AS ");
+                sql.append(generateSubqueryAlias());
+            } else {
+                sql.append("(");
+                visit(plan);
+                sql.append(") AS ");
+                sql.append(generateSubqueryAlias());
+            }
+        }
+    }
+
+    /**
+     * Helper class to hold join information.
+     */
+    private static class JoinPart {
+        final LogicalPlan right;
+        final Join.JoinType joinType;
+        final Expression condition;
+
+        JoinPart(LogicalPlan right, Join.JoinType joinType, Expression condition) {
+            this.right = right;
+            this.joinType = joinType;
+            this.condition = condition;
+        }
+    }
+
+    /**
+     * Gets the SQL keyword for a join type.
+     */
+    private String getJoinKeyword(Join.JoinType joinType) {
+        switch (joinType) {
+            case INNER: return "INNER JOIN";
+            case LEFT: return "LEFT OUTER JOIN";
+            case RIGHT: return "RIGHT OUTER JOIN";
+            case FULL: return "FULL OUTER JOIN";
+            case CROSS: return "CROSS JOIN";
+            case LEFT_SEMI: return "LEFT SEMI JOIN";
+            case LEFT_ANTI: return "LEFT ANTI JOIN";
+            default: throw new UnsupportedOperationException("Unknown join type: " + joinType);
         }
     }
 
@@ -218,13 +425,57 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * Visits a Filter node (WHERE clause).
      */
     private void visitFilter(Filter plan) {
-        sql.append("SELECT * FROM (");
-        subqueryDepth++;
-        visit(plan.child());
-        subqueryDepth--;
-        sql.append(") AS ").append(generateSubqueryAlias());
-        sql.append(" WHERE ");
-        sql.append(plan.condition().toSQL());
+        LogicalPlan child = plan.child();
+
+        // For Joins with user-defined aliases (AliasedRelation), append WHERE directly
+        // to preserve alias visibility. Otherwise, wrap in subquery.
+        if (child instanceof Join && hasAliasedChildren((Join) child)) {
+            // Visit the join directly (produces SELECT * FROM ... JOIN ... ON ...)
+            visit(child);
+            // Append WHERE clause - aliases are still in scope
+            sql.append(" WHERE ");
+            sql.append(plan.condition().toSQL());
+        } else {
+            // Standard approach - check for direct table reference
+            String childSource = getDirectlyAliasableSource(child);
+            if (childSource != null) {
+                // Direct table - no subquery needed
+                sql.append("SELECT * FROM ").append(childSource);
+                sql.append(" WHERE ");
+                sql.append(plan.condition().toSQL());
+            } else {
+                // Complex child - wrap in subquery
+                sql.append("SELECT * FROM (");
+                subqueryDepth++;
+                visit(child);
+                subqueryDepth--;
+                sql.append(") AS ").append(generateSubqueryAlias());
+                sql.append(" WHERE ");
+                sql.append(plan.condition().toSQL());
+            }
+        }
+    }
+
+    /**
+     * Checks if a Join has any AliasedRelation children (directly or nested).
+     * Used to determine if filter should preserve alias visibility.
+     */
+    private boolean hasAliasedChildren(Join join) {
+        return hasAliasedRelation(join.left()) || hasAliasedRelation(join.right());
+    }
+
+    /**
+     * Recursively checks if a plan contains AliasedRelation.
+     */
+    private boolean hasAliasedRelation(LogicalPlan plan) {
+        if (plan instanceof AliasedRelation) {
+            return true;
+        }
+        if (plan instanceof Join) {
+            Join j = (Join) plan;
+            return hasAliasedRelation(j.left()) || hasAliasedRelation(j.right());
+        }
+        return false;
     }
 
     /**
@@ -235,7 +486,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         if (columns == null || columns.isEmpty()) {
             // DISTINCT on all columns
-            sql.append("SELECT DISTINCT * FROM (");
+            sql.append("SELECT DISTINCT * FROM ");
         } else {
             // DISTINCT on specific columns
             sql.append("SELECT DISTINCT ");
@@ -245,13 +496,20 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 }
                 sql.append(quoteIdentifier(columns.get(i)));
             }
-            sql.append(" FROM (");
+            sql.append(" FROM ");
         }
 
-        subqueryDepth++;
-        visit(plan.children().get(0));
-        subqueryDepth--;
-        sql.append(") AS ").append(generateSubqueryAlias());
+        // Check for direct source optimization
+        String childSource = getDirectlyAliasableSource(plan.children().get(0));
+        if (childSource != null) {
+            sql.append(childSource);
+        } else {
+            sql.append("(");
+            subqueryDepth++;
+            visit(plan.children().get(0));
+            subqueryDepth--;
+            sql.append(") AS ").append(generateSubqueryAlias());
+        }
     }
 
     /**
@@ -324,11 +582,17 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * Builds SQL directly in buffer to avoid corruption.
      */
     private void visitSort(Sort plan) {
-        sql.append("SELECT * FROM (");
-        subqueryDepth++;
-        visit(plan.child());  // Use visit(), not generate()
-        subqueryDepth--;
-        sql.append(") AS ").append(generateSubqueryAlias());
+        // Check for direct source optimization
+        String childSource = getDirectlyAliasableSource(plan.child());
+        if (childSource != null) {
+            sql.append("SELECT * FROM ").append(childSource);
+        } else {
+            sql.append("SELECT * FROM (");
+            subqueryDepth++;
+            visit(plan.child());  // Use visit(), not generate()
+            subqueryDepth--;
+            sql.append(") AS ").append(generateSubqueryAlias());
+        }
         sql.append(" ORDER BY ");
 
         java.util.List<Sort.SortOrder> sortOrders = plan.sortOrders();
@@ -360,11 +624,17 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * Visits a Limit node (LIMIT clause).
      */
     private void visitLimit(Limit plan) {
-        sql.append("SELECT * FROM (");
-        subqueryDepth++;
-        visit(plan.child());
-        subqueryDepth--;
-        sql.append(") AS ").append(generateSubqueryAlias());
+        // Check for direct source optimization
+        String childSource = getDirectlyAliasableSource(plan.child());
+        if (childSource != null) {
+            sql.append("SELECT * FROM ").append(childSource);
+        } else {
+            sql.append("SELECT * FROM (");
+            subqueryDepth++;
+            visit(plan.child());
+            subqueryDepth--;
+            sql.append(") AS ").append(generateSubqueryAlias());
+        }
         sql.append(" LIMIT ");
         sql.append(plan.limit());
 
@@ -372,6 +642,238 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(" OFFSET ");
             sql.append(plan.offset());
         }
+    }
+
+    /**
+     * Visits a Tail node.
+     *
+     * <p>The Tail operation is handled in memory by TailBatchIterator for
+     * memory-efficient streaming (O(N) instead of O(total_rows)). When
+     * generating SQL for a Tail plan, we simply generate SQL for the child
+     * plan - the tail limit is applied during streaming via the iterator wrapper.
+     *
+     * <p>This method is kept for compatibility with unit tests that
+     * call SQLGenerator directly, but the actual execution path uses
+     * TailBatchIterator instead.
+     */
+    private void visitTail(Tail plan) {
+        // Simply generate SQL for the child plan
+        // The tail operation is handled in memory by TailBatchIterator
+        visit(plan.child());
+    }
+
+    /**
+     * Visits a Sample node.
+     *
+     * <p>Generates SQL using DuckDB's USING SAMPLE clause with Bernoulli sampling
+     * to match Spark's per-row probability algorithm. The Bernoulli method
+     * evaluates each row independently with the specified probability.
+     *
+     * <p>Example outputs:
+     * <pre>
+     *   SELECT * FROM (child) AS subquery_1 USING SAMPLE 10% (bernoulli)
+     *   SELECT * FROM (child) AS subquery_1 USING SAMPLE 10% (bernoulli, 42)
+     * </pre>
+     */
+    private void visitSample(Sample plan) {
+        sql.append("SELECT * FROM (");
+        subqueryDepth++;
+        visit(plan.child());
+        subqueryDepth--;
+        sql.append(") AS ").append(generateSubqueryAlias());
+
+        // Convert fraction to percentage for DuckDB SAMPLE clause
+        double percentage = plan.fraction() * 100.0;
+
+        // Use Bernoulli sampling to match Spark's per-row probability algorithm
+        if (plan.seed().isPresent()) {
+            sql.append(String.format(" USING SAMPLE %.6f%% (bernoulli, %d)",
+                percentage, plan.seed().getAsLong()));
+        } else {
+            sql.append(String.format(" USING SAMPLE %.6f%% (bernoulli)",
+                percentage));
+        }
+    }
+
+    /**
+     * Visits a WithColumns node (add/replace columns).
+     * Generates SQL that preserves column order when replacing existing columns.
+     */
+    private void visitWithColumns(WithColumns plan) {
+        // Get child schema for column ordering and type-aware SQL generation
+        StructType childSchema = null;
+        try {
+            childSchema = plan.child().schema();
+        } catch (Exception e) {
+            // Child schema unavailable - fall back to legacy approach
+        }
+
+        if (childSchema == null) {
+            // Fall back to legacy COLUMNS() approach when schema unavailable
+            visitWithColumnsLegacy(plan, null);
+            return;
+        }
+
+        // Build map of columns being modified for O(1) lookup
+        Map<String, Integer> modifiedCols = new HashMap<>();
+        for (int i = 0; i < plan.columnNames().size(); i++) {
+            modifiedCols.put(plan.columnNames().get(i), i);
+        }
+
+        // Track which columns exist in child schema (for identifying new columns)
+        Set<String> childColumnNames = new HashSet<>();
+        for (StructField field : childSchema.fields()) {
+            childColumnNames.add(field.name());
+        }
+
+        sql.append("SELECT ");
+        boolean first = true;
+
+        // Iterate through child columns IN ORDER to preserve column positions
+        for (StructField field : childSchema.fields()) {
+            if (!first) sql.append(", ");
+            first = false;
+
+            if (modifiedCols.containsKey(field.name())) {
+                // Output modified expression at this position
+                int idx = modifiedCols.get(field.name());
+                Expression expr = plan.columnExpressions().get(idx);
+                String exprSQL = generateExpressionWithCast(expr, childSchema);
+                sql.append(exprSQL).append(" AS ").append(SQLQuoting.quoteIdentifier(field.name()));
+            } else {
+                // Keep original column
+                sql.append(SQLQuoting.quoteIdentifier(field.name()));
+            }
+        }
+
+        // Add any NEW columns (columns not in child schema) at end
+        for (int i = 0; i < plan.columnNames().size(); i++) {
+            String name = plan.columnNames().get(i);
+            if (!childColumnNames.contains(name)) {
+                // This is a new column, not a replacement
+                if (!first) sql.append(", ");
+                first = false;
+                Expression expr = plan.columnExpressions().get(i);
+                String exprSQL = generateExpressionWithCast(expr, childSchema);
+                sql.append(exprSQL).append(" AS ").append(SQLQuoting.quoteIdentifier(name));
+            }
+        }
+
+        sql.append(" FROM (");
+        subqueryDepth++;
+        visit(plan.child());
+        subqueryDepth--;
+        sql.append(") AS _withcol_subquery");
+    }
+
+    /**
+     * Generates expression SQL with optional CAST for decimal division results.
+     */
+    private String generateExpressionWithCast(Expression expr, StructType childSchema) {
+        String exprSQL = expr.toSQL();
+
+        // Check if expression contains a division that should produce DecimalType
+        // DuckDB calculates decimal division differently than Spark, so we need CAST
+        if (childSchema != null) {
+            com.thunderduck.types.DataType resolvedType =
+                com.thunderduck.types.TypeInferenceEngine.resolveType(expr, childSchema);
+            if (resolvedType instanceof com.thunderduck.types.DecimalType) {
+                com.thunderduck.types.DecimalType decType =
+                    (com.thunderduck.types.DecimalType) resolvedType;
+                if (containsDivision(expr)) {
+                    exprSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        exprSQL, decType.precision(), decType.scale());
+                }
+            }
+        }
+        return exprSQL;
+    }
+
+    /**
+     * Legacy COLUMNS()-based approach for WithColumns when schema is unavailable.
+     * This places modified columns at the end but works without schema information.
+     */
+    private void visitWithColumnsLegacy(WithColumns plan, StructType childSchema) {
+        sql.append("SELECT COLUMNS(c -> c NOT IN (");
+        for (int i = 0; i < plan.columnNames().size(); i++) {
+            if (i > 0) sql.append(", ");
+            sql.append("'").append(plan.columnNames().get(i).replace("'", "''")).append("'");
+        }
+        sql.append(")), ");
+
+        for (int i = 0; i < plan.columnNames().size(); i++) {
+            if (i > 0) sql.append(", ");
+            Expression expr = plan.columnExpressions().get(i);
+            String exprSQL = generateExpressionWithCast(expr, childSchema);
+            sql.append(exprSQL).append(" AS ").append(SQLQuoting.quoteIdentifier(plan.columnNames().get(i)));
+        }
+
+        sql.append(" FROM (");
+        subqueryDepth++;
+        visit(plan.child());
+        subqueryDepth--;
+        sql.append(") AS _withcol_subquery");
+    }
+
+    /**
+     * Checks if an expression contains a division operation.
+     * This includes direct BinaryExpression divisions and divisions nested in other expressions.
+     */
+    private boolean containsDivision(Expression expr) {
+        if (expr instanceof BinaryExpression) {
+            BinaryExpression binExpr = (BinaryExpression) expr;
+            if (binExpr.operator() == BinaryExpression.Operator.DIVIDE) {
+                return true;
+            }
+            // Check children
+            return containsDivision(binExpr.left()) || containsDivision(binExpr.right());
+        }
+        // For other expression types, check if they might contain divisions
+        // (e.g., AliasExpression, FunctionCall with expression arguments)
+        if (expr instanceof com.thunderduck.expression.AliasExpression) {
+            return containsDivision(((com.thunderduck.expression.AliasExpression) expr).expression());
+        }
+        if (expr instanceof com.thunderduck.expression.WindowFunction) {
+            com.thunderduck.expression.WindowFunction wf = (com.thunderduck.expression.WindowFunction) expr;
+            for (Expression arg : wf.arguments()) {
+                if (containsDivision(arg)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Visits a ToDF node (column renaming operation).
+     * Generates SQL that renames columns using DuckDB's table alias with column names syntax.
+     */
+    private void visitToDF(ToDF plan) {
+        List<String> columnNames = plan.columnNames();
+
+        if (columnNames.isEmpty()) {
+            // No renaming needed, just visit child
+            visit(plan.child());
+            return;
+        }
+
+        // Build column alias list
+        StringBuilder columnList = new StringBuilder();
+        for (int i = 0; i < columnNames.size(); i++) {
+            if (i > 0) {
+                columnList.append(", ");
+            }
+            columnList.append(quoteIdentifier(columnNames.get(i)));
+        }
+
+        // Generate: SELECT * FROM (child) AS _todf_subquery(col1, col2, ...)
+        sql.append("SELECT * FROM (");
+        subqueryDepth++;
+        visit(plan.child());
+        subqueryDepth--;
+        sql.append(") AS _todf_subquery(");
+        sql.append(columnList);
+        sql.append(")");
     }
 
     /**
@@ -393,9 +895,50 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             selectExprs.add(expr.toSQL());
         }
 
+        // Get child schema for type-aware SQL generation (e.g., CAST for AVG of decimal)
+        com.thunderduck.types.StructType childSchema = null;
+        try {
+            childSchema = plan.child().schema();
+        } catch (Exception e) {
+            // Child schema unavailable - proceed without type-specific handling
+        }
+
         // Add aggregate expressions
         for (Aggregate.AggregateExpression aggExpr : plan.aggregateExpressions()) {
             String aggSQL = aggExpr.toSQL();
+
+            // For AVG of decimal columns, wrap with CAST to preserve decimal type
+            // (DuckDB returns DOUBLE for AVG, but Spark preserves DECIMAL)
+            // Spark: AVG(DECIMAL(p,s)) -> DECIMAL(p+4, s+4)
+            if (childSchema != null &&
+                aggExpr.function().equalsIgnoreCase("AVG") &&
+                aggExpr.argument() != null) {
+
+                com.thunderduck.types.DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
+                if (argType instanceof com.thunderduck.types.DecimalType) {
+                    com.thunderduck.types.DecimalType decType = (com.thunderduck.types.DecimalType) argType;
+                    int newPrecision = Math.min(decType.precision() + 4, 38);
+                    int newScale = Math.min(decType.scale() + 4, newPrecision);
+                    aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        aggSQL, newPrecision, newScale);
+                }
+            }
+
+            // For SUM of decimal columns, wrap with CAST to match Spark precision rules
+            // Spark: SUM(DECIMAL(p,s)) -> DECIMAL(p+10, s), capped at max precision 38
+            if (childSchema != null &&
+                aggExpr.function().equalsIgnoreCase("SUM") &&
+                aggExpr.argument() != null) {
+
+                com.thunderduck.types.DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
+                if (argType instanceof com.thunderduck.types.DecimalType) {
+                    com.thunderduck.types.DecimalType decType = (com.thunderduck.types.DecimalType) argType;
+                    int newPrecision = Math.min(decType.precision() + 10, 38);
+                    aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        aggSQL, newPrecision, decType.scale());
+                }
+            }
+
             // Add alias if provided
             if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
                 aggSQL += " AS " + SQLQuoting.quoteIdentifier(aggExpr.alias());
@@ -405,19 +948,30 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         sql.append(String.join(", ", selectExprs));
 
-        // FROM clause
-        sql.append(" FROM (");
-        subqueryDepth++;
-        visit(plan.child());  // Use visit(), not generate()
-        subqueryDepth--;
-        sql.append(") AS ").append(generateSubqueryAlias());
+        // FROM clause - check for direct source optimization
+        String childSource = getDirectlyAliasableSource(plan.child());
+        if (childSource != null) {
+            sql.append(" FROM ").append(childSource);
+        } else {
+            sql.append(" FROM (");
+            subqueryDepth++;
+            visit(plan.child());  // Use visit(), not generate()
+            subqueryDepth--;
+            sql.append(") AS ").append(generateSubqueryAlias());
+        }
 
         // GROUP BY clause
+        // Note: GROUP BY cannot have aliases, so we unwrap AliasExpressions
         if (!plan.groupingExpressions().isEmpty()) {
             sql.append(" GROUP BY ");
             java.util.List<String> groupExprs = new java.util.ArrayList<>();
             for (com.thunderduck.expression.Expression expr : plan.groupingExpressions()) {
-                groupExprs.add(expr.toSQL());
+                // Unwrap AliasExpression for GROUP BY - aliases not allowed here
+                if (expr instanceof com.thunderduck.expression.AliasExpression) {
+                    groupExprs.add(((com.thunderduck.expression.AliasExpression) expr).expression().toSQL());
+                } else {
+                    groupExprs.add(expr.toSQL());
+                }
             }
             sql.append(String.join(", ", groupExprs));
         }
@@ -430,8 +984,41 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
+     * Resolves the data type of an expression from the child schema.
+     *
+     * @param expr the expression
+     * @param childSchema the child schema for resolving column types
+     * @return the resolved data type
+     */
+    private com.thunderduck.types.DataType resolveExpressionType(
+            com.thunderduck.expression.Expression expr,
+            com.thunderduck.types.StructType childSchema) {
+        // Get underlying expression if aliased
+        com.thunderduck.expression.Expression baseExpr = expr;
+        if (expr instanceof com.thunderduck.expression.AliasExpression) {
+            baseExpr = ((com.thunderduck.expression.AliasExpression) expr).expression();
+        }
+
+        // Resolve column reference from child schema
+        if (baseExpr instanceof UnresolvedColumn && childSchema != null) {
+            String colName = ((UnresolvedColumn) baseExpr).columnName();
+            com.thunderduck.types.StructField field = childSchema.fieldByName(colName);
+            if (field != null) {
+                return field.dataType();
+            }
+        }
+
+        // For other expressions, use their declared type
+        return baseExpr.dataType();
+    }
+
+    /**
      * Visits a Join node.
      * Builds SQL directly in buffer to avoid corruption.
+     *
+     * <p>For columns with plan_id, this method qualifies column references
+     * based on which side of the join they belong to. This enables proper
+     * handling of joins where both tables have columns with the same name.
      *
      * For semi-joins and anti-joins, uses EXISTS/NOT EXISTS patterns
      * since DuckDB doesn't support LEFT SEMI JOIN syntax directly.
@@ -444,35 +1031,93 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             // For semi/anti joins, we need to use WHERE EXISTS/NOT EXISTS
             // SELECT * FROM left WHERE [NOT] EXISTS (SELECT 1 FROM right WHERE condition)
 
-            String leftAlias = generateSubqueryAlias();
-            String rightAlias = generateSubqueryAlias();
+            LogicalPlan leftPlan = plan.left();
+            LogicalPlan rightPlan = plan.right();
 
-            // Start with SELECT * FROM left
-            sql.append("SELECT * FROM (");
-            subqueryDepth++;
-            visit(plan.left());
-            subqueryDepth--;
-            sql.append(") AS ").append(leftAlias);
+            // Determine aliases - use user-provided aliases from AliasedRelation when available
+            String leftAlias;
+            String rightAlias;
+
+            if (leftPlan instanceof AliasedRelation) {
+                leftAlias = SQLQuoting.quoteIdentifier(((AliasedRelation) leftPlan).alias());
+            } else {
+                leftAlias = generateSubqueryAlias();
+            }
+
+            if (rightPlan instanceof AliasedRelation) {
+                rightAlias = SQLQuoting.quoteIdentifier(((AliasedRelation) rightPlan).alias());
+            } else {
+                rightAlias = generateSubqueryAlias();
+            }
+
+            // Build plan_id → alias mapping for column qualification
+            Map<Long, String> planIdToAlias = new HashMap<>();
+            collectPlanIds(plan.left(), leftAlias, planIdToAlias);
+            collectPlanIds(plan.right(), rightAlias, planIdToAlias);
+
+            // LEFT SIDE - handle AliasedRelation, use direct aliasing for TableScan, wrap others
+            if (leftPlan instanceof AliasedRelation) {
+                AliasedRelation aliased = (AliasedRelation) leftPlan;
+                String childSource = getDirectlyAliasableSource(aliased.child());
+                if (childSource != null) {
+                    sql.append("SELECT * FROM ").append(childSource).append(" AS ").append(leftAlias);
+                } else {
+                    sql.append("SELECT * FROM (");
+                    subqueryDepth++;
+                    visit(aliased.child());
+                    subqueryDepth--;
+                    sql.append(") AS ").append(leftAlias);
+                }
+            } else {
+                String leftSource = getDirectlyAliasableSource(leftPlan);
+                if (leftSource != null) {
+                    sql.append("SELECT * FROM ").append(leftSource).append(" AS ").append(leftAlias);
+                } else {
+                    sql.append("SELECT * FROM (");
+                    subqueryDepth++;
+                    visit(leftPlan);
+                    subqueryDepth--;
+                    sql.append(") AS ").append(leftAlias);
+                }
+            }
 
             // Add WHERE [NOT] EXISTS
             sql.append(" WHERE ");
             if (plan.joinType() == Join.JoinType.LEFT_ANTI) {
                 sql.append("NOT ");
             }
-            sql.append("EXISTS (SELECT 1 FROM (");
 
-            // Add right side
-            subqueryDepth++;
-            visit(plan.right());
-            subqueryDepth--;
-            sql.append(") AS ").append(rightAlias);
+            // RIGHT SIDE - handle AliasedRelation, use direct aliasing for TableScan, wrap others
+            if (rightPlan instanceof AliasedRelation) {
+                AliasedRelation aliased = (AliasedRelation) rightPlan;
+                String childSource = getDirectlyAliasableSource(aliased.child());
+                if (childSource != null) {
+                    sql.append("EXISTS (SELECT 1 FROM ").append(childSource).append(" AS ").append(rightAlias);
+                } else {
+                    sql.append("EXISTS (SELECT 1 FROM (");
+                    subqueryDepth++;
+                    visit(aliased.child());
+                    subqueryDepth--;
+                    sql.append(") AS ").append(rightAlias);
+                }
+            } else {
+                String rightSource = getDirectlyAliasableSource(rightPlan);
+                if (rightSource != null) {
+                    sql.append("EXISTS (SELECT 1 FROM ").append(rightSource).append(" AS ").append(rightAlias);
+                } else {
+                    sql.append("EXISTS (SELECT 1 FROM (");
+                    subqueryDepth++;
+                    visit(rightPlan);
+                    subqueryDepth--;
+                    sql.append(") AS ").append(rightAlias);
+                }
+            }
 
             // Add WHERE clause for the correlation
             if (plan.condition() != null) {
                 sql.append(" WHERE ");
-                // Need to properly handle the join condition here
-                // For now, using the condition as-is (may need column qualification)
-                sql.append(plan.condition().toSQL());
+                // Qualify columns using plan_id mapping
+                sql.append(qualifyCondition(plan.condition(), planIdToAlias));
             }
 
             sql.append(")");
@@ -480,12 +1125,58 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         } else {
             // Regular joins (INNER, LEFT, RIGHT, FULL, CROSS)
 
-            // SELECT * FROM left
-            sql.append("SELECT * FROM (");
-            subqueryDepth++;
-            visit(plan.left());
-            subqueryDepth--;
-            sql.append(") AS ").append(generateSubqueryAlias());
+            // Determine aliases - use user-provided aliases from AliasedRelation when available
+            String leftAlias;
+            String rightAlias;
+            LogicalPlan leftPlan = plan.left();
+            LogicalPlan rightPlan = plan.right();
+
+            if (leftPlan instanceof AliasedRelation) {
+                leftAlias = SQLQuoting.quoteIdentifier(((AliasedRelation) leftPlan).alias());
+            } else {
+                leftAlias = generateSubqueryAlias();
+            }
+
+            if (rightPlan instanceof AliasedRelation) {
+                rightAlias = SQLQuoting.quoteIdentifier(((AliasedRelation) rightPlan).alias());
+            } else {
+                rightAlias = generateSubqueryAlias();
+            }
+
+            // Build plan_id → alias mapping for column qualification
+            Map<Long, String> planIdToAlias = new HashMap<>();
+            collectPlanIds(plan.left(), leftAlias, planIdToAlias);
+            collectPlanIds(plan.right(), rightAlias, planIdToAlias);
+
+            // Generate SELECT clause - use explicit column list for USING joins to deduplicate
+            String selectClause = generateJoinSelectClause(plan, leftAlias, rightAlias);
+
+            // LEFT SIDE - use direct aliasing for TableScan, handle AliasedRelation, wrap others
+            if (leftPlan instanceof AliasedRelation) {
+                // User provided an alias - generate SQL using that alias directly
+                AliasedRelation aliased = (AliasedRelation) leftPlan;
+                String childSource = getDirectlyAliasableSource(aliased.child());
+                if (childSource != null) {
+                    sql.append(selectClause).append(" FROM ").append(childSource).append(" AS ").append(leftAlias);
+                } else {
+                    sql.append(selectClause).append(" FROM (");
+                    subqueryDepth++;
+                    visit(aliased.child());
+                    subqueryDepth--;
+                    sql.append(") AS ").append(leftAlias);
+                }
+            } else {
+                String leftSource = getDirectlyAliasableSource(leftPlan);
+                if (leftSource != null) {
+                    sql.append(selectClause).append(" FROM ").append(leftSource).append(" AS ").append(leftAlias);
+                } else {
+                    sql.append(selectClause).append(" FROM (");
+                    subqueryDepth++;
+                    visit(leftPlan);
+                    subqueryDepth--;
+                    sql.append(") AS ").append(leftAlias);
+                }
+            }
 
             // JOIN type
             switch (plan.joinType()) {
@@ -509,28 +1200,176 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                         "Unexpected join type: " + plan.joinType());
             }
 
-            // Right side
-            sql.append("(");
-            subqueryDepth++;
-            visit(plan.right());
-            subqueryDepth--;
-            sql.append(") AS ").append(generateSubqueryAlias());
+            // RIGHT SIDE - use direct aliasing for TableScan, handle AliasedRelation, wrap others
+            if (rightPlan instanceof AliasedRelation) {
+                // User provided an alias - generate SQL using that alias directly
+                AliasedRelation aliased = (AliasedRelation) rightPlan;
+                String childSource = getDirectlyAliasableSource(aliased.child());
+                if (childSource != null) {
+                    sql.append(childSource).append(" AS ").append(rightAlias);
+                } else {
+                    sql.append("(");
+                    subqueryDepth++;
+                    visit(aliased.child());
+                    subqueryDepth--;
+                    sql.append(") AS ").append(rightAlias);
+                }
+            } else {
+                String rightSource = getDirectlyAliasableSource(rightPlan);
+                if (rightSource != null) {
+                    sql.append(rightSource).append(" AS ").append(rightAlias);
+                } else {
+                    sql.append("(");
+                    subqueryDepth++;
+                    visit(rightPlan);
+                    subqueryDepth--;
+                    sql.append(") AS ").append(rightAlias);
+                }
+            }
 
             // ON clause (except for CROSS join)
             if (plan.joinType() != Join.JoinType.CROSS && plan.condition() != null) {
                 sql.append(" ON ");
-                sql.append(plan.condition().toSQL());
+                // Qualify columns using plan_id mapping
+                sql.append(qualifyCondition(plan.condition(), planIdToAlias));
             }
+        }
+    }
+
+    /**
+     * Collects plan_id → alias mappings from a logical plan tree.
+     *
+     * <p>Traverses the plan tree and maps each plan_id to the given alias,
+     * but only if that plan_id is not already mapped. This ensures that
+     * in self-join scenarios (where the same underlying data appears on
+     * both sides), each side's plan_ids map to the correct alias.
+     *
+     * <p>For example, in {@code data.join(data.filter(...), ...)}, both sides
+     * may share some plan_ids from the underlying data. We want:
+     * <ul>
+     *   <li>Left side's plan_ids → left alias</li>
+     *   <li>Right side's plan_ids → right alias</li>
+     *   <li>If a plan_id appears on both sides, the first mapping wins</li>
+     * </ul>
+     *
+     * @param plan the logical plan to traverse
+     * @param alias the alias to map plan_ids to
+     * @param mapping the map to populate with plan_id → alias entries
+     */
+    private void collectPlanIds(LogicalPlan plan, String alias, Map<Long, String> mapping) {
+        if (plan.planId().isPresent()) {
+            long id = plan.planId().getAsLong();
+            // Only add if not already mapped (preserves first mapping)
+            mapping.putIfAbsent(id, alias);
+        }
+        // Recursively collect from children
+        for (LogicalPlan child : plan.children()) {
+            collectPlanIds(child, alias, mapping);
+        }
+    }
+
+    /**
+     * Qualifies column references in an expression using plan_id mapping.
+     *
+     * <p>Traverses the expression tree and qualifies UnresolvedColumn references
+     * that have a plan_id with the appropriate table alias from the mapping.
+     *
+     * <p>Rules:
+     * <ul>
+     *   <li>Already qualified columns (with explicit qualifier) are preserved</li>
+     *   <li>Columns with plan_id are qualified using the mapped alias</li>
+     *   <li>Columns without plan_id are left unqualified (may cause ambiguity)</li>
+     * </ul>
+     *
+     * @param expr the expression to qualify
+     * @param planIdToAlias map from plan_id to table alias
+     * @return the SQL string with qualified column references
+     */
+    public String qualifyCondition(Expression expr, Map<Long, String> planIdToAlias) {
+        if (expr instanceof UnresolvedColumn) {
+            UnresolvedColumn col = (UnresolvedColumn) expr;
+
+            // Already qualified - return as-is
+            if (col.isQualified()) {
+                return col.toSQL();
+            }
+
+            // Use plan_id to determine alias
+            if (col.hasPlanId()) {
+                String alias = planIdToAlias.get(col.planId().getAsLong());
+                if (alias != null) {
+                    return alias + "." + SQLQuoting.quoteIdentifier(col.columnName());
+                }
+            }
+
+            // No plan_id or no mapping - return unqualified (may cause ambiguity)
+            return col.toSQL();
+        }
+
+        if (expr instanceof BinaryExpression) {
+            BinaryExpression binExpr = (BinaryExpression) expr;
+            String leftSQL = qualifyCondition(binExpr.left(), planIdToAlias);
+            String rightSQL = qualifyCondition(binExpr.right(), planIdToAlias);
+            return "(" + leftSQL + " " + binExpr.operator().symbol() + " " + rightSQL + ")";
+        }
+
+        // For other expression types, use their default SQL representation
+        // This handles literals, function calls, etc.
+        return expr.toSQL();
+    }
+
+    /**
+     * Generates a source reference that can be directly aliased in FROM clause.
+     *
+     * <p>Only TableScan nodes can be directly aliased because they represent
+     * simple table/file references. Other leaf nodes (RangeRelation, LocalDataRelation)
+     * produce SELECT statements that need subquery wrapping.
+     *
+     * <p>This optimization reduces verbose SQL like:
+     * <pre>SELECT * FROM (SELECT * FROM "table") AS alias</pre>
+     * to the cleaner:
+     * <pre>SELECT * FROM "table" AS alias</pre>
+     *
+     * @param plan the logical plan
+     * @return the source SQL if directly aliasable, or null if wrapping is needed
+     */
+    private String getDirectlyAliasableSource(LogicalPlan plan) {
+        if (!(plan instanceof TableScan)) {
+            return null;
+        }
+
+        TableScan scan = (TableScan) plan;
+        String source = scan.source();
+
+        switch (scan.format()) {
+            case TABLE:
+                return quoteIdentifier(source);
+            case PARQUET:
+                return "read_parquet(" + quoteFilePath(source) + ")";
+            case DELTA:
+                return "delta_scan(" + quoteFilePath(source) + ")";
+            case ICEBERG:
+                return "iceberg_scan(" + quoteFilePath(source) + ")";
+            default:
+                return null;
         }
     }
 
     /**
      * Visits a Union node.
      * Builds SQL directly in buffer.
+     * Wraps children in parentheses for correct precedence in chained operations.
      */
     private void visitUnion(Union plan) {
-        // Left side
+        if (plan.byName()) {
+            visitUnionByName(plan);
+            return;
+        }
+
+        // Left side (wrapped for precedence)
+        sql.append("(");
         visit(plan.left());
+        sql.append(")");
 
         // UNION operator
         if (plan.all()) {
@@ -539,8 +1378,152 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(" UNION ");
         }
 
-        // Right side
+        // Right side (wrapped for precedence)
+        sql.append("(");
         visit(plan.right());
+        sql.append(")");
+    }
+
+    /**
+     * Visits a Union node with byName=true.
+     * Reorders right side columns to match left side column order by name.
+     */
+    private void visitUnionByName(Union plan) {
+        StructType leftSchema = plan.left().schema();
+        StructType rightSchema = plan.right().schema();
+
+        if (leftSchema == null || rightSchema == null) {
+            throw new UnsupportedOperationException(
+                "unionByName requires schema information. Ensure both DataFrames have known schemas.");
+        }
+
+        // Left side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.left());
+        sql.append(")");
+
+        // UNION operator
+        if (plan.all()) {
+            sql.append(" UNION ALL ");
+        } else {
+            sql.append(" UNION ");
+        }
+
+        // Right side: SELECT columns in left schema order FROM (right)
+        sql.append("(SELECT ");
+
+        // Extract field names from schemas
+        List<String> leftColNames = new ArrayList<>();
+        for (int i = 0; i < leftSchema.size(); i++) {
+            leftColNames.add(leftSchema.fieldAt(i).name());
+        }
+        List<String> rightColNames = new ArrayList<>();
+        for (int i = 0; i < rightSchema.size(); i++) {
+            rightColNames.add(rightSchema.fieldAt(i).name());
+        }
+
+        for (int i = 0; i < leftColNames.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+            String leftColName = leftColNames.get(i);
+
+            // Check if right side has this column (case-insensitive match)
+            String matchedRightCol = findMatchingColumn(leftColName, rightColNames);
+
+            if (matchedRightCol != null) {
+                // Column exists in right side, select it
+                sql.append(SQLQuoting.quoteIdentifier(matchedRightCol));
+                // Alias to left column name if case differs
+                if (!matchedRightCol.equals(leftColName)) {
+                    sql.append(" AS ");
+                    sql.append(SQLQuoting.quoteIdentifier(leftColName));
+                }
+            } else if (plan.allowMissingColumns()) {
+                // Column missing in right side, fill with NULL
+                sql.append("NULL AS ");
+                sql.append(SQLQuoting.quoteIdentifier(leftColName));
+            } else {
+                throw new IllegalArgumentException(
+                    "Column '" + leftColName + "' not found in right DataFrame. " +
+                    "Use allowMissingColumns=true to fill missing columns with NULL.");
+            }
+        }
+
+        sql.append(" FROM (");
+        visit(plan.right());
+        sql.append(") AS _union_by_name)");
+    }
+
+    /**
+     * Finds a matching column name in the list (case-insensitive).
+     *
+     * @param target the column name to find
+     * @param candidates the list of candidate column names
+     * @return the matching column name, or null if not found
+     */
+    private String findMatchingColumn(String target, List<String> candidates) {
+        // First try exact match
+        for (String candidate : candidates) {
+            if (candidate.equals(target)) {
+                return candidate;
+            }
+        }
+        // Then try case-insensitive match
+        for (String candidate : candidates) {
+            if (candidate.equalsIgnoreCase(target)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Visits an Intersect node.
+     * Builds SQL directly in buffer.
+     * Wraps children in parentheses for correct precedence in chained operations.
+     */
+    private void visitIntersect(Intersect plan) {
+        // Left side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.left());
+        sql.append(")");
+
+        // INTERSECT operator
+        if (plan.distinct()) {
+            sql.append(" INTERSECT ");
+        } else {
+            sql.append(" INTERSECT ALL ");
+        }
+
+        // Right side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.right());
+        sql.append(")");
+    }
+
+    /**
+     * Visits an Except node.
+     * Builds SQL directly in buffer.
+     * Wraps children in parentheses for correct precedence in chained operations.
+     */
+    private void visitExcept(Except plan) {
+        // Left side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.left());
+        sql.append(")");
+
+        // EXCEPT operator
+        if (plan.distinct()) {
+            sql.append(" EXCEPT ");
+        } else {
+            sql.append(" EXCEPT ALL ");
+        }
+
+        // Right side (wrapped for precedence)
+        sql.append("(");
+        visit(plan.right());
+        sql.append(")");
     }
 
     /**
@@ -571,7 +1554,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         if (root == null || root.getRowCount() == 0) {
             // Empty relation - generate a VALUES clause that returns no rows
-            sql.append(generateEmptyValues());
+            // Use schema string if available to preserve column names
+            sql.append(generateEmptyValues(plan.getSchemaString()));
         } else if (root.getRowCount() <= 100) {
             // Small dataset - use VALUES clause
             sql.append(generateValuesClause(root));
@@ -582,13 +1566,265 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
-     * Generates an empty VALUES clause that returns no rows.
-     * Example: SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE
+     * Generates an empty VALUES clause that returns no rows, preserving schema.
+     * Example with schema: SELECT CAST(NULL AS INT) AS "id", CAST(NULL AS STRING) AS "name" WHERE FALSE
+     * Example without schema: SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE
      *
-     * @return SQL for empty values
+     * @param schemaStr optional DDL schema string (e.g., "id INT, name STRING")
+     * @return SQL for empty values with proper column names
      */
-    public String generateEmptyValues() {
-        return "SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE";
+    public String generateEmptyValues(String schemaStr) {
+        if (schemaStr == null || schemaStr.isEmpty()) {
+            return "SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE";
+        }
+
+        // Try JSON format first (used by PySpark 4.0+)
+        List<String[]> columns = null;
+        if (schemaStr.trim().startsWith("{")) {
+            columns = parseJSONSchema(schemaStr);
+        }
+
+        // Fall back to DDL format like "id INT, name STRING"
+        if (columns == null || columns.isEmpty()) {
+            columns = parseDDLSchema(schemaStr);
+        }
+
+        if (columns == null || columns.isEmpty()) {
+            return "SELECT * FROM (VALUES (NULL)) AS t WHERE FALSE";
+        }
+
+        StringBuilder result = new StringBuilder("SELECT ");
+        for (int i = 0; i < columns.size(); i++) {
+            if (i > 0) {
+                result.append(", ");
+            }
+            String colName = columns.get(i)[0];
+            String colType = columns.get(i)[1];
+            // Generate CAST(NULL AS type) AS "colName" for each column
+            result.append("CAST(NULL AS ").append(mapSparkTypeToDuckDB(colType))
+                  .append(") AS ").append(quoteIdentifier(colName));
+        }
+        result.append(" WHERE FALSE");
+        return result.toString();
+    }
+
+    /**
+     * Parses a JSON schema string into column name/type pairs.
+     * Handles format like: {"fields":[{"name":"id","type":"integer"},{"name":"name","type":"string"}],"type":"struct"}
+     *
+     * @param schemaStr the JSON schema string
+     * @return list of [name, type] arrays, or null if parsing fails
+     */
+    private List<String[]> parseJSONSchema(String schemaStr) {
+        List<String[]> columns = new ArrayList<>();
+        try {
+            // Simple JSON parsing without external library
+            // Look for "fields" array
+            int fieldsIdx = schemaStr.indexOf("\"fields\"");
+            if (fieldsIdx < 0) {
+                return null;
+            }
+
+            // Find the fields array start
+            int arrayStart = schemaStr.indexOf('[', fieldsIdx);
+            if (arrayStart < 0) {
+                return null;
+            }
+
+            // Find matching end bracket
+            int depth = 1;
+            int arrayEnd = arrayStart + 1;
+            while (arrayEnd < schemaStr.length() && depth > 0) {
+                char c = schemaStr.charAt(arrayEnd);
+                if (c == '[') depth++;
+                else if (c == ']') depth--;
+                arrayEnd++;
+            }
+
+            String fieldsArray = schemaStr.substring(arrayStart + 1, arrayEnd - 1);
+
+            // Parse each field object - handle nested braces
+            int objStart = 0;
+            while ((objStart = fieldsArray.indexOf('{', objStart)) >= 0) {
+                // Find matching close brace (accounting for nested objects)
+                int braceDepth = 1;
+                int objEnd = objStart + 1;
+                while (objEnd < fieldsArray.length() && braceDepth > 0) {
+                    char c = fieldsArray.charAt(objEnd);
+                    if (c == '{') braceDepth++;
+                    else if (c == '}') braceDepth--;
+                    objEnd++;
+                }
+                if (braceDepth != 0) break; // Unbalanced braces
+
+                String fieldObj = fieldsArray.substring(objStart, objEnd);
+
+                // Extract name
+                String name = extractJSONValue(fieldObj, "name");
+                // Extract type
+                String type = extractJSONValue(fieldObj, "type");
+
+                if (name != null && type != null) {
+                    columns.add(new String[]{name, type});
+                }
+
+                objStart = objEnd;
+            }
+
+            return columns.isEmpty() ? null : columns;
+        } catch (Exception e) {
+            // Parsing failed, return null to fall back to DDL parsing
+            return null;
+        }
+    }
+
+    /**
+     * Extracts a string value from a JSON object.
+     */
+    private String extractJSONValue(String json, String key) {
+        String searchKey = "\"" + key + "\"";
+        int keyIdx = json.indexOf(searchKey);
+        if (keyIdx < 0) return null;
+
+        int colonIdx = json.indexOf(':', keyIdx);
+        if (colonIdx < 0) return null;
+
+        // Skip whitespace
+        int valueStart = colonIdx + 1;
+        while (valueStart < json.length() && Character.isWhitespace(json.charAt(valueStart))) {
+            valueStart++;
+        }
+
+        if (valueStart >= json.length()) return null;
+
+        char startChar = json.charAt(valueStart);
+        if (startChar == '"') {
+            // String value
+            int valueEnd = json.indexOf('"', valueStart + 1);
+            if (valueEnd < 0) return null;
+            return json.substring(valueStart + 1, valueEnd);
+        } else {
+            // Non-string value (shouldn't happen for name/type)
+            return null;
+        }
+    }
+
+    /**
+     * Parses a DDL schema string into column name/type pairs.
+     * Handles formats like "id INT, name STRING" or "id INT NOT NULL, name STRING"
+     *
+     * @param schemaStr the DDL schema string
+     * @return list of [name, type] arrays
+     */
+    private List<String[]> parseDDLSchema(String schemaStr) {
+        List<String[]> columns = new ArrayList<>();
+        if (schemaStr == null || schemaStr.isEmpty()) {
+            return columns;
+        }
+
+        // Split by comma, but handle nested types like STRUCT<...> or ARRAY<...>
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i <= schemaStr.length(); i++) {
+            char c = (i < schemaStr.length()) ? schemaStr.charAt(i) : ',';
+            if (c == '<' || c == '(') {
+                depth++;
+            } else if (c == '>' || c == ')') {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                String part = schemaStr.substring(start, i).trim();
+                String[] parsed = parseColumnDef(part);
+                if (parsed != null) {
+                    columns.add(parsed);
+                }
+                start = i + 1;
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * Parses a single column definition like "id INT" or "name STRING NOT NULL"
+     *
+     * @param colDef the column definition
+     * @return [name, type] array or null if unparseable
+     */
+    private String[] parseColumnDef(String colDef) {
+        if (colDef == null || colDef.isEmpty()) {
+            return null;
+        }
+
+        // Handle backtick-quoted names like `my column`
+        String name;
+        String rest;
+        if (colDef.startsWith("`")) {
+            int endQuote = colDef.indexOf('`', 1);
+            if (endQuote < 0) {
+                return null;
+            }
+            name = colDef.substring(1, endQuote);
+            rest = colDef.substring(endQuote + 1).trim();
+        } else {
+            // Split on first whitespace
+            int spaceIdx = colDef.indexOf(' ');
+            if (spaceIdx < 0) {
+                return null;
+            }
+            name = colDef.substring(0, spaceIdx);
+            rest = colDef.substring(spaceIdx + 1).trim();
+        }
+
+        // Extract type (remove NOT NULL if present)
+        String type = rest.replaceAll("(?i)\\s+NOT\\s+NULL\\s*$", "").trim();
+        if (type.isEmpty()) {
+            return null;
+        }
+
+        return new String[]{name, type};
+    }
+
+    /**
+     * Maps Spark SQL types to DuckDB types.
+     *
+     * @param sparkType the Spark type string
+     * @return DuckDB-compatible type string
+     */
+    private String mapSparkTypeToDuckDB(String sparkType) {
+        if (sparkType == null) {
+            return "VARCHAR";
+        }
+        String upper = sparkType.toUpperCase().trim();
+        switch (upper) {
+            case "STRING":
+                return "VARCHAR";
+            case "INTEGER":
+            case "INT":
+                return "INTEGER";
+            case "LONG":
+            case "BIGINT":
+                return "BIGINT";
+            case "SHORT":
+            case "SMALLINT":
+                return "SMALLINT";
+            case "BYTE":
+            case "TINYINT":
+                return "TINYINT";
+            case "FLOAT":
+                return "FLOAT";
+            case "DOUBLE":
+                return "DOUBLE";
+            case "BOOLEAN":
+                return "BOOLEAN";
+            case "DATE":
+                return "DATE";
+            case "TIMESTAMP":
+                return "TIMESTAMP";
+            case "BINARY":
+                return "BLOB";
+            default:
+                // For complex types or unknown types, return as-is
+                return sparkType;
+        }
     }
 
     /**
@@ -600,7 +1836,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      */
     public String generateValuesClause(org.apache.arrow.vector.VectorSchemaRoot root) {
         if (root == null || root.getRowCount() == 0) {
-            return generateEmptyValues();
+            return generateEmptyValues(null);
         }
 
         StringBuilder values = new StringBuilder("SELECT * FROM (VALUES ");
@@ -620,8 +1856,10 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 }
 
                 org.apache.arrow.vector.FieldVector vector = root.getVector(col);
+                org.apache.arrow.vector.types.pojo.ArrowType arrowType =
+                    root.getSchema().getFields().get(col).getType();
                 Object value = getArrowValue(vector, row);
-                values.append(formatSQLValue(value));
+                values.append(formatTypedSQLValue(value, arrowType));
             }
 
             values.append(")");
@@ -677,9 +1915,50 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         } else if (vector instanceof org.apache.arrow.vector.DateDayVector) {
             int days = ((org.apache.arrow.vector.DateDayVector) vector).get(index);
             return java.time.LocalDate.ofEpochDay(days);
+        } else if (vector instanceof org.apache.arrow.vector.DateMilliVector) {
+            // Date stored as milliseconds since epoch
+            long millis = ((org.apache.arrow.vector.DateMilliVector) vector).get(index);
+            return java.time.LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000L));
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampMicroTZVector) {
+            // Timestamp with timezone in microseconds
+            long micros = ((org.apache.arrow.vector.TimeStampMicroTZVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(micros / 1_000_000, (micros % 1_000_000) * 1000);
         } else if (vector instanceof org.apache.arrow.vector.TimeStampMicroVector) {
+            // Timestamp without timezone in microseconds
             long micros = ((org.apache.arrow.vector.TimeStampMicroVector) vector).get(index);
-            return new java.sql.Timestamp(micros / 1000);
+            return java.time.Instant.ofEpochSecond(micros / 1_000_000, (micros % 1_000_000) * 1000);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampMilliTZVector) {
+            // Timestamp with timezone in milliseconds
+            long millis = ((org.apache.arrow.vector.TimeStampMilliTZVector) vector).get(index);
+            return java.time.Instant.ofEpochMilli(millis);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampMilliVector) {
+            // Timestamp without timezone in milliseconds
+            long millis = ((org.apache.arrow.vector.TimeStampMilliVector) vector).get(index);
+            return java.time.Instant.ofEpochMilli(millis);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampNanoTZVector) {
+            // Timestamp with timezone in nanoseconds
+            long nanos = ((org.apache.arrow.vector.TimeStampNanoTZVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(nanos / 1_000_000_000, nanos % 1_000_000_000);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampNanoVector) {
+            // Timestamp without timezone in nanoseconds
+            long nanos = ((org.apache.arrow.vector.TimeStampNanoVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(nanos / 1_000_000_000, nanos % 1_000_000_000);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampSecTZVector) {
+            // Timestamp with timezone in seconds
+            long secs = ((org.apache.arrow.vector.TimeStampSecTZVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(secs);
+        } else if (vector instanceof org.apache.arrow.vector.TimeStampSecVector) {
+            // Timestamp without timezone in seconds
+            long secs = ((org.apache.arrow.vector.TimeStampSecVector) vector).get(index);
+            return java.time.Instant.ofEpochSecond(secs);
+        } else if (vector instanceof org.apache.arrow.vector.complex.ListVector) {
+            // Handle array/list types - return as List to preserve structure
+            org.apache.arrow.vector.complex.ListVector listVector = (org.apache.arrow.vector.complex.ListVector) vector;
+            return listVector.getObject(index);  // Returns java.util.List
+        } else if (vector instanceof org.apache.arrow.vector.complex.MapVector) {
+            // Handle map types - return as List of Map.Entry-like structures
+            org.apache.arrow.vector.complex.MapVector mapVector = (org.apache.arrow.vector.complex.MapVector) vector;
+            return mapVector.getObject(index);  // Returns List of structs (key, value)
         }
 
         // Fallback: try to get object representation
@@ -711,10 +1990,85 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             return "DATE '" + value.toString() + "'";
         } else if (value instanceof java.sql.Timestamp) {
             return "TIMESTAMP '" + value.toString() + "'";
+        } else if (value instanceof java.time.Instant) {
+            // Format Instant as TIMESTAMP literal
+            java.time.Instant instant = (java.time.Instant) value;
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC);
+            return "TIMESTAMP '" + ldt.toString().replace("T", " ") + "'";
+        } else if (value instanceof java.time.LocalDateTime) {
+            // Format LocalDateTime as TIMESTAMP literal
+            return "TIMESTAMP '" + value.toString().replace("T", " ") + "'";
+        } else if (value instanceof java.util.List) {
+            // Format as DuckDB array literal: [elem1, elem2, ...]
+            java.util.List<?> list = (java.util.List<?>) value;
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(formatSQLValue(list.get(i)));
+            }
+            sb.append("]");
+            return sb.toString();
+        } else if (value instanceof java.util.Map) {
+            // Format as DuckDB map literal: MAP([keys], [values])
+            java.util.Map<?, ?> map = (java.util.Map<?, ?>) value;
+            StringBuilder keys = new StringBuilder("[");
+            StringBuilder values = new StringBuilder("[");
+            boolean first = true;
+            for (java.util.Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!first) {
+                    keys.append(", ");
+                    values.append(", ");
+                }
+                keys.append(formatSQLValue(entry.getKey()));
+                values.append(formatSQLValue(entry.getValue()));
+                first = false;
+            }
+            keys.append("]");
+            values.append("]");
+            return "MAP(" + keys + ", " + values + ")";
+        } else if (value instanceof org.apache.arrow.vector.util.JsonStringHashMap) {
+            // Arrow returns maps as JsonStringHashMap (key-value struct entries)
+            // Format as DuckDB map literal
+            @SuppressWarnings("unchecked")
+            org.apache.arrow.vector.util.JsonStringHashMap<String, ?> arrowMap =
+                (org.apache.arrow.vector.util.JsonStringHashMap<String, ?>) value;
+            Object key = arrowMap.get("key");
+            Object val = arrowMap.get("value");
+            // This is a single entry from a map - should be handled by the List case above
+            // Just format as a struct-like value
+            return "{'key': " + formatSQLValue(key) + ", 'value': " + formatSQLValue(val) + "}";
         } else {
             // Fallback: convert to string and quote
             String escaped = value.toString().replace("'", "''");
             return "'" + escaped + "'";
+        }
+    }
+
+    /**
+     * Formats a value with explicit CAST to preserve Arrow schema type.
+     * This ensures DuckDB uses the correct type instead of inferring from literals.
+     *
+     * @param value the value to format
+     * @param type the Arrow type to cast to
+     * @return SQL representation with CAST wrapper for numeric types
+     */
+    private String formatTypedSQLValue(Object value, org.apache.arrow.vector.types.pojo.ArrowType type) {
+        String formatted = formatSQLValue(value);
+        if (value == null) {
+            return formatted; // NULL doesn't need CAST
+        }
+
+        // Only wrap numeric types that DuckDB might infer incorrectly
+        switch (type.getTypeID()) {
+            case Int:
+            case FloatingPoint:
+            case Decimal:
+                String sqlType = com.thunderduck.runtime.ArrowInterchange.arrowTypeToSQLType(type);
+                return "CAST(" + formatted + " AS " + sqlType + ")";
+            default:
+                return formatted; // Other types (String, Date, etc.) are fine as-is
         }
     }
 
@@ -763,5 +2117,77 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      */
     public int getSubqueryDepth() {
         return subqueryDepth;
+    }
+
+    /**
+     * Generates the SELECT clause for a join.
+     *
+     * <p>For USING joins, generates an explicit column list to deduplicate
+     * the join columns. For regular joins (ON clause), returns "SELECT *".
+     *
+     * <p>For RIGHT and FULL outer joins with USING columns, we use COALESCE
+     * to ensure the join column value comes from whichever side has a non-NULL
+     * value, since the left side may be NULL.
+     *
+     * @param plan the Join plan
+     * @param leftAlias the alias for the left side
+     * @param rightAlias the alias for the right side
+     * @return the SELECT clause (without trailing space)
+     */
+    private String generateJoinSelectClause(Join plan, String leftAlias, String rightAlias) {
+        List<String> usingColumns = plan.usingColumns();
+
+        // For non-USING joins, just return SELECT *
+        if (usingColumns == null || usingColumns.isEmpty()) {
+            return "SELECT *";
+        }
+
+        // Get schemas for building explicit column list
+        com.thunderduck.types.StructType leftSchema = plan.left().schema();
+        com.thunderduck.types.StructType rightSchema = plan.right().schema();
+
+        // If schemas aren't available or empty, fall back to SELECT *
+        if (leftSchema == null || rightSchema == null ||
+            leftSchema.fields().isEmpty() || rightSchema.fields().isEmpty()) {
+            return "SELECT *";
+        }
+
+        // Build explicit column list for USING joins
+        // Spark column order: USING columns first, then non-USING left, then non-USING right
+        Set<String> usingSet = new HashSet<>(usingColumns);
+        List<String> selectItems = new ArrayList<>();
+
+        // Determine if we need COALESCE for USING columns (RIGHT/FULL outer joins)
+        boolean needsCoalesce = (plan.joinType() == Join.JoinType.RIGHT ||
+                                 plan.joinType() == Join.JoinType.FULL);
+
+        // 1. First, add USING columns (in the order they appear in usingColumns list)
+        for (String usingCol : usingColumns) {
+            String quotedName = SQLQuoting.quoteIdentifier(usingCol);
+            if (needsCoalesce) {
+                // For RIGHT/FULL joins, use COALESCE to get value from whichever side has it
+                selectItems.add(String.format("COALESCE(%s.%s, %s.%s) AS %s",
+                    leftAlias, quotedName, rightAlias, quotedName, quotedName));
+            } else {
+                selectItems.add(leftAlias + "." + quotedName);
+            }
+        }
+
+        // 2. Add non-USING columns from left side
+        for (com.thunderduck.types.StructField field : leftSchema.fields()) {
+            if (!usingSet.contains(field.name())) {
+                selectItems.add(leftAlias + "." + SQLQuoting.quoteIdentifier(field.name()));
+            }
+        }
+
+        // 3. Add non-USING columns from right side
+        for (com.thunderduck.types.StructField field : rightSchema.fields()) {
+            if (!usingSet.contains(field.name())) {
+                selectItems.add(rightAlias + "." +
+                    SQLQuoting.quoteIdentifier(field.name()));
+            }
+        }
+
+        return "SELECT " + String.join(", ", selectItems);
     }
 }

@@ -1,5 +1,7 @@
 package com.thunderduck.functions;
 
+import com.thunderduck.types.*;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +28,7 @@ public class FunctionRegistry {
 
     private static final Map<String, String> DIRECT_MAPPINGS = new HashMap<>();
     private static final Map<String, FunctionTranslator> CUSTOM_TRANSLATORS = new HashMap<>();
+    private static final Map<String, FunctionMetadata> FUNCTION_METADATA = new HashMap<>();
 
     static {
         initializeStringFunctions();
@@ -35,6 +38,7 @@ public class FunctionRegistry {
         initializeWindowFunctions();
         initializeArrayFunctions();
         initializeConditionalFunctions();
+        initializeFunctionMetadata();
     }
 
     /**
@@ -126,7 +130,7 @@ public class FunctionRegistry {
 
         // Position and search
         DIRECT_MAPPINGS.put("instr", "instr");
-        DIRECT_MAPPINGS.put("locate", "position");
+        // Note: locate uses CUSTOM_TRANSLATOR (see below) due to argument order difference
         DIRECT_MAPPINGS.put("position", "position");
 
         // Padding
@@ -154,6 +158,29 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("md5", "md5");
         DIRECT_MAPPINGS.put("sha1", "sha1");
         DIRECT_MAPPINGS.put("sha2", "sha256"); // Spark sha2(str, 256) → DuckDB sha256(str)
+
+        // Custom translator for locate - Spark and DuckDB have different argument orders
+        // Spark: locate(substr, str) - substring first, string second
+        // DuckDB instr: instr(str, substr) - string first, substring second
+        // Note: Spark returns NULL if str is NULL, DuckDB instr returns 0 - we must preserve NULL
+        CUSTOM_TRANSLATORS.put("locate", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("locate requires at least 2 arguments");
+            }
+            String substr = args[0];
+            String str = args[1];
+
+            if (args.length > 2) {
+                // locate(substr, str, pos) - with start position
+                String startPos = args[2];
+                return "CASE WHEN " + str + " IS NULL THEN NULL " +
+                       "WHEN instr(substr(" + str + ", " + startPos + "), " + substr + ") > 0 " +
+                       "THEN instr(substr(" + str + ", " + startPos + "), " + substr + ") + " + startPos + " - 1 " +
+                       "ELSE 0 END";
+            }
+            // Basic 2-arg form: swap argument order for instr, but return NULL if str is NULL
+            return "CASE WHEN " + str + " IS NULL THEN NULL ELSE instr(" + str + ", " + substr + ") END";
+        });
     }
 
     // ==================== Math Functions ====================
@@ -203,17 +230,32 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("e", "e");
         DIRECT_MAPPINGS.put("rand", "random");
         DIRECT_MAPPINGS.put("random", "random");
+
+        // Comparison functions
+        DIRECT_MAPPINGS.put("greatest", "greatest");
+        DIRECT_MAPPINGS.put("least", "least");
+
+        // Custom translator for pmod (positive modulo)
+        // DuckDB doesn't have pmod, so we emulate: pmod(a, b) = ((a % b) + b) % b
+        CUSTOM_TRANSLATORS.put("pmod", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("pmod requires 2 arguments");
+            }
+            String a = args[0];
+            String b = args[1];
+            // Positive modulo formula: ((a % b) + b) % b
+            return "(((" + a + ") % (" + b + ") + (" + b + ")) % (" + b + "))";
+        });
     }
 
     // ==================== Date/Time Functions ====================
 
     private static void initializeDateFunctions() {
-        // Extract components
+        // Extract components - direct mappings
         DIRECT_MAPPINGS.put("year", "year");
         DIRECT_MAPPINGS.put("month", "month");
         DIRECT_MAPPINGS.put("day", "day");
         DIRECT_MAPPINGS.put("dayofmonth", "day");
-        DIRECT_MAPPINGS.put("dayofweek", "dayofweek");
         DIRECT_MAPPINGS.put("dayofyear", "dayofyear");
         DIRECT_MAPPINGS.put("hour", "hour");
         DIRECT_MAPPINGS.put("minute", "minute");
@@ -221,38 +263,190 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("quarter", "quarter");
         DIRECT_MAPPINGS.put("weekofyear", "weekofyear");
 
-        // Date arithmetic
-        DIRECT_MAPPINGS.put("date_add", "date_add");
-        DIRECT_MAPPINGS.put("date_sub", "date_sub");
-        DIRECT_MAPPINGS.put("datediff", "datediff");
-        DIRECT_MAPPINGS.put("add_months", "add_months");
+        // dayofweek: Spark returns 1=Sunday...7=Saturday; DuckDB returns 0=Sunday...6=Saturday
+        // Need to add 1 to DuckDB result
+        CUSTOM_TRANSLATORS.put("dayofweek", args -> "dayofweek(" + args[0] + ") + 1");
 
-        // Date formatting
-        DIRECT_MAPPINGS.put("date_format", "strftime");
-        DIRECT_MAPPINGS.put("to_date", "cast");
-        DIRECT_MAPPINGS.put("to_timestamp", "cast");
+        // Date arithmetic - date_add works directly
+        DIRECT_MAPPINGS.put("date_add", "date_add");
+
+        // date_sub: Spark date_sub(date, days)
+        // DuckDB doesn't have date_sub(date, int) - use date - INTERVAL 'n days'
+        CUSTOM_TRANSLATORS.put("date_sub", args ->
+            "CAST((" + args[0] + " - INTERVAL '" + args[1] + " days') AS DATE)");
+
+        // datediff: Spark datediff(end, start) returns (end - start) days
+        // DuckDB datediff('day', A, B) returns (B - A) days (second minus first!)
+        // So we swap args: datediff('day', start, end) = end - start
+        CUSTOM_TRANSLATORS.put("datediff", args ->
+            "datediff('day', " + args[1] + ", " + args[0] + ")");
+
+        // add_months: Spark add_months(date, months)
+        // DuckDB: date + INTERVAL 'n months'
+        CUSTOM_TRANSLATORS.put("add_months", args ->
+            "CAST((" + args[0] + " + INTERVAL '" + args[1] + " months') AS DATE)");
+
+        // months_between: Spark months_between(date1, date2, roundOff) returns (date1 - date2) months
+        // DuckDB datediff('day', A, B) returns (B - A) days (second minus first!)
+        // So: datediff('day', date2, date1) / 31.0 = (date1 - date2) / 31.0
+        CUSTOM_TRANSLATORS.put("months_between", args -> {
+            if (args.length >= 2) {
+                // Compute the fractional months: (date1 - date2) / 31.0
+                // This is an approximation; for exact Spark parity, more complex logic needed
+                return "CAST(datediff('day', " + args[1] + ", " + args[0] + ") AS DOUBLE) / 31.0";
+            }
+            return "0.0";
+        });
+
+        // Date formatting - need format string conversion
+        // Spark uses Java SimpleDateFormat (yyyy-MM-dd), DuckDB uses strftime (%Y-%m-%d)
+        CUSTOM_TRANSLATORS.put("date_format", args -> {
+            if (args.length >= 2) {
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "strftime(" + args[0] + ", " + format + ")";
+            }
+            return "strftime(" + args[0] + ", '%Y-%m-%d')";
+        });
+
+        // to_date: Spark to_date(string) or to_date(string, format)
+        CUSTOM_TRANSLATORS.put("to_date", args -> {
+            if (args.length == 1) {
+                return "CAST(" + args[0] + " AS DATE)";
+            } else {
+                // to_date with format - use strptime then CAST
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "CAST(strptime(" + args[0] + ", " + format + ") AS DATE)";
+            }
+        });
+
+        // to_timestamp: Spark to_timestamp(string) or to_timestamp(string, format)
+        CUSTOM_TRANSLATORS.put("to_timestamp", args -> {
+            if (args.length == 1) {
+                return "CAST(" + args[0] + " AS TIMESTAMP)";
+            } else {
+                // to_timestamp with format - use strptime then CAST
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "CAST(strptime(" + args[0] + ", " + format + ") AS TIMESTAMP)";
+            }
+        });
 
         // Current date/time
         DIRECT_MAPPINGS.put("current_date", "current_date");
         DIRECT_MAPPINGS.put("current_timestamp", "current_timestamp");
         DIRECT_MAPPINGS.put("now", "now");
 
-        // Date truncation
-        DIRECT_MAPPINGS.put("date_trunc", "date_trunc");
-        DIRECT_MAPPINGS.put("trunc", "date_trunc");
+        // Date truncation - Spark always returns TIMESTAMP, DuckDB may return DATE
+        // Cast result to TIMESTAMP to match Spark behavior
+        CUSTOM_TRANSLATORS.put("date_trunc", args ->
+            "CAST(date_trunc(" + String.join(", ", args) + ") AS TIMESTAMP)");
+        CUSTOM_TRANSLATORS.put("trunc", args ->
+            "CAST(date_trunc(" + String.join(", ", args) + ") AS TIMESTAMP)");
 
-        // Other date functions
+        // last_day: same in both
         DIRECT_MAPPINGS.put("last_day", "last_day");
+
+        // next_day: Spark uses day names, DuckDB same
+        // Spark: next_day(date, 'Monday')
+        // DuckDB: next_day(date, 'monday') - case insensitive
         DIRECT_MAPPINGS.put("next_day", "next_day");
-        DIRECT_MAPPINGS.put("unix_timestamp", "epoch");
-        DIRECT_MAPPINGS.put("from_unixtime", "to_timestamp");
+
+        // unix_timestamp: Spark unix_timestamp() or unix_timestamp(timestamp) or unix_timestamp(string, format)
+        // DuckDB: epoch(timestamp) returns DOUBLE, but Spark returns LONG
+        // Cast to BIGINT to match Spark's return type
+        CUSTOM_TRANSLATORS.put("unix_timestamp", args -> {
+            if (args.length == 0) {
+                return "CAST(epoch(current_timestamp) AS BIGINT)";
+            } else if (args.length == 1) {
+                return "CAST(epoch(" + args[0] + ") AS BIGINT)";
+            } else {
+                // unix_timestamp(expr, format)
+                // If expr is a string literal (single quotes in SQL), parse it with strptime
+                // Otherwise, assume it's already a date/timestamp column and just use epoch
+                // Note: Double quotes are identifiers in SQL (column names), not string literals
+                String expr = args[0].trim();
+                if (expr.startsWith("'") && !expr.startsWith("''")) {
+                    // It's a string literal - needs parsing
+                    String format = convertSparkDateFormatToDuckDB(args[1]);
+                    return "CAST(epoch(strptime(" + args[0] + ", " + format + ")) AS BIGINT)";
+                } else {
+                    // It's a column reference, identifier, or timestamp expression
+                    // Just use epoch() directly - the format is ignored for non-string inputs
+                    return "CAST(epoch(" + args[0] + ") AS BIGINT)";
+                }
+            }
+        });
+
+        // from_unixtime: Convert epoch seconds to timestamp string
+        // Spark: from_unixtime(epoch) or from_unixtime(epoch, format)
+        // DuckDB: strftime(to_timestamp(epoch), format)
+        CUSTOM_TRANSLATORS.put("from_unixtime", args -> {
+            if (args.length == 1) {
+                return "strftime(to_timestamp(" + args[0] + "), '%Y-%m-%d %H:%M:%S')";
+            } else {
+                String format = convertSparkDateFormatToDuckDB(args[1]);
+                return "strftime(to_timestamp(" + args[0] + "), " + format + ")";
+            }
+        });
+    }
+
+    /**
+     * Converts Spark/Java SimpleDateFormat patterns to DuckDB strftime patterns.
+     * Common patterns:
+     * - yyyy -> %Y (4-digit year)
+     * - yy -> %y (2-digit year)
+     * - MM -> %m (month 01-12)
+     * - dd -> %d (day 01-31)
+     * - HH -> %H (hour 00-23)
+     * - hh -> %I (hour 01-12)
+     * - mm -> %M (minute 00-59)
+     * - ss -> %S (second 00-59)
+     * - a -> %p (AM/PM)
+     * - E -> %a (abbreviated weekday)
+     * - EEEE -> %A (full weekday)
+     */
+    private static String convertSparkDateFormatToDuckDB(String sparkFormat) {
+        if (sparkFormat == null || sparkFormat.isEmpty()) {
+            return "'%Y-%m-%d %H:%M:%S'";
+        }
+
+        // Remove surrounding quotes if present
+        String format = sparkFormat;
+        if (format.startsWith("'") && format.endsWith("'")) {
+            format = format.substring(1, format.length() - 1);
+        }
+
+        // Convert patterns (order matters - longer patterns first)
+        format = format.replace("yyyy", "%Y");
+        format = format.replace("yy", "%y");
+        format = format.replace("MMMM", "%B");  // Full month name
+        format = format.replace("MMM", "%b");   // Abbreviated month name
+        format = format.replace("MM", "%m");
+        format = format.replace("dd", "%d");
+        format = format.replace("HH", "%H");
+        format = format.replace("hh", "%I");
+        format = format.replace("mm", "%M");
+        format = format.replace("ss", "%S");
+        format = format.replace("SSS", "%f");   // Milliseconds
+        format = format.replace("EEEE", "%A");  // Full weekday
+        format = format.replace("EEE", "%a");   // Abbreviated weekday
+        format = format.replace("E", "%a");     // Abbreviated weekday
+        format = format.replace("a", "%p");     // AM/PM
+
+        return "'" + format + "'";
     }
 
     // ==================== Aggregate Functions ====================
 
     private static void initializeAggregateFunctions() {
         // Basic aggregates
-        DIRECT_MAPPINGS.put("sum", "sum");
+        // SUM needs special handling: DuckDB returns DECIMAL(38,0) for integer inputs,
+        // but Spark returns BIGINT. Cast to BIGINT for Spark compatibility.
+        CUSTOM_TRANSLATORS.put("sum", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("sum requires at least 1 argument");
+            }
+            return "CAST(SUM(" + args[0] + ") AS BIGINT)";
+        });
         DIRECT_MAPPINGS.put("avg", "avg");
         DIRECT_MAPPINGS.put("mean", "avg");
         DIRECT_MAPPINGS.put("min", "min");
@@ -268,16 +462,57 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("var_pop", "var_pop");
 
         // Collection aggregates
-        DIRECT_MAPPINGS.put("collect_list", "list");
-        DIRECT_MAPPINGS.put("collect_set", "list_distinct");
+        // Note: collect_list and collect_set use custom translators (see below)
+        // collect_list maps to list() but needs FILTER to exclude NULLs (matching Spark semantics)
         DIRECT_MAPPINGS.put("first", "first");
         DIRECT_MAPPINGS.put("last", "last");
+
+        // collect_list: DuckDB's list() includes NULLs, but Spark excludes them
+        // Use FILTER clause to match Spark semantics
+        CUSTOM_TRANSLATORS.put("collect_list", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("collect_list requires at least 1 argument");
+            }
+            String arg = args[0];
+            // Use FILTER clause to exclude NULLs (matching Spark semantics)
+            return "list(" + arg + ") FILTER (WHERE " + arg + " IS NOT NULL)";
+        });
+
+        // collect_set requires wrapping: list_distinct(list(arg))
+        // DuckDB's list() aggregates all values, list_distinct() removes duplicates
+        // Also use FILTER clause to exclude NULLs (matching Spark semantics)
+        CUSTOM_TRANSLATORS.put("collect_set", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("collect_set requires at least 1 argument");
+            }
+            String arg = args[0];
+            return "list_distinct(list(" + arg + ") FILTER (WHERE " + arg + " IS NOT NULL))";
+        });
 
         // Other aggregates
         DIRECT_MAPPINGS.put("approx_count_distinct", "approx_count_distinct");
         DIRECT_MAPPINGS.put("corr", "corr");
         DIRECT_MAPPINGS.put("covar_pop", "covar_pop");
         DIRECT_MAPPINGS.put("covar_samp", "covar_samp");
+
+        // DISTINCT aggregate functions - DISTINCT keyword goes inside parentheses
+        // These handle Spark's countDistinct(), sumDistinct() etc. which arrive as
+        // "count_distinct", "sum_distinct" after ExpressionConverter appends "_DISTINCT"
+        CUSTOM_TRANSLATORS.put("count_distinct", args -> {
+            if (args.length == 1) {
+                return "COUNT(DISTINCT " + args[0] + ")";
+            } else {
+                // Multiple columns: wrap in ROW() for DuckDB tuple semantics
+                // Spark: COUNT(DISTINCT col1, col2) counts distinct (col1, col2) pairs
+                // DuckDB: COUNT(DISTINCT col1, col2) only counts distinct col1 (WRONG!)
+                // Solution: COUNT(DISTINCT ROW(col1, col2)) counts distinct tuples
+                return "COUNT(DISTINCT ROW(" + String.join(", ", args) + "))";
+            }
+        });
+        CUSTOM_TRANSLATORS.put("sum_distinct", args ->
+            "SUM(DISTINCT " + String.join(", ", args) + ")");
+        CUSTOM_TRANSLATORS.put("avg_distinct", args ->
+            "AVG(DISTINCT " + String.join(", ", args) + ")");
     }
 
     // ==================== Window Functions ====================
@@ -307,18 +542,147 @@ public class FunctionRegistry {
         // Array operations
         DIRECT_MAPPINGS.put("array_contains", "list_contains");
         DIRECT_MAPPINGS.put("array_distinct", "list_distinct");
-        DIRECT_MAPPINGS.put("array_sort", "list_sort");
+        // Note: array_sort and sort_array use custom translators (see below)
         DIRECT_MAPPINGS.put("array_max", "list_max");
         DIRECT_MAPPINGS.put("array_min", "list_min");
-        DIRECT_MAPPINGS.put("size", "len");
+        // Note: size uses custom translator to cast to INT (see below)
         DIRECT_MAPPINGS.put("explode", "unnest");
         DIRECT_MAPPINGS.put("flatten", "flatten");
+        // Note: "reverse" for strings is mapped above (line 128) to DuckDB's reverse()
+        // For arrays, use array_reverse explicitly
+        DIRECT_MAPPINGS.put("array_reverse", "list_reverse");
+        DIRECT_MAPPINGS.put("array_position", "list_position");
+        DIRECT_MAPPINGS.put("element_at", "list_extract");
+        DIRECT_MAPPINGS.put("slice", "list_slice");
+        DIRECT_MAPPINGS.put("arrays_overlap", "list_has_any");
 
         // Array construction
         DIRECT_MAPPINGS.put("array", "list_value");
         DIRECT_MAPPINGS.put("array_union", "list_union");
         DIRECT_MAPPINGS.put("array_intersect", "list_intersect");
         DIRECT_MAPPINGS.put("array_except", "list_except");
+
+        // Higher-order array functions (lambda-based)
+        DIRECT_MAPPINGS.put("transform", "list_transform");
+        DIRECT_MAPPINGS.put("filter", "list_filter");
+        DIRECT_MAPPINGS.put("aggregate", "list_reduce");
+
+        // MAP_FROM_ARRAYS: create map from key and value arrays
+        // Spark: MAP_FROM_ARRAYS(ARRAY('a', 'b'), ARRAY(1, 2))
+        // DuckDB: MAP(keys_array, values_array)
+        CUSTOM_TRANSLATORS.put("map_from_arrays", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("map_from_arrays requires exactly 2 arguments");
+            }
+            return "MAP(" + args[0] + ", " + args[1] + ")";
+        });
+        // Note: exists, forall require special handling in ExpressionConverter
+        // as they need to wrap list_transform with list_any/list_all
+
+        // size() returns INT in Spark but DuckDB len() returns BIGINT - need CAST
+        CUSTOM_TRANSLATORS.put("size", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("size requires at least 1 argument");
+            }
+            return "CAST(len(" + args[0] + ") AS INTEGER)";
+        });
+
+        // Custom translators for sort_array/array_sort
+        // Spark uses boolean (TRUE=asc, FALSE=desc), DuckDB uses string ('ASC'/'DESC')
+        CUSTOM_TRANSLATORS.put("sort_array", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("sort_array requires at least 1 argument");
+            }
+            String arrayArg = args[0];
+            String direction = "'ASC'";  // default ascending
+            if (args.length > 1) {
+                String secondArg = args[1].trim().toUpperCase();
+                // Convert TRUE -> 'ASC', FALSE -> 'DESC'
+                if ("FALSE".equals(secondArg)) {
+                    direction = "'DESC'";
+                }
+            }
+            return "list_sort(" + arrayArg + ", " + direction + ")";
+        });
+
+        CUSTOM_TRANSLATORS.put("array_sort", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("array_sort requires at least 1 argument");
+            }
+            String arrayArg = args[0];
+            String direction = "'ASC'";  // default ascending
+            if (args.length > 1) {
+                String secondArg = args[1].trim().toUpperCase();
+                if ("FALSE".equals(secondArg)) {
+                    direction = "'DESC'";
+                }
+            }
+            return "list_sort(" + arrayArg + ", " + direction + ")";
+        });
+
+        // ==================== Complex Type Constructors ====================
+
+        // STRUCT: positional struct → row() function
+        // Spark: struct(col1, col2)
+        // DuckDB: row(col1, col2)
+        DIRECT_MAPPINGS.put("struct", "row");
+
+        // NAMED_STRUCT: alternating name/value pairs → struct_pack syntax
+        // Spark: named_struct('name', 'Alice', 'age', 30)
+        // DuckDB: struct_pack(name := 'Alice', age := 30)
+        CUSTOM_TRANSLATORS.put("named_struct", args -> {
+            if (args.length == 0) {
+                return "struct_pack()";
+            }
+            if (args.length % 2 != 0) {
+                throw new IllegalArgumentException(
+                    "named_struct requires even number of arguments (name/value pairs)");
+            }
+
+            StringBuilder sb = new StringBuilder("struct_pack(");
+            for (int i = 0; i < args.length; i += 2) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                String fieldName = extractFieldName(args[i]);
+                String value = args[i + 1];
+                sb.append(fieldName).append(" := ").append(value);
+            }
+            sb.append(")");
+            return sb.toString();
+        });
+
+        // MAP constructor: alternating key/value pairs → MAP([keys], [values])
+        // Spark: map('a', 1, 'b', 2)
+        // DuckDB: MAP(['a', 'b'], [1, 2])
+        FunctionTranslator mapTranslator = args -> {
+            if (args.length == 0) {
+                return "MAP([], [])";
+            }
+            if (args.length % 2 != 0) {
+                throw new IllegalArgumentException(
+                    "map requires even number of arguments (key/value pairs)");
+            }
+
+            StringBuilder keys = new StringBuilder("[");
+            StringBuilder values = new StringBuilder("[");
+
+            for (int i = 0; i < args.length; i += 2) {
+                if (i > 0) {
+                    keys.append(", ");
+                    values.append(", ");
+                }
+                keys.append(args[i]);
+                values.append(args[i + 1]);
+            }
+
+            keys.append("]");
+            values.append("]");
+
+            return "MAP(" + keys + ", " + values + ")";
+        };
+        CUSTOM_TRANSLATORS.put("map", mapTranslator);
+        CUSTOM_TRANSLATORS.put("create_map", mapTranslator);
     }
 
     // ==================== Conditional Functions ====================
@@ -349,5 +713,230 @@ public class FunctionRegistry {
      */
     public static int registeredFunctionCount() {
         return DIRECT_MAPPINGS.size() + CUSTOM_TRANSLATORS.size();
+    }
+
+    /**
+     * Maps a Spark function name to DuckDB equivalent.
+     *
+     * <p>Returns the mapped DuckDB function name if a direct mapping exists,
+     * otherwise returns the original name unchanged.
+     *
+     * @param sparkFunctionName the Spark function name
+     * @return the DuckDB function name (or original if no mapping)
+     */
+    public static String mapFunctionName(String sparkFunctionName) {
+        if (sparkFunctionName == null) {
+            return null;
+        }
+        String normalizedName = sparkFunctionName.toLowerCase();
+        return DIRECT_MAPPINGS.getOrDefault(normalizedName, sparkFunctionName);
+    }
+
+    /**
+     * Gets the function metadata if available.
+     *
+     * <p>Function metadata provides type inference and nullable information
+     * in addition to translation logic.
+     *
+     * @param functionName the Spark function name
+     * @return the metadata, or empty if not available
+     */
+    public static Optional<FunctionMetadata> getMetadata(String functionName) {
+        if (functionName == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(FUNCTION_METADATA.get(functionName.toLowerCase()));
+    }
+
+    // ==================== Function Metadata Initialization ====================
+
+    /**
+     * Initialize function metadata for key functions that need type/nullable inference.
+     *
+     * <p>This provides a single source of truth for functions that have complex
+     * type or nullable inference requirements. Functions not in this map will
+     * fall back to the legacy inference logic in ExpressionConverter.
+     */
+    private static void initializeFunctionMetadata() {
+        // Null-coalescing functions: return first argument's type, non-null if ANY arg is non-null
+        FUNCTION_METADATA.put("greatest", FunctionMetadata.builder("greatest")
+            .duckdbName("greatest")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("least", FunctionMetadata.builder("least")
+            .duckdbName("least")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("coalesce", FunctionMetadata.builder("coalesce")
+            .duckdbName("coalesce")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("nvl", FunctionMetadata.builder("nvl")
+            .duckdbName("coalesce")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        FUNCTION_METADATA.put("ifnull", FunctionMetadata.builder("ifnull")
+            .duckdbName("ifnull")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.nullCoalescing())
+            .build());
+
+        // Math type-preserving functions
+        FUNCTION_METADATA.put("abs", FunctionMetadata.builder("abs")
+            .duckdbName("abs")
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("pmod", FunctionMetadata.builder("pmod")
+            .translator(args -> {
+                if (args.length < 2) {
+                    throw new IllegalArgumentException("pmod requires 2 arguments");
+                }
+                String a = args[0];
+                String b = args[1];
+                return "(((" + a + ") % (" + b + ") + (" + b + ")) % (" + b + "))";
+            })
+            .returnType(FunctionMetadata.firstArgTypePreserving())
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // Position functions return IntegerType
+        FUNCTION_METADATA.put("locate", FunctionMetadata.builder("locate")
+            .translator(args -> {
+                if (args.length < 2) {
+                    throw new IllegalArgumentException("locate requires at least 2 arguments");
+                }
+                String substr = args[0];
+                String str = args[1];
+                if (args.length > 2) {
+                    String startPos = args[2];
+                    return "CASE WHEN " + str + " IS NULL THEN NULL " +
+                           "WHEN instr(substr(" + str + ", " + startPos + "), " + substr + ") > 0 " +
+                           "THEN instr(substr(" + str + ", " + startPos + "), " + substr + ") + " + startPos + " - 1 " +
+                           "ELSE 0 END";
+                }
+                return "CASE WHEN " + str + " IS NULL THEN NULL ELSE instr(" + str + ", " + substr + ") END";
+            })
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("instr", FunctionMetadata.builder("instr")
+            .duckdbName("instr")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("position", FunctionMetadata.builder("position")
+            .duckdbName("position")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("array_position", FunctionMetadata.builder("array_position")
+            .duckdbName("list_position")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // Boolean-returning functions
+        FUNCTION_METADATA.put("isnull", FunctionMetadata.builder("isnull")
+            .duckdbName("isnull")
+            .returnType(FunctionMetadata.constantType(BooleanType.get()))
+            .nullable(FunctionMetadata.alwaysNonNull())
+            .build());
+
+        FUNCTION_METADATA.put("isnotnull", FunctionMetadata.builder("isnotnull")
+            .duckdbName("isnotnull")
+            .returnType(FunctionMetadata.constantType(BooleanType.get()))
+            .nullable(FunctionMetadata.alwaysNonNull())
+            .build());
+
+        // Date/time functions with specific return types
+        // Note: These use CUSTOM_TRANSLATORS for SQL generation, but need metadata for type inference
+        FUNCTION_METADATA.put("months_between", FunctionMetadata.builder("months_between")
+            .duckdbName("datediff")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(DoubleType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("to_date", FunctionMetadata.builder("to_date")
+            .duckdbName("cast")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(DateType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("to_timestamp", FunctionMetadata.builder("to_timestamp")
+            .duckdbName("cast")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(TimestampType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("unix_timestamp", FunctionMetadata.builder("unix_timestamp")
+            .duckdbName("epoch")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(LongType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("date_trunc", FunctionMetadata.builder("date_trunc")
+            .duckdbName("date_trunc")
+            .returnType(FunctionMetadata.constantType(TimestampType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("last_day", FunctionMetadata.builder("last_day")
+            .duckdbName("last_day")
+            .returnType(FunctionMetadata.constantType(DateType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("next_day", FunctionMetadata.builder("next_day")
+            .duckdbName("next_day")
+            .returnType(FunctionMetadata.constantType(DateType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("from_unixtime", FunctionMetadata.builder("from_unixtime")
+            .duckdbName("strftime")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
+            .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+    }
+
+    // ==================== Helper Methods ====================
+
+    /**
+     * Extracts a field name from a quoted string literal.
+     * Removes surrounding single/double quotes if present.
+     *
+     * <p>Used by complex type constructors like named_struct to extract
+     * field names from Spark SQL string literals.
+     *
+     * @param quotedName the potentially quoted field name
+     * @return the unquoted field name
+     */
+    private static String extractFieldName(String quotedName) {
+        if (quotedName == null) {
+            return "field";
+        }
+        String trimmed = quotedName.trim();
+        // Remove surrounding single quotes
+        if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length() >= 2) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        // Remove surrounding double quotes
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 }

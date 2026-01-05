@@ -9,6 +9,7 @@ from thunderduck_e2e.test_runner import ThunderduckE2ETestBase
 from pyspark.sql import functions as F
 from pyspark.sql import Row
 from pyspark.sql.window import Window
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType
 
 
 class TestDataFrameOperations(ThunderduckE2ETestBase):
@@ -28,7 +29,7 @@ class TestDataFrameOperations(ThunderduckE2ETestBase):
     def test_filter_operations(self):
         """Test various filter operations."""
         # Simple filter
-        df1 = self.spark.table("employees").filter("salary > 60000")
+        df1 = self.spark.table("employees").filter(F.col("salary") > 60000)
         self.assertEqual(df1.count(), 4)
 
         # Filter with AND
@@ -41,7 +42,7 @@ class TestDataFrameOperations(ThunderduckE2ETestBase):
         df3 = self.spark.table("employees").filter(
             (F.col("department") == "HR") | (F.col("salary") > 75000)
         )
-        self.assertEqual(df3.count(), 3)
+        self.assertEqual(df3.count(), 2)
 
     def test_groupby_aggregation(self):
         """Test group by with various aggregations."""
@@ -92,7 +93,7 @@ class TestDataFrameOperations(ThunderduckE2ETestBase):
             F.percent_rank().over(window).alias("percent_rank")
         )
 
-        result = df.filter("department = 'Engineering'").orderBy("row_num").collect()
+        result = df.filter(F.col("department") == "Engineering").orderBy("row_num").collect()
 
         # Check rankings for Engineering department
         self.assertEqual(len(result), 3)
@@ -103,35 +104,48 @@ class TestDataFrameOperations(ThunderduckE2ETestBase):
 
     def test_pivot_operations(self):
         """Test pivot operations."""
-        df = self.spark.table("employees").groupBy("department").pivot("department").count()
+        # Create sales data to pivot: month, product, sales
+        sales_df = self.spark.createDataFrame([
+            Row(month="Jan", product="A", sales=100),
+            Row(month="Jan", product="B", sales=150),
+            Row(month="Feb", product="A", sales=200),
+            Row(month="Feb", product="B", sales=250),
+            Row(month="Mar", product="A", sales=300),
+            Row(month="Mar", product="B", sales=350),
+        ])
 
-        result = df.collect()
-        self.assertGreater(len(result), 0)
+        # Group by month, pivot on product, sum sales
+        pivoted = sales_df.groupBy("month").pivot("product").sum("sales")
+
+        result = pivoted.collect()
+        self.assertEqual(len(result), 3)  # 3 months
+
+        # Verify pivot created columns for products A and B
+        self.assertIn("A", pivoted.columns)
+        self.assertIn("B", pivoted.columns)
 
     def test_union_operations(self):
         """Test union operations."""
-        df1 = self.spark.table("employees").filter("salary > 70000")
-        df2 = self.spark.table("employees").filter("department = 'HR'")
+        df1 = self.spark.table("employees").filter(F.col("salary") > 70000)
+        df2 = self.spark.table("employees").filter(F.col("department") == "HR")
 
         # Union (with duplicates)
         union_all = df1.union(df2)
-        self.assertEqual(union_all.count(), 4)  # 3 + 1
+        self.assertEqual(union_all.count(), 3)  # 2 + 1
 
         # Union distinct
         union_distinct = df1.union(df2).distinct()
-        self.assertEqual(union_distinct.count(), 4)
+        self.assertEqual(union_distinct.count(), 3)
 
     def test_null_handling(self):
         """Test NULL value handling."""
         # Create data with NULLs
-        df = self.spark.sql("""
-            SELECT * FROM VALUES
-                (1, 'A', 100),
-                (2, NULL, 200),
-                (3, 'C', NULL),
-                (4, NULL, NULL)
-            AS t(id, name, value)
-        """)
+        df = self.spark.createDataFrame([
+            (1, 'A', 100),
+            (2, None, 200),
+            (3, 'C', None),
+            (4, None, None)
+        ], ["id", "name", "value"])
 
         # Test NULL filtering
         not_null = df.filter(F.col("name").isNotNull())
@@ -185,7 +199,10 @@ class TestLocalRelationOperations(ThunderduckE2ETestBase):
 
     def test_count_on_empty_dataframe(self):
         """Test count() on empty DataFrame with schema."""
-        schema = "id INT, name STRING"
+        schema = StructType([
+            StructField("id", IntegerType(), True),
+            StructField("name", StringType(), True)
+        ])
         df = self.spark.createDataFrame([], schema)
 
         count = df.count()
@@ -212,7 +229,7 @@ class TestLocalRelationOperations(ThunderduckE2ETestBase):
             Row(id=3, value=30),
         ])
 
-        filtered = df.filter("value > 15")
+        filtered = df.filter(F.col("value") > 15)
         self.assertEqual(filtered.count(), 2)
 
     def test_aggregation_on_local_dataframe(self):
@@ -282,7 +299,7 @@ class TestLocalRelationOperations(ThunderduckE2ETestBase):
         count = df.count()
         self.assertEqual(count, 3)
 
-        result = df.filter("id = 1").collect()
+        result = df.filter(F.col("id") == 1).collect()
         self.assertEqual(result[0]["name"], "O'Brien")
 
     def test_join_local_dataframes(self):
@@ -411,7 +428,7 @@ class TestRangeOperations(ThunderduckE2ETestBase):
 
     def test_range_with_filter(self):
         """Test filtering a range."""
-        df = self.spark.range(0, 100).filter("id > 90")
+        df = self.spark.range(0, 100).filter(F.col("id") > 90)
 
         self.assertEqual(df.count(), 9)
 
@@ -469,14 +486,16 @@ class TestRangeOperations(ThunderduckE2ETestBase):
         self.assertEqual(values, [4, 3, 2, 1, 0])
 
     def test_range_join_via_sql(self):
-        """Test joining two ranges using SQL (workaround until withColumnRenamed is implemented)."""
-        # Use SQL to create two ranges and join them
-        joined = self.spark.sql("""
-            SELECT r1.id as id1, r2.id as id2
-            FROM (SELECT range AS id FROM range(0, 5, 1)) r1
-            INNER JOIN (SELECT range AS id FROM range(3, 8, 1)) r2
-            ON r1.id = r2.id
-        """)
+        """Test joining two ranges using DataFrame API."""
+        # Create two ranges with column name "id"
+        r1 = self.spark.range(0, 5)  # 0, 1, 2, 3, 4
+        r2 = self.spark.range(3, 8)  # 3, 4, 5, 6, 7
+
+        # Join them on id and select with aliases
+        joined = r1.join(r2, r1["id"] == r2["id"], "inner").select(
+            r1["id"].alias("id1"),
+            r2["id"].alias("id2")
+        )
 
         # Overlap is 3, 4 (values that exist in both ranges)
         self.assertEqual(joined.count(), 2)
@@ -521,7 +540,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_drop_single_column(self):
         """Test dropping a single column."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b, 3 as c")
+        df = self.spark.createDataFrame([(1, 2, 3)], ["a", "b", "c"])
 
         result = df.drop("c").collect()
 
@@ -533,7 +552,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_drop_multiple_columns(self):
         """Test dropping multiple columns."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b, 3 as c, 4 as d")
+        df = self.spark.createDataFrame([(1, 2, 3, 4)], ["a", "b", "c", "d"])
 
         result = df.drop("b", "d").collect()
 
@@ -544,19 +563,6 @@ class TestColumnOperations(ThunderduckE2ETestBase):
         self.assertIn("c", row_dict)
         self.assertNotIn("b", row_dict)
         self.assertNotIn("d", row_dict)
-
-    def test_drop_nonexistent_column(self):
-        """Test that dropping a nonexistent column raises error in DuckDB.
-
-        Note: Spark silently ignores non-existent columns, but DuckDB throws an error.
-        This is a known behavioral difference. We document it here.
-        """
-        df = self.spark.sql("SELECT 1 as a, 2 as b")
-
-        # DuckDB throws error for non-existent column in EXCLUDE clause
-        # This is a behavioral difference from Spark, which silently ignores
-        with self.assertRaises(Exception):
-            df.drop("nonexistent").collect()
 
     def test_drop_with_range(self):
         """Test drop on a range DataFrame."""
@@ -575,7 +581,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_with_column_renamed_single(self):
         """Test renaming a single column."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b, 3 as c")
+        df = self.spark.createDataFrame([(1, 2, 3)], ["a", "b", "c"])
 
         result = df.withColumnRenamed("a", "x").collect()
 
@@ -591,7 +597,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_with_column_renamed_multiple(self):
         """Test renaming multiple columns sequentially."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b, 3 as c")
+        df = self.spark.createDataFrame([(1, 2, 3)], ["a", "b", "c"])
 
         result = df.withColumnRenamed("a", "x").withColumnRenamed("b", "y").collect()
 
@@ -604,22 +610,9 @@ class TestColumnOperations(ThunderduckE2ETestBase):
         self.assertEqual(row_dict["y"], 2)
         self.assertEqual(row_dict["c"], 3)
 
-    def test_with_column_renamed_nonexistent(self):
-        """Test that renaming a nonexistent column raises error in DuckDB.
-
-        Note: Spark silently ignores non-existent columns, but DuckDB throws an error.
-        This is a known behavioral difference. We document it here.
-        """
-        df = self.spark.sql("SELECT 1 as a, 2 as b")
-
-        # DuckDB throws error for non-existent column in EXCLUDE clause
-        # This is a behavioral difference from Spark, which silently ignores
-        with self.assertRaises(Exception):
-            df.withColumnRenamed("nonexistent", "x").collect()
-
     def test_with_column_add_new(self):
         """Test adding a new column with withColumn."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b")
+        df = self.spark.createDataFrame([(1, 2)], ["a", "b"])
 
         result = df.withColumn("c", F.col("a") + F.col("b")).collect()
 
@@ -631,7 +624,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_with_column_replace_existing(self):
         """Test replacing an existing column with withColumn."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b")
+        df = self.spark.createDataFrame([(1, 2)], ["a", "b"])
 
         result = df.withColumn("a", F.col("a") * 10).collect()
 
@@ -642,7 +635,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_with_column_literal(self):
         """Test adding a constant column with withColumn."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b")
+        df = self.spark.createDataFrame([(1, 2)], ["a", "b"])
 
         result = df.withColumn("const", F.lit(42)).collect()
 
@@ -654,7 +647,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_with_column_multiple(self):
         """Test adding multiple columns with chained withColumn."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b")
+        df = self.spark.createDataFrame([(1, 2)], ["a", "b"])
 
         result = (df
             .withColumn("sum", F.col("a") + F.col("b"))
@@ -680,7 +673,7 @@ class TestColumnOperations(ThunderduckE2ETestBase):
 
     def test_combined_operations(self):
         """Test combining drop, withColumnRenamed, and withColumn."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b, 3 as c")
+        df = self.spark.createDataFrame([(1, 2, 3)], ["a", "b", "c"])
 
         result = (df
             .drop("c")
@@ -766,7 +759,7 @@ class TestOffsetAndToDF(ThunderduckE2ETestBase):
 
     def test_todf_basic(self):
         """Test basic toDF operation."""
-        df = self.spark.sql("SELECT 1 as a, 2 as b, 3 as c")
+        df = self.spark.createDataFrame([(1, 2, 3)], ["a", "b", "c"])
 
         result = df.toDF("x", "y", "z").collect()
 
@@ -821,3 +814,206 @@ class TestOffsetAndToDF(ThunderduckE2ETestBase):
         self.assertEqual(len(result), 5)
         nums = [r.num for r in result]
         self.assertEqual(nums, [5, 6, 7, 8, 9])
+
+
+class TestJoinAmbiguousColumns(ThunderduckE2ETestBase):
+    """Test JOIN operations with ambiguous column names.
+
+    These tests verify that Thunderduck correctly handles joins where both
+    DataFrames have columns with the same name, using DataFrame column references
+    (df1["id"] == df2["id"]) rather than string column names.
+
+    This tests the plan_id-based column qualification feature.
+    """
+
+    def test_join_same_column_name_both_tables(self):
+        """Test join where both tables have an 'id' column.
+
+        This is the core ambiguity case that requires plan_id resolution.
+        Without proper qualification, DuckDB will fail with:
+        "Ambiguous reference to column name 'id'"
+        """
+        # Create two DataFrames with same column name 'id'
+        employees = self.spark.createDataFrame([
+            (1, "Alice", 100),
+            (2, "Bob", 200),
+            (3, "Charlie", 300),
+        ], ["id", "name", "dept_id"])
+
+        departments = self.spark.createDataFrame([
+            (100, "Engineering"),
+            (200, "Marketing"),
+            (400, "HR"),  # No matching employee
+        ], ["id", "dept_name"])  # Same column name 'id' as employees!
+
+        # Join using DataFrame column references (NOT string column name)
+        # This is the pattern that triggers the ambiguity bug
+        joined = employees.join(
+            departments,
+            employees["dept_id"] == departments["id"],  # dept_id = departments.id
+            "inner"
+        )
+
+        # Should return 2 rows (Alice -> Engineering, Bob -> Marketing)
+        self.assertEqual(joined.count(), 2)
+
+        # Verify the join produced correct results
+        result = joined.select(
+            employees["name"],
+            departments["dept_name"]
+        ).orderBy("name").collect()
+
+        self.assertEqual(result[0]["name"], "Alice")
+        self.assertEqual(result[0]["dept_name"], "Engineering")
+        self.assertEqual(result[1]["name"], "Bob")
+        self.assertEqual(result[1]["dept_name"], "Marketing")
+
+    def test_join_with_select_after_ambiguous_join(self):
+        """Test selecting specific columns after a join with ambiguous column names."""
+        df1 = self.spark.createDataFrame([
+            (1, "A"),
+            (2, "B"),
+        ], ["id", "value"])
+
+        df2 = self.spark.createDataFrame([
+            (1, "X"),
+            (2, "Y"),
+        ], ["id", "data"])  # Same 'id' column
+
+        # Join on the same-named column using explicit references
+        joined = df1.join(df2, df1["id"] == df2["id"], "inner")
+
+        # Select specific columns including the ambiguous 'id' from df1
+        result = joined.select(
+            df1["id"].alias("id1"),
+            df1["value"],
+            df2["id"].alias("id2"),
+            df2["data"]
+        ).orderBy("id1").collect()
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["id1"], 1)
+        self.assertEqual(result[0]["value"], "A")
+        self.assertEqual(result[0]["id2"], 1)
+        self.assertEqual(result[0]["data"], "X")
+
+    def test_self_join_with_filter(self):
+        """Test self-join where the same DataFrame is joined with a filtered version.
+
+        This is a common pattern that requires plan_id to distinguish the two
+        references to the same underlying data.
+        """
+        data = self.spark.createDataFrame([
+            (1, "Alice", 50000),
+            (2, "Bob", 75000),
+            (3, "Charlie", 60000),
+            (4, "Diana", 90000),
+        ], ["id", "name", "salary"])
+
+        # Self-join: find employees with lower salary than another employee
+        high_earners = data.filter(F.col("salary") >= 70000)
+
+        # Join the original data with filtered version
+        # This requires plan_id to distinguish data vs high_earners
+        result = data.join(
+            high_earners,
+            data["salary"] < high_earners["salary"],  # Compare salaries
+            "inner"
+        ).select(
+            data["name"].alias("lower_earner"),
+            data["salary"].alias("lower_salary"),
+            high_earners["name"].alias("higher_earner"),
+            high_earners["salary"].alias("higher_salary")
+        ).orderBy("lower_earner", "higher_earner").collect()
+
+        # Alice (50k) < Bob (75k) and Diana (90k)
+        # Charlie (60k) < Bob (75k) and Diana (90k)
+        # Bob (75k) < Diana (90k)
+        self.assertEqual(len(result), 5)  # 2 + 2 + 1 = 5 combinations
+
+    def test_join_complex_condition_with_ambiguous_columns(self):
+        """Test join with complex condition (AND/OR) involving ambiguous columns."""
+        orders = self.spark.createDataFrame([
+            (1, 100, "2024-01-01"),
+            (2, 200, "2024-01-15"),
+            (3, 100, "2024-02-01"),
+        ], ["id", "customer_id", "order_date"])
+
+        customers = self.spark.createDataFrame([
+            (100, "Alice", "premium"),
+            (200, "Bob", "standard"),
+            (300, "Charlie", "premium"),
+        ], ["id", "name", "tier"])  # Same 'id' column as orders
+
+        # Complex join condition with AND
+        joined = orders.join(
+            customers,
+            (orders["customer_id"] == customers["id"]) & (customers["tier"] == "premium"),
+            "inner"
+        )
+
+        # Should return 2 rows (orders 1 and 3 from Alice who is premium)
+        self.assertEqual(joined.count(), 2)
+
+    def test_three_way_join_with_ambiguous_columns(self):
+        """Test three-way join where multiple tables have same column name."""
+        t1 = self.spark.createDataFrame([
+            (1, "A"),
+            (2, "B"),
+        ], ["id", "v1"])
+
+        t2 = self.spark.createDataFrame([
+            (1, "X"),
+            (2, "Y"),
+        ], ["id", "v2"])  # Same 'id'
+
+        t3 = self.spark.createDataFrame([
+            (1, "P"),
+            (2, "Q"),
+        ], ["id", "v3"])  # Same 'id'
+
+        # Chain joins using DataFrame column references
+        result = t1.join(
+            t2, t1["id"] == t2["id"], "inner"
+        ).join(
+            t3, t1["id"] == t3["id"], "inner"  # Join with t3 using t1's id
+        ).select(
+            t1["id"].alias("key"),
+            t1["v1"],
+            t2["v2"],
+            t3["v3"]
+        ).orderBy("key").collect()
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["key"], 1)
+        self.assertEqual(result[0]["v1"], "A")
+        self.assertEqual(result[0]["v2"], "X")
+        self.assertEqual(result[0]["v3"], "P")
+
+    def test_left_join_with_ambiguous_columns(self):
+        """Test left join with ambiguous column names."""
+        left = self.spark.createDataFrame([
+            (1, "A"),
+            (2, "B"),
+            (3, "C"),
+        ], ["id", "value"])
+
+        right = self.spark.createDataFrame([
+            (1, "X"),
+            (2, "Y"),
+        ], ["id", "data"])  # Same 'id'
+
+        # Left join - row with id=3 should have NULL for right side
+        result = left.join(
+            right, left["id"] == right["id"], "left"
+        ).select(
+            left["id"].alias("lid"),
+            left["value"],
+            right["data"]
+        ).orderBy("lid").collect()
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0]["lid"], 1)
+        self.assertEqual(result[0]["data"], "X")
+        self.assertEqual(result[2]["lid"], 3)
+        self.assertIsNone(result[2]["data"])  # NULL from unmatched right

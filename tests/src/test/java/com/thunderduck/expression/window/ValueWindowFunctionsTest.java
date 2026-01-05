@@ -521,8 +521,8 @@ public class ValueWindowFunctionsTest extends TestBase {
             );
 
             // When: Check nullable
-            // Then: Window functions return nullable values
-            assertThat(percentRank.nullable()).isTrue();
+            // Then: PERCENT_RANK always returns a value (0.0 to 1.0), so it's NOT nullable
+            assertThat(percentRank.nullable()).isFalse();
         }
     }
 }

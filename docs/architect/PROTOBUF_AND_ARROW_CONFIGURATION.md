@@ -1,6 +1,7 @@
 # Protobuf and Apache Arrow Configuration Guide
 
 **Purpose**: Reference document for resolving protobuf version conflicts and Apache Arrow platform-specific requirements.
+**Applies to**: Spark 4.0.x, Thunderduck
 
 ---
 
@@ -31,7 +32,7 @@ Use `provided` scope for `spark-connect_2.13` to exclude pre-compiled protobuf c
 
 ---
 
-## Apache Arrow on ARM64
+## Apache Arrow JVM Requirements
 
 ### Symptoms
 ```
@@ -40,9 +41,11 @@ You must start Java with `--add-opens=java.base/java.nio=org.apache.arrow.memory
 ```
 
 ### Affected Platforms
+**As of Spark 4.0.x, these flags are required on ALL platforms** (not just ARM64):
+- x86_64 (Intel/AMD)
 - AWS Graviton (ARM64)
 - Apple Silicon (M1/M2/M3)
-- Any ARM64 Linux system
+- Any Linux/macOS system
 
 ### Solution
 Add JVM flag when starting the server:

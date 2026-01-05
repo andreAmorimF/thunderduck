@@ -167,7 +167,8 @@ public class Phase2IntegrationTest extends TestBase {
             assertNotNull(sql, "SQL should not be null");
             assertTrue(sql.contains("SELECT"), "Should contain SELECT");
             assertTrue(sql.contains("GROUP BY"), "Should contain GROUP BY");
-            assertTrue(sql.contains("COUNT"), "Should contain COUNT aggregate");
+            // Use case-insensitive check for SQL function names
+            assertTrue(sql.toLowerCase().contains("count"), "Should contain COUNT aggregate");
         }
 
         @Test
@@ -186,9 +187,10 @@ public class Phase2IntegrationTest extends TestBase {
             String sql = generator.generate(agg);
 
             logData("Generated SQL", sql);
-            assertTrue(sql.contains("COUNT"), "Should contain COUNT");
-            assertTrue(sql.contains("SUM"), "Should contain SUM");
-            assertTrue(sql.contains("AVG"), "Should contain AVG");
+            // Use case-insensitive checks for SQL function names
+            assertTrue(sql.toLowerCase().contains("count"), "Should contain COUNT");
+            assertTrue(sql.toLowerCase().contains("sum"), "Should contain SUM");
+            assertTrue(sql.toLowerCase().contains("avg"), "Should contain AVG");
             assertTrue(sql.contains("GROUP BY"), "Should contain GROUP BY");
         }
 
@@ -204,7 +206,8 @@ public class Phase2IntegrationTest extends TestBase {
             String sql = generator.generate(agg);
 
             logData("Generated SQL", sql);
-            assertTrue(sql.contains("COUNT"), "Should contain COUNT");
+            // Use case-insensitive check for SQL function names
+            assertTrue(sql.toLowerCase().contains("count"), "Should contain COUNT");
             assertFalse(sql.contains("GROUP BY"), "Should NOT contain GROUP BY");
         }
 

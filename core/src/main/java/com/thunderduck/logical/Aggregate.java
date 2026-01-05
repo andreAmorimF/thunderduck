@@ -1,8 +1,13 @@
 package com.thunderduck.logical;
 
+import com.thunderduck.expression.AliasExpression;
 import com.thunderduck.expression.Expression;
+import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.types.DataType;
+import com.thunderduck.types.DecimalType;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
+import com.thunderduck.types.TypeInferenceEngine;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -123,8 +128,50 @@ public class Aggregate extends LogicalPlan {
         }
 
         // Add aggregate expressions
+        // Get child schema to determine if AVG needs CAST for decimal columns
+        StructType childSchema = null;
+        try {
+            childSchema = child().schema();
+        } catch (Exception e) {
+            // Child schema unavailable - proceed without CAST
+        }
+
         for (AggregateExpression aggExpr : aggregateExpressions) {
             String aggSQL = aggExpr.toSQL();
+
+            // For AVG of decimal columns, wrap with CAST to preserve decimal type
+            // (DuckDB returns DOUBLE for AVG, but Spark preserves DECIMAL)
+            // Spark AVG of DECIMAL(p,s) returns DECIMAL(p+4, s+4)
+            if (childSchema != null &&
+                aggExpr.function().equalsIgnoreCase("AVG") &&
+                aggExpr.argument() != null) {
+
+                DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
+                if (argType instanceof DecimalType) {
+                    DecimalType decType = (DecimalType) argType;
+                    // Spark: AVG(DECIMAL(p,s)) -> DECIMAL(p+4, s+4), capped at max precision 38
+                    int newPrecision = Math.min(decType.precision() + 4, 38);
+                    int newScale = Math.min(decType.scale() + 4, newPrecision);
+                    aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        aggSQL, newPrecision, newScale);
+                }
+            }
+
+            // For SUM of decimal columns, wrap with CAST to match Spark precision rules
+            // Spark: SUM(DECIMAL(p,s)) -> DECIMAL(p+10, s), capped at max precision 38
+            if (childSchema != null &&
+                aggExpr.function().equalsIgnoreCase("SUM") &&
+                aggExpr.argument() != null) {
+
+                DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
+                if (argType instanceof DecimalType) {
+                    DecimalType decType = (DecimalType) argType;
+                    int newPrecision = Math.min(decType.precision() + 10, 38);
+                    aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
+                        aggSQL, newPrecision, decType.scale());
+                }
+            }
+
             // Add alias if provided
             if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
                 aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(aggExpr.alias());
@@ -140,11 +187,17 @@ public class Aggregate extends LogicalPlan {
         sql.append(") AS ").append(generator.generateSubqueryAlias());
 
         // GROUP BY clause
+        // Note: GROUP BY cannot have aliases, so we unwrap AliasExpressions
         if (!groupingExpressions.isEmpty()) {
             sql.append(" GROUP BY ");
             List<String> groupExprs = new ArrayList<>();
             for (Expression expr : groupingExpressions) {
-                groupExprs.add(expr.toSQL());
+                // Unwrap AliasExpression for GROUP BY - aliases not allowed here
+                if (expr instanceof AliasExpression) {
+                    groupExprs.add(((AliasExpression) expr).expression().toSQL());
+                } else {
+                    groupExprs.add(expr.toSQL());
+                }
             }
             sql.append(String.join(", ", groupExprs));
         }
@@ -160,22 +213,82 @@ public class Aggregate extends LogicalPlan {
 
     @Override
     public StructType inferSchema() {
+        // Get child schema for resolving types (may be null for some plan types)
+        StructType childSchema = null;
+        try {
+            childSchema = child().schema();
+        } catch (Exception e) {
+            // Child schema resolution failed - continue with null childSchema
+            // We can still infer column names from expressions and types from aggregate functions
+        }
+
+        // Note: childSchema may be null, but we can still produce a schema
+        // using expression names and default/aggregate types.
+        // This ensures column names are preserved even when child schema is unavailable.
+
         List<StructField> fields = new ArrayList<>();
 
-        // Add grouping fields
-        for (int i = 0; i < groupingExpressions.size(); i++) {
-            Expression expr = groupingExpressions.get(i);
-            fields.add(new StructField("group_" + i, expr.dataType(), expr.nullable()));
+        // Add grouping fields with proper names and types
+        for (Expression expr : groupingExpressions) {
+            String name = extractExpressionName(expr);
+            DataType type = resolveExpressionType(expr, childSchema);
+            boolean nullable = resolveExpressionNullable(expr, childSchema);
+            fields.add(new StructField(name, type, nullable));
         }
 
         // Add aggregate fields
-        for (int i = 0; i < aggregateExpressions.size(); i++) {
-            AggregateExpression aggExpr = aggregateExpressions.get(i);
-            String name = aggExpr.alias != null ? aggExpr.alias : ("agg_" + i);
-            fields.add(new StructField(name, aggExpr.dataType(), aggExpr.nullable()));
+        for (AggregateExpression aggExpr : aggregateExpressions) {
+            String name = aggExpr.alias() != null ? aggExpr.alias() : aggExpr.toSQL();
+            DataType type = inferAggregateReturnType(aggExpr, childSchema);
+            fields.add(new StructField(name, type, aggExpr.nullable()));
         }
 
         return new StructType(fields);
+    }
+
+    /**
+     * Extracts a meaningful name from an expression for schema inference.
+     * Follows Spark semantics for groupBy output naming.
+     *
+     * @param expr the expression
+     * @return the extracted name
+     */
+    private String extractExpressionName(Expression expr) {
+        // Priority 1: Explicit alias
+        if (expr instanceof AliasExpression) {
+            return ((AliasExpression) expr).alias();
+        }
+
+        // Priority 2: Column reference name
+        if (expr instanceof UnresolvedColumn) {
+            return ((UnresolvedColumn) expr).columnName();
+        }
+
+        // Priority 3: SQL representation (for complex expressions)
+        return expr.toSQL();
+    }
+
+    /**
+     * Resolves the data type of an expression using the centralized TypeInferenceEngine.
+     */
+    private DataType resolveExpressionType(Expression expr, StructType childSchema) {
+        return TypeInferenceEngine.resolveType(expr, childSchema);
+    }
+
+    /**
+     * Resolves the nullability of an expression using the centralized TypeInferenceEngine.
+     */
+    private boolean resolveExpressionNullable(Expression expr, StructType childSchema) {
+        return TypeInferenceEngine.resolveNullable(expr, childSchema);
+    }
+
+    /**
+     * Infers the return type for an aggregate function using the centralized TypeInferenceEngine.
+     */
+    private DataType inferAggregateReturnType(AggregateExpression aggExpr, StructType childSchema) {
+        Expression arg = aggExpr.argument();
+        DataType argType = arg != null ? resolveExpressionType(arg, childSchema) : null;
+        return TypeInferenceEngine.resolveAggregateReturnType(aggExpr.function(), argType);
     }
 
     @Override
@@ -275,42 +388,58 @@ public class Aggregate extends LogicalPlan {
 
         @Override
         public boolean nullable() {
-            // Aggregates can generally produce nulls (e.g., AVG of empty set)
+            // COUNT always returns non-null (0 for empty groups)
+            String funcUpper = function.toUpperCase();
+            if (funcUpper.equals("COUNT")) {
+                return false;
+            }
+            // All other aggregates can return null (empty groups, null inputs)
             return true;
         }
 
         @Override
         public String toSQL() {
-            StringBuilder sql = new StringBuilder();
-            sql.append(function.toUpperCase());
-            sql.append("(");
-
-            // Add DISTINCT keyword if specified
-            if (distinct) {
-                sql.append("DISTINCT ");
-            }
-
-            // Add argument or * for COUNT(*)
+            // Build argument SQL first
+            String argSQL;
             if (argument != null) {
                 // Special case: COUNT(*) where * is passed as a Literal
                 if (function.equalsIgnoreCase("COUNT") &&
                     argument instanceof com.thunderduck.expression.Literal &&
                     "*".equals(((com.thunderduck.expression.Literal) argument).value())) {
-                    sql.append("*");
+                    argSQL = "*";
                 } else {
-                    sql.append(argument.toSQL());
+                    argSQL = argument.toSQL();
                 }
             } else {
                 // COUNT(*) case - DISTINCT not allowed with *
-                if (!distinct) {
-                    sql.append("*");
-                }
-                // If distinct is true and argument is null, we don't add *
-                // This should be validated elsewhere as an error case
+                argSQL = distinct ? null : "*";
             }
 
-            sql.append(")");
-            return sql.toString();
+            // Add DISTINCT prefix if specified
+            String finalArgSQL = argSQL;
+            if (distinct && argSQL != null) {
+                finalArgSQL = "DISTINCT " + argSQL;
+            }
+
+            // Translate function name using registry (handles sort_array -> list_sort, etc.)
+            try {
+                if (finalArgSQL != null) {
+                    return com.thunderduck.functions.FunctionRegistry.translate(function, finalArgSQL);
+                } else {
+                    // No argument case - translate with empty args
+                    return com.thunderduck.functions.FunctionRegistry.translate(function);
+                }
+            } catch (UnsupportedOperationException e) {
+                // Fallback to uppercase function name if not in registry
+                StringBuilder sql = new StringBuilder();
+                sql.append(function.toUpperCase());
+                sql.append("(");
+                if (finalArgSQL != null) {
+                    sql.append(finalArgSQL);
+                }
+                sql.append(")");
+                return sql.toString();
+            }
         }
 
         @Override
