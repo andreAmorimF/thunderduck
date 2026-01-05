@@ -207,7 +207,8 @@ public class FunctionRegistryTest extends TestBase {
 
             String result = FunctionRegistry.translate("datediff", "end_date", "start_date");
 
-            assertThat(result).isEqualTo("datediff(end_date, start_date)");
+            // DuckDB datediff requires unit ('day') and swapped argument order
+            assertThat(result).containsIgnoringCase("datediff('day', start_date, end_date)");
         }
 
         @Test
@@ -234,7 +235,8 @@ public class FunctionRegistryTest extends TestBase {
 
             String result = FunctionRegistry.translate("sum", "amount");
 
-            assertThat(result).isEqualTo("sum(amount)");
+            // SUM is wrapped with CAST to BIGINT for Spark compatibility
+            assertThat(result).containsIgnoringCase("CAST(SUM(amount) AS BIGINT)");
         }
 
         @Test
@@ -325,13 +327,14 @@ public class FunctionRegistryTest extends TestBase {
         }
 
         @Test
-        @DisplayName("TC-FUNC-050: count_distinct with multiple args joins them")
+        @DisplayName("TC-FUNC-050: count_distinct with multiple args uses ROW")
         void testCountDistinctMultipleArgs() {
             logStep("Translate count_distinct with multiple arguments");
 
             String result = FunctionRegistry.translate("count_distinct", "col1", "col2");
 
-            assertThat(result).isEqualTo("COUNT(DISTINCT col1, col2)");
+            // DuckDB uses ROW() for counting distinct tuples
+            assertThat(result).containsIgnoringCase("COUNT(DISTINCT ROW(col1, col2))");
         }
     }
 
@@ -553,13 +556,14 @@ public class FunctionRegistryTest extends TestBase {
         }
 
         @Test
-        @DisplayName("TC-FUNC-043: size maps to len")
+        @DisplayName("TC-FUNC-043: size maps to len with INTEGER cast")
         void testSizeFunctionTranslation() {
             logStep("Translate Spark size() to DuckDB");
 
             String result = FunctionRegistry.translate("size", "items");
 
-            assertThat(result).isEqualTo("len(items)");
+            // size() is cast to INTEGER to match Spark's return type
+            assertThat(result).containsIgnoringCase("CAST(len(items) AS INTEGER)");
         }
 
         @Test

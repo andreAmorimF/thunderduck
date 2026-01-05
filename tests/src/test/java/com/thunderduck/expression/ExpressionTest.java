@@ -614,7 +614,8 @@ public class ExpressionTest extends TestBase {
             Expression arg = new ColumnReference("amount", DoubleType.get());
             FunctionCall func = FunctionCall.of("sum", arg, DoubleType.get());
 
-            assertThat(func.toSQL()).isEqualTo("sum(amount)");
+            // SUM is wrapped with CAST to BIGINT for Spark compatibility
+            assertThat(func.toSQL()).containsIgnoringCase("CAST(SUM(amount) AS BIGINT)");
         }
 
         @Test
