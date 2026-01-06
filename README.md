@@ -8,7 +8,7 @@
 
 > **📋 SparkSQL Notice**: Direct SQL execution via `spark.sql()` is **not yet supported**. SparkSQL support will be added once a proper SQL parser is integrated. The **DataFrame API is fully functional** and recommended for all use cases.
 
-**Thunderduck** is a high-performance embedded execution engine that translates Spark DataFrame operations to DuckDB SQL, delivering 5-10x faster query execution than Spark local mode with 6-8x better memory efficiency.
+**Thunderduck** is a high-performance embedded execution engine that translates Spark DataFrame operations to DuckDB SQL, with the aim to deliver 5-10x faster query execution mode with 6-8x better memory efficiency than an Apache Spark cluster with comparable CPU and RAM resources.
 
 ## Table of Contents
 
