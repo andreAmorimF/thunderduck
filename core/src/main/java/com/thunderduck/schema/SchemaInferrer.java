@@ -117,7 +117,10 @@ public class SchemaInferrer {
                 return LongType.get();
             case "HUGEINT":
             case "INT128":
-                return LongType.get(); // Best approximation
+                // HUGEINT is 128-bit but Spark Connect only supports up to 64-bit.
+                // SUM() results are already cast to BIGINT in SQL generation (FunctionRegistry).
+                // This fallback handles any edge cases where HUGEINT appears in results.
+                return LongType.get();
             case "UTINYINT":
             case "UINT1":
                 return ShortType.get(); // Widen to signed

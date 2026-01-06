@@ -439,8 +439,10 @@ public class FunctionRegistry {
 
     private static void initializeAggregateFunctions() {
         // Basic aggregates
-        // SUM needs special handling: DuckDB returns DECIMAL(38,0) for integer inputs,
-        // but Spark returns BIGINT. Cast to BIGINT for Spark compatibility.
+        // SUM needs special handling: DuckDB returns HUGEINT (int128) for integer inputs
+        // to prevent overflow. However, Spark returns BIGINT (int64) and the Spark Connect
+        // protocol doesn't support 128-bit integers. Cast to BIGINT for Spark compatibility.
+        // Note: Very large sums (>9.2 quintillion) will overflow, matching Spark behavior.
         CUSTOM_TRANSLATORS.put("sum", args -> {
             if (args.length < 1) {
                 throw new IllegalArgumentException("sum requires at least 1 argument");
@@ -509,8 +511,9 @@ public class FunctionRegistry {
                 return "COUNT(DISTINCT ROW(" + String.join(", ", args) + "))";
             }
         });
+        // SUM DISTINCT also needs CAST to BIGINT (same reason as regular SUM above)
         CUSTOM_TRANSLATORS.put("sum_distinct", args ->
-            "SUM(DISTINCT " + String.join(", ", args) + ")");
+            "CAST(SUM(DISTINCT " + String.join(", ", args) + ") AS BIGINT)");
         CUSTOM_TRANSLATORS.put("avg_distinct", args ->
             "AVG(DISTINCT " + String.join(", ", args) + ")");
     }
