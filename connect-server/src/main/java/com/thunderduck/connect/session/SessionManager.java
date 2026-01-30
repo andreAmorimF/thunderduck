@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @see ExecutionState
  * @see WaitingClient
  */
-public class SessionManager {
+public final class SessionManager {
     private static final Logger logger = LoggerFactory.getLogger(SessionManager.class);
 
     /** Default maximum clients waiting in queue */

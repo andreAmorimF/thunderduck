@@ -70,7 +70,7 @@ public class HardwareProfile {
         try {
             OperatingSystemMXBean osBean = ManagementFactory.getPlatformMXBean(
                 OperatingSystemMXBean.class);
-            memory = osBean.getTotalPhysicalMemorySize();
+            memory = osBean.getTotalMemorySize();
         } catch (Exception e) {
             // Fallback to max heap if physical memory detection fails
             memory = Runtime.getRuntime().maxMemory() * 4; // Estimate

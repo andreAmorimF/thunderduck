@@ -46,6 +46,8 @@ package com.thunderduck.exception;
  */
 public class ValidationException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     private final String phase;
     private final String invalidElement;
     private final String suggestion;

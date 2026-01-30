@@ -636,6 +636,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
      * @param request AnalyzePlanRequest
      * @param responseObserver Response observer
      */
+    @SuppressWarnings("deprecation") // getSql() deprecated in Spark 4.0+, kept for backward compatibility
     @Override
     public void analyzePlan(AnalyzePlanRequest request,
                            StreamObserver<AnalyzePlanResponse> responseObserver) {

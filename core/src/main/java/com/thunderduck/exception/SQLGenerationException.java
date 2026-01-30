@@ -29,6 +29,8 @@ import com.thunderduck.logical.LogicalPlan;
  */
 public class SQLGenerationException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     private final LogicalPlan failedPlan;
 
     /**

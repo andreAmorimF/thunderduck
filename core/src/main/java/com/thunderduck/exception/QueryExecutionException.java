@@ -31,6 +31,8 @@ import java.util.regex.Pattern;
  */
 public class QueryExecutionException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     private final String failedSQL;
 
     /**

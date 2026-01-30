@@ -768,9 +768,9 @@ public class RelationConverter {
             case BOOLEAN:
                 return lit.getBoolean();
             case SHORT:
-                return (int) lit.getShort();
+                return lit.getShort();
             case BYTE:
-                return (int) lit.getByte();
+                return lit.getByte();
             case DATE:
                 // DuckDB date is days since epoch
                 return java.time.LocalDate.ofEpochDay(lit.getDate());
@@ -1325,6 +1325,7 @@ public class RelationConverter {
      * @param withColumnsRenamed the WithColumnsRenamed protobuf message
      * @return a LogicalPlan with renamed columns
      */
+    @SuppressWarnings("deprecation") // getRenameColumnsMapMap() deprecated in Spark 4.0+, kept for backward compatibility
     private LogicalPlan convertWithColumnsRenamed(org.apache.spark.connect.proto.WithColumnsRenamed withColumnsRenamed) {
         LogicalPlan input = convert(withColumnsRenamed.getInput());
 

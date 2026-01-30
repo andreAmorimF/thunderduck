@@ -5,6 +5,8 @@ package com.thunderduck.schema;
  */
 public class SchemaInferenceException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     public SchemaInferenceException(String message) {
         super(message);
     }

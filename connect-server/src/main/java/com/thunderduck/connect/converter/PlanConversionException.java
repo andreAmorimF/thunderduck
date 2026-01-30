@@ -7,6 +7,7 @@ package com.thunderduck.connect.converter;
  * buffers to thunderduck logical plans encounters an error or unsupported feature.
  */
 public class PlanConversionException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
 
     public PlanConversionException(String message) {
         super(message);

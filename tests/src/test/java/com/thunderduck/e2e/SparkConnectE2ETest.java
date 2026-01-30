@@ -259,6 +259,7 @@ public class SparkConnectE2ETest {
         );
     }
 
+    @SuppressWarnings("try") // Socket opened only to test connectivity
     private boolean isPortOpen(String host, int port) {
         try (Socket socket = new Socket(host, port)) {
             return true;
