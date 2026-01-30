@@ -34,33 +34,42 @@ The project uses a **two-stage distribution model**:
 
 ### Authentication Flow Architecture
 
-Multi-layered authentication system for Claude Code:
+Simple environment variable authentication using `ANTHROPIC_AUTH_TOKEN`:
 
 ```
-Host System (macOS)
+Host System
   ↓ initializeCommand (runs before container creation)
-  ├─→ Extract API key from macOS keychain
-  │   └─→ Write to .devcontainer/.claude-token (gitignored)
-  └─→ Extract OAuth config from ~/.claude.json
-      └─→ Write to .devcontainer/.claude-oauth.json (gitignored)
+  └─→ Capture ANTHROPIC_* environment variables from host
+      ├─→ ANTHROPIC_AUTH_TOKEN → .devcontainer/.claude-auth-token (required)
+      ├─→ ANTHROPIC_BASE_URL → .devcontainer/.claude-base-url (optional)
+      └─→ ANTHROPIC_CUSTOM_HEADERS → .devcontainer/.claude-custom-headers (optional)
 
 Container Creation
   ↓ postCreateCommand (runs inside container after creation)
   ├─→ Install Claude Code via npm
   └─→ Run generate-claude-config.sh
-      ├─→ Read .claude-token and .claude-oauth.json
-      ├─→ Generate ~/.claude.json (OAuth + API key)
-      └─→ Generate ~/.claude/settings.json (ANTHROPIC_API_KEY env var)
+      ├─→ Read credential files from .devcontainer/
+      ├─→ Generate ~/.claude.json (minimal config)
+      └─→ Generate ~/.claude/settings.json with env vars:
+          ├─→ ANTHROPIC_AUTH_TOKEN (required)
+          ├─→ ANTHROPIC_BASE_URL (if set)
+          └─→ ANTHROPIC_CUSTOM_HEADERS (if set)
 
 Result: Claude Code authenticated without manual login
 ```
 
+**Required environment variable**:
+- `ANTHROPIC_AUTH_TOKEN` - Must be set in host environment before starting container
+
+**Optional environment variables** (captured from host if set):
+- `ANTHROPIC_BASE_URL` - Custom API endpoint
+- `ANTHROPIC_CUSTOM_HEADERS` - Additional HTTP headers for API requests
+
 **Critical implementation details**:
 - `initializeCommand` runs on HOST before container exists
 - `postCreateCommand` runs INSIDE container after it's created
-- Two authentication methods for compatibility (OAuth + env var)
-- Token files are gitignored and never committed
-- `tr -d '\n'` strips trailing newline from keychain token (required)
+- All credential files are gitignored and never committed
+- Container will fail to configure if `ANTHROPIC_AUTH_TOKEN` is not set
 
 ### Security Architecture
 
@@ -125,7 +134,7 @@ When `build.sh` runs, it reads files from project root and embeds them in `insta
 - Reads all source files from project root
 - Generates git commit hash and build date
 - Creates heredocs for each file with EOF delimiters
-- Produces self-contained install.sh (~44KB)
+- Produces self-contained install.sh (~60KB)
 - Makes installer executable (chmod +x)
 
 **Files embedded** (defined in build.sh:31-36):
@@ -151,7 +160,7 @@ bash /path/to/claude-container/install.sh
 - Creates .devcontainer/ directory
 - Extracts all embedded files
 - Makes generate-claude-config.sh executable
-- Adds .claude-token and .claude-oauth.json to .gitignore
+- Adds credential files to .gitignore
 
 ### Run Claude Code in Unsupervised Mode
 
@@ -231,6 +240,83 @@ Edit `devcontainer.json` runArgs array:
 
 Then rebuild: `./build.sh`
 
+## Dockerfile Architecture
+
+### Base Image
+
+Uses Microsoft's official DevContainer base image (`mcr.microsoft.com/devcontainers/base:ubuntu-22.04`):
+- Pre-configured non-root `vscode` user (UID 1000)
+- Common dev tools pre-installed (git, curl, wget, build-essential)
+- Ubuntu 22.04 LTS (support until 2027)
+
+### Installed Tools and Environment Setup
+
+**Core tools** (always installed):
+- Build tools: build-essential, cmake, ninja-build, pkg-config
+- Python: python3, pip, venv
+- Node.js: Latest LTS via NodeSource repository
+- pkgx: User-space package manager for ad-hoc tool installation
+- Git: Pre-configured with safe.directory for /workspace
+
+**Optional development environments** (commented out, uncomment to enable):
+- **Java**: OpenJDK 11, 17, 21 + Maven + Gradle (multi-architecture: AMD64/ARM64)
+- **Rust**: rustup with cargo (stable/beta/nightly versions)
+- **C++**: LLVM 18 with Clang, LLDB, LLD
+- **Python**: Enhanced with conda, virtualenv, dev tools
+- **Clojure**: Official Clojure CLI tools
+
+### Multi-Architecture Support
+
+The Dockerfile uses `$(dpkg --print-architecture)` for automatic architecture detection:
+- Works on both AMD64 (Intel) and ARM64 (Apple Silicon)
+- Java version selection commands use architecture-aware paths
+- Example: `/usr/lib/jvm/java-17-openjdk-$(dpkg --print-architecture)/bin/java`
+
+**Java architecture notes**:
+- OpenJDK 11, 17, 21: Available on both AMD64 and ARM64
+- OpenJDK 8: Removed from default configuration (legacy, AMD64-only)
+- Use pkgx for other Java versions: `pkgx install openjdk.org@17`
+
+### VSCode Server Directory Structure
+
+VSCode DevContainers requires specific directory structure (created in Dockerfile):
+
+```
+/vscode/
+└── vscode-server/
+    └── extensionsCache/        # Shared extensions cache (777 permissions)
+
+/home/vscode/
+└── .vscode-server/
+    └── extensionsCache/        # Per-user extensions cache (755 permissions)
+```
+
+**Why both locations**:
+- `/vscode`: Can be volume-mounted to share server binaries across multiple containers
+- `/home/vscode/.vscode-server`: Per-user data, isolated to this container
+- VSCode syncs extensions between both caches during startup
+
+**Critical implementation** (Dockerfile lines 320-336):
+```dockerfile
+RUN mkdir -p /vscode/vscode-server/extensionsCache \
+             /home/vscode/.vscode-server/extensionsCache && \
+    chown -R vscode:vscode /home/vscode/.vscode-server && \
+    chmod -R 755 /home/vscode/.vscode-server && \
+    chmod -R 777 /vscode
+```
+
+**Why this matters**: If `extensionsCache` subdirectories don't exist, VSCode startup fails with "can't cd to /home/vscode/.vscode-server/extensionsCache" error.
+
+### Java Certificate Store Fix
+
+Java installations include a fix for ca-certificates-java setup issues:
+
+```dockerfile
+&& /var/lib/dpkg/info/ca-certificates-java.postinst configure
+```
+
+This ensures the Java certificate store is properly initialized, preventing "No such file or directory" errors for `/etc/ssl/certs/java/cacerts` during OpenJDK installation.
+
 ## Key Implementation Details
 
 ### Why Heredoc Embedding?
@@ -244,8 +330,8 @@ The build system uses heredocs instead of base64 encoding or downloading files b
 ### Dynamic Configuration Generation
 
 Authentication configuration is generated dynamically by `generate-claude-config.sh` using `jq -n`:
-1. `~/.claude/settings.json` with `env.ANTHROPIC_API_KEY` (primary)
-2. `~/.claude.json` generated with OAuth account info and token suffix
+1. `~/.claude/settings.json` with `env.ANTHROPIC_AUTH_TOKEN`
+2. `~/.claude.json` with minimal config (onboarding complete, token suffix)
 
 No template file is needed - the script creates the JSON structure directly using jq.
 
@@ -368,13 +454,13 @@ free -h  # Should show ~8GB (if VM has 16GB)
 
 ## Platform Compatibility Notes
 
-### macOS-specific Features
+### Cross-Platform Authentication
 
-The `initializeCommand` in devcontainer.json uses macOS-specific commands:
-- `security find-generic-password` - Extracts from keychain
-- `tr -d '\n'` - Removes trailing newline from keychain output
+The `initializeCommand` uses standard shell commands that work on macOS, Linux, and Windows (WSL):
+- Environment variables are captured using `printf` and shell conditionals
+- No platform-specific commands are used
 
-**For Linux/Windows**: Users must modify initializeCommand or authenticate interactively inside container.
+**Requirement**: Set `ANTHROPIC_AUTH_TOKEN` in your environment before starting the container.
 
 ### Podman vs Docker
 

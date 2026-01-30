@@ -65,3 +65,8 @@ htmlcov/
 # Claude Code authentication (auto-generated, keep secret)
 .devcontainer/.claude-token
 .devcontainer/.claude-oauth.json
+
+# Claude Code authentication (auto-generated, keep secret)
+.devcontainer/.claude-auth-token
+.devcontainer/.claude-base-url
+.devcontainer/.claude-custom-headers

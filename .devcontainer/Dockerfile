@@ -105,8 +105,6 @@ RUN su vscode -c 'curl -fsSL https://pkgx.sh | sh' && \
 # Each block is independent and can be enabled separately.
 # After uncommenting, rebuild the container: F1 → "Dev Containers: Rebuild Container"
 # ==============================================================================
-# Podman (Docker)
-RUN apt-get update && apt-get install -y podman
 
 # ------------------------------------------------------------------------------
 # Java Development Environment
@@ -119,13 +117,13 @@ RUN apt-get update && apt-get install -y podman
 # Note: Use 'update-java-alternatives' to switch between Java versions
 # Note: Consider using pkgx for Java (pkgx install openjdk.org@17) as an alternative
 # ------------------------------------------------------------------------------
- RUN apt-get update && apt-get install -y \
+# RUN apt-get update && apt-get install -y \
 #     # OpenJDK 11 (LTS, wide enterprise adoption)
 #     # Available on both AMD64 and ARM64
 #     openjdk-11-jdk \
 #     # OpenJDK 17 (LTS, current recommended version)
 #     # Available on both AMD64 and ARM64
-     openjdk-17-jdk \
+#     openjdk-17-jdk \
 #     # OpenJDK 21 (LTS, latest stable LTS release)
 #     # Available on both AMD64 and ARM64
 #     openjdk-21-jdk \
@@ -135,16 +133,16 @@ RUN apt-get update && apt-get install -y podman
 #     # echo "deb https://packages.adoptium.net/artifactory/deb $(lsb_release -sc) main" > /etc/apt/sources.list.d/adoptium.list
 #     # apt-get update && apt-get install -y temurin-24-jdk
 #     # Maven (latest from Ubuntu repos, typically 3.6.x or 3.8.x)
-     maven \
+#     maven \
 #     # Gradle (version from Ubuntu repos, may not be latest)
 #     # For latest Gradle, use: pkgx install gradle.org
-     gradle \
+#     gradle \
 #     # Fix ca-certificates-java setup (workaround for cacerts directory issue)
 #     # The ca-certificates-java postinst script sometimes fails on first run
 #     # This ensures the Java certificate store is properly initialized
-     && /var/lib/dpkg/info/ca-certificates-java.postinst configure \
-     && apt-get clean \
-     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+#     && /var/lib/dpkg/info/ca-certificates-java.postinst configure \
+#     && apt-get clean \
+#     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 #
 # # Configure default Java version (multi-architecture compatible)
 # # Option 1: Use update-java-alternatives (recommended, handles all Java components)
@@ -157,7 +155,7 @@ RUN apt-get update && apt-get install -y podman
 # # No action needed - already set during installation
 #
 # # Verify installation
-RUN java -version && mvn -version && gradle -version
+# # RUN java -version && mvn -version && gradle -version
 
 # ------------------------------------------------------------------------------
 # Rust Development Environment
