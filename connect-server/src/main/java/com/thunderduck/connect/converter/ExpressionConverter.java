@@ -466,7 +466,8 @@ public class ExpressionConverter {
 
         // map constructor - creates map from key-value pairs
         // Spark: map('a', 1, 'b', 2) - alternating key-value pairs
-        if (lower.equals("map")) {
+        // PySpark: create_map(key_col, value_col, ...) - also alternating key-value pairs
+        if (lower.equals("map") || lower.equals("create_map")) {
             if (args.size() >= 2) {
                 // Check if any value (odd positions) is nullable
                 boolean valueContainsNull = false;

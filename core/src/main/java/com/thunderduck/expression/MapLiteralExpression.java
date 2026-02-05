@@ -94,8 +94,9 @@ public class MapLiteralExpression extends Expression {
      *
      * <p>Infers the key and value types by unifying all key and value types
      * respectively. Empty maps default to MapType(StringType, StringType, true).
+     * The valueContainsNull flag is computed based on actual value nullability.
      *
-     * @return MapType with inferred key and value types
+     * @return MapType with inferred key and value types and computed valueContainsNull
      */
     @Override
     public DataType dataType() {
@@ -118,7 +119,7 @@ public class MapLiteralExpression extends Expression {
             valueType = TypeInferenceEngine.unifyTypes(valueType, nextType);
         }
 
-        return new MapType(keyType, valueType, true);
+        return new MapType(keyType, valueType, valueContainsNull());
     }
 
     /**

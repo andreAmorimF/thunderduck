@@ -2139,7 +2139,9 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             // 1. DecimalType: prefer logical plan's type (computed using Spark rules)
             // 2. IntegerType vs LongType: prefer logical (date extraction functions return INT in Spark)
             // 3. LongType vs DoubleType: prefer logical (unix_timestamp returns LONG in Spark)
-            // 4. Other types: use DuckDB's type (handles aggregates, etc.)
+            // 4. Complex types (Map, Array, Struct): prefer logical plan's type for correct nullability info
+            //    DuckDB reports all complex type elements as nullable, but logical plan has the correct info
+            // 5. Other types: use DuckDB's type (handles aggregates, etc.)
             com.thunderduck.types.DataType finalType;
             com.thunderduck.types.DataType logicalType = logicalField.dataType();
             com.thunderduck.types.DataType duckType = duckField.dataType();
@@ -2154,6 +2156,12 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             } else if (logicalType instanceof com.thunderduck.types.LongType
                        && duckType instanceof com.thunderduck.types.DoubleType) {
                 // DuckDB returns DOUBLE for unix_timestamp, but Spark expects LONG
+                finalType = logicalType;
+            } else if (logicalType instanceof com.thunderduck.types.MapType
+                       || logicalType instanceof com.thunderduck.types.ArrayType
+                       || logicalType instanceof com.thunderduck.types.StructType) {
+                // Complex types: use logical plan's type for correct containsNull/valueContainsNull info
+                // DuckDB reports all complex type elements as nullable, but logical plan knows the truth
                 finalType = logicalType;
             } else {
                 // Use DuckDB's type for other cases (correct for aggregates)

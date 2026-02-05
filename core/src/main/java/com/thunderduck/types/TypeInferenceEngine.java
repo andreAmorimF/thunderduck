@@ -590,11 +590,12 @@ public final class TypeInferenceEngine {
      * Resolves the type of an array literal with schema awareness.
      *
      * <p>If the array is empty, returns ArrayType(StringType, true).
-     * Otherwise, unifies all element types to determine the element type.
+     * Otherwise, unifies all element types to determine the element type,
+     * and computes containsNull based on actual element nullability.
      *
      * @param array the array literal expression
      * @param schema the schema for resolving column types
-     * @return ArrayType with unified element type
+     * @return ArrayType with unified element type and computed containsNull
      */
     public static DataType resolveArrayLiteralType(ArrayLiteralExpression array, StructType schema) {
         if (array.isEmpty()) {
@@ -602,23 +603,28 @@ public final class TypeInferenceEngine {
         }
 
         DataType elementType = null;
+        boolean containsNull = false;
         for (Expression elem : array.elements()) {
             DataType elemType = resolveType(elem, schema);
             elementType = unifyTypes(elementType, elemType);
+            if (resolveNullable(elem, schema)) {
+                containsNull = true;
+            }
         }
 
-        return new ArrayType(elementType != null ? elementType : StringType.get(), true);
+        return new ArrayType(elementType != null ? elementType : StringType.get(), containsNull);
     }
 
     /**
      * Resolves the type of a map literal with schema awareness.
      *
      * <p>If the map is empty, returns MapType(StringType, StringType, true).
-     * Otherwise, unifies all key and value types separately.
+     * Otherwise, unifies all key and value types separately, and computes
+     * valueContainsNull based on actual value nullability.
      *
      * @param map the map literal expression
      * @param schema the schema for resolving column types
-     * @return MapType with unified key and value types
+     * @return MapType with unified key/value types and computed valueContainsNull
      */
     public static DataType resolveMapLiteralType(MapLiteralExpression map, StructType schema) {
         if (map.isEmpty()) {
@@ -632,26 +638,31 @@ public final class TypeInferenceEngine {
         }
 
         DataType valueType = null;
+        boolean valueContainsNull = false;
         for (Expression value : map.values()) {
             DataType vType = resolveType(value, schema);
             valueType = unifyTypes(valueType, vType);
+            if (resolveNullable(value, schema)) {
+                valueContainsNull = true;
+            }
         }
 
         return new MapType(
             keyType != null ? keyType : StringType.get(),
             valueType != null ? valueType : StringType.get(),
-            true);
+            valueContainsNull);
     }
 
     /**
      * Resolves the type of a struct literal with schema awareness.
      *
      * <p>Returns a StructType with field names from the literal and types
-     * resolved from the schema.
+     * resolved from the schema. Field nullability is computed using resolveNullable
+     * to properly handle column references and other expression types.
      *
      * @param struct the struct literal expression
      * @param schema the schema for resolving column types
-     * @return StructType with resolved field types
+     * @return StructType with resolved field types and computed nullability
      */
     public static DataType resolveStructLiteralType(StructLiteralExpression struct, StructType schema) {
         List<StructField> fields = new java.util.ArrayList<>();
@@ -662,7 +673,7 @@ public final class TypeInferenceEngine {
         for (int i = 0; i < fieldNames.size(); i++) {
             String name = fieldNames.get(i);
             DataType type = resolveType(fieldValues.get(i), schema);
-            boolean nullable = fieldValues.get(i).nullable();
+            boolean nullable = resolveNullable(fieldValues.get(i), schema);
             fields.add(new StructField(name, type, nullable));
         }
 
@@ -892,6 +903,11 @@ public final class TypeInferenceEngine {
         // Handle AliasExpression - resolve the underlying expression
         if (expr instanceof AliasExpression) {
             return resolveNullable(((AliasExpression) expr).expression(), schema);
+        }
+
+        // Handle Literal - non-null if value is not null
+        if (expr instanceof Literal) {
+            return ((Literal) expr).isNull();
         }
 
         // Handle UnresolvedColumn - look up nullable from schema

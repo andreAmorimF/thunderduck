@@ -73,8 +73,9 @@ public class ArrayLiteralExpression extends Expression {
      *
      * <p>Infers the element type by unifying all element types. Empty arrays
      * default to ArrayType(StringType, true) following Spark conventions.
+     * The containsNull flag is computed based on actual element nullability.
      *
-     * @return ArrayType with inferred element type
+     * @return ArrayType with inferred element type and computed containsNull
      */
     @Override
     public DataType dataType() {
@@ -90,7 +91,7 @@ public class ArrayLiteralExpression extends Expression {
             elementType = TypeInferenceEngine.unifyTypes(elementType, nextType);
         }
 
-        return new ArrayType(elementType, true);
+        return new ArrayType(elementType, containsNullableElements());
     }
 
     /**
