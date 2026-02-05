@@ -238,6 +238,13 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             }
         }
 
+        // Special case: Project directly on Join with aliased relations
+        // Generate flat SQL to preserve alias visibility and properly qualify columns
+        if (child instanceof Join && hasAliasedRelation(child)) {
+            generateProjectOnJoin(plan, (Join) child);
+            return;
+        }
+
         sql.append("SELECT ");
 
         List<Expression> projections = plan.projections();
@@ -281,10 +288,14 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
-     * Generates flat SQL for Project on Filter on Join with aliased relations.
-     * This preserves alias visibility by not wrapping intermediate results in subqueries.
+     * Generates flat SQL for Project directly on Join with aliased relations.
+     * This preserves alias visibility by qualifying column references.
      */
-    private void generateProjectOnFilterJoin(Project project, Filter filter, Join join) {
+    private void generateProjectOnJoin(Project project, Join join) {
+        // Build plan_id → alias mapping for the join first (before generating SQL)
+        Map<Long, String> planIdToAlias = new HashMap<>();
+        collectJoinPlanIds(join, planIdToAlias);
+
         sql.append("SELECT ");
 
         List<Expression> projections = project.projections();
@@ -296,23 +307,70 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             }
 
             Expression expr = projections.get(i);
-            sql.append(expr.toSQL());
+            // Use qualifyCondition to properly resolve column references
+            String qualifiedExpr = qualifyCondition(expr, planIdToAlias);
+            sql.append(qualifiedExpr);
 
             String alias = aliases.get(i);
             if (alias != null && !alias.isEmpty()) {
-                sql.append(" AS ");
-                sql.append(SQLQuoting.quoteIdentifier(alias));
+                // qualifyCondition may have already added AS for AliasExpression
+                // Check if it doesn't end with an alias already
+                if (!qualifiedExpr.contains(" AS ")) {
+                    sql.append(" AS ");
+                    sql.append(SQLQuoting.quoteIdentifier(alias));
+                }
             }
         }
 
         sql.append(" FROM ");
 
-        // Generate flat join chain
-        generateFlatJoinChain(join);
+        // Generate flat join chain (conditions will also be qualified)
+        generateFlatJoinChainWithMapping(join, null);
+    }
 
-        // Add WHERE clause from filter
+    /**
+     * Generates flat SQL for Project on Filter on Join with aliased relations.
+     * This preserves alias visibility by not wrapping intermediate results in subqueries.
+     */
+    private void generateProjectOnFilterJoin(Project project, Filter filter, Join join) {
+        // Build plan_id → alias mapping for the join first (before generating SQL)
+        Map<Long, String> planIdToAlias = new HashMap<>();
+        collectJoinPlanIds(join, planIdToAlias);
+
+        sql.append("SELECT ");
+
+        List<Expression> projections = project.projections();
+        List<String> aliases = project.aliases();
+
+        for (int i = 0; i < projections.size(); i++) {
+            if (i > 0) {
+                sql.append(", ");
+            }
+
+            Expression expr = projections.get(i);
+            // Use qualifyCondition to properly resolve column references
+            String qualifiedExpr = qualifyCondition(expr, planIdToAlias);
+            sql.append(qualifiedExpr);
+
+            String alias = aliases.get(i);
+            if (alias != null && !alias.isEmpty()) {
+                // qualifyCondition may have already added AS for AliasExpression
+                // Check if it doesn't end with an alias already
+                if (!qualifiedExpr.contains(" AS ")) {
+                    sql.append(" AS ");
+                    sql.append(SQLQuoting.quoteIdentifier(alias));
+                }
+            }
+        }
+
+        sql.append(" FROM ");
+
+        // Generate flat join chain (conditions will also be qualified)
+        generateFlatJoinChainWithMapping(join, null);
+
+        // Add WHERE clause with qualified filter condition
         sql.append(" WHERE ");
-        sql.append(filter.condition().toSQL());
+        sql.append(qualifyCondition(filter.condition(), planIdToAlias));
     }
 
     /**
@@ -320,9 +378,32 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * This preserves table aliases so they can be referenced in WHERE clauses.
      */
     private void generateFlatJoinChain(Join join) {
+        generateFlatJoinChainWithMapping(join, null);
+    }
+
+    /**
+     * Generates a flat join chain and optionally populates a planIdToAlias mapping.
+     * This allows callers to get the mapping for qualifying expressions elsewhere.
+     *
+     * @param join the join to generate
+     * @param planIdToAliasOut optional map to populate with plan_id → alias mappings (may be null)
+     */
+    private void generateFlatJoinChainWithMapping(Join join, Map<Long, String> planIdToAliasOut) {
         // Collect all joins in the chain
         List<JoinPart> joinParts = new java.util.ArrayList<>();
         LogicalPlan leftmost = collectJoinParts(join, joinParts);
+
+        // Build plan_id → alias mapping for the entire join tree
+        Map<Long, String> planIdToAlias = new HashMap<>();
+        String leftmostAlias = collectJoinSourcePlanIds(leftmost, planIdToAlias);
+        for (JoinPart part : joinParts) {
+            collectJoinSourcePlanIds(part.right, planIdToAlias);
+        }
+
+        // If caller wants the mapping, populate it
+        if (planIdToAliasOut != null) {
+            planIdToAliasOut.putAll(planIdToAlias);
+        }
 
         // Generate leftmost table/subquery
         generateJoinSource(leftmost);
@@ -335,8 +416,38 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             generateJoinSource(part.right);
             if (part.condition != null) {
                 sql.append(" ON ");
-                sql.append(part.condition.toSQL());
+                // Use qualified condition to properly resolve column references
+                sql.append(qualifyCondition(part.condition, planIdToAlias));
             }
+        }
+    }
+
+    /**
+     * Collects plan_ids from a join source (for use in flat join chains).
+     * Returns the alias that will be used for this source.
+     *
+     * @param plan the join source plan
+     * @param mapping the map to populate with plan_id → alias entries
+     * @return the alias that will be used for this source
+     */
+    private String collectJoinSourcePlanIds(LogicalPlan plan, Map<Long, String> mapping) {
+        if (plan instanceof AliasedRelation) {
+            AliasedRelation aliased = (AliasedRelation) plan;
+            String alias = SQLQuoting.quoteIdentifier(aliased.alias());
+            // Map the AliasedRelation's own plan_id
+            if (aliased.planId().isPresent()) {
+                mapping.putIfAbsent(aliased.planId().getAsLong(), alias);
+            }
+            // Also map child plan_ids to this alias
+            collectPlanIds(aliased.child(), alias, mapping);
+            return alias;
+        } else {
+            // Generate a subquery alias for non-aliased sources
+            // Note: We can't use generateSubqueryAlias() here as it would increment counter
+            // Instead, peek at what the alias would be
+            String alias = "subquery_" + (aliasCounter + 1);
+            collectPlanIds(plan, alias, mapping);
+            return alias;
         }
     }
 
@@ -430,11 +541,17 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // For Joins with user-defined aliases (AliasedRelation), append WHERE directly
         // to preserve alias visibility. Otherwise, wrap in subquery.
         if (child instanceof Join && hasAliasedChildren((Join) child)) {
+            Join join = (Join) child;
+
+            // Build plan_id → alias mapping for the join
+            Map<Long, String> planIdToAlias = new HashMap<>();
+            collectJoinPlanIds(join, planIdToAlias);
+
             // Visit the join directly (produces SELECT * FROM ... JOIN ... ON ...)
             visit(child);
-            // Append WHERE clause - aliases are still in scope
+            // Append WHERE clause with qualified column references
             sql.append(" WHERE ");
-            sql.append(plan.condition().toSQL());
+            sql.append(qualifyCondition(plan.condition(), planIdToAlias));
         } else {
             // Standard approach - check for direct table reference
             String childSource = getDirectlyAliasableSource(child);
@@ -453,6 +570,44 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 sql.append(" WHERE ");
                 sql.append(plan.condition().toSQL());
             }
+        }
+    }
+
+    /**
+     * Collects plan_id → alias mappings from an entire join tree.
+     *
+     * @param join the join to traverse
+     * @param mapping the map to populate with plan_id → alias entries
+     */
+    private void collectJoinPlanIds(Join join, Map<Long, String> mapping) {
+        collectJoinSidePlanIds(join.left(), mapping);
+        collectJoinSidePlanIds(join.right(), mapping);
+    }
+
+    /**
+     * Collects plan_ids from one side of a join.
+     *
+     * @param plan the join side plan
+     * @param mapping the map to populate with plan_id → alias entries
+     */
+    private void collectJoinSidePlanIds(LogicalPlan plan, Map<Long, String> mapping) {
+        if (plan instanceof AliasedRelation) {
+            AliasedRelation aliased = (AliasedRelation) plan;
+            String alias = SQLQuoting.quoteIdentifier(aliased.alias());
+            // Map the AliasedRelation's own plan_id
+            if (aliased.planId().isPresent()) {
+                mapping.putIfAbsent(aliased.planId().getAsLong(), alias);
+            }
+            // Also map child plan_ids to this alias
+            collectPlanIds(aliased.child(), alias, mapping);
+        } else if (plan instanceof Join) {
+            // Recursively handle nested joins
+            collectJoinPlanIds((Join) plan, mapping);
+        } else {
+            // For non-aliased, non-join plans, generate an alias and map their plan_ids
+            // Note: This alias should match what generateSubqueryAlias() will produce later
+            String alias = "subquery_" + (aliasCounter + 1);
+            collectPlanIds(plan, alias, mapping);
         }
     }
 
@@ -1313,8 +1468,72 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             return "(" + leftSQL + " " + binExpr.operator().symbol() + " " + rightSQL + ")";
         }
 
-        // For other expression types, use their default SQL representation
-        // This handles literals, function calls, etc.
+        // UnaryExpression: NOT, IS NULL, IS NOT NULL, NEGATE
+        if (expr instanceof com.thunderduck.expression.UnaryExpression) {
+            com.thunderduck.expression.UnaryExpression unaryExpr =
+                (com.thunderduck.expression.UnaryExpression) expr;
+            String operandSQL = qualifyCondition(unaryExpr.operand(), planIdToAlias);
+            if (unaryExpr.operator().isPrefix()) {
+                // NEGATE has no space, NOT has space
+                if (unaryExpr.operator() == com.thunderduck.expression.UnaryExpression.Operator.NEGATE) {
+                    return "(" + unaryExpr.operator().symbol() + operandSQL + ")";
+                }
+                return "(" + unaryExpr.operator().symbol() + " " + operandSQL + ")";
+            } else {
+                // IS NULL, IS NOT NULL are postfix
+                return "(" + operandSQL + " " + unaryExpr.operator().symbol() + ")";
+            }
+        }
+
+        // AliasExpression: expr AS alias
+        if (expr instanceof com.thunderduck.expression.AliasExpression) {
+            com.thunderduck.expression.AliasExpression aliasExpr =
+                (com.thunderduck.expression.AliasExpression) expr;
+            String innerSQL = qualifyCondition(aliasExpr.expression(), planIdToAlias);
+            return innerSQL + " AS " + aliasExpr.alias();
+        }
+
+        // CastExpression: CAST(expr AS type)
+        if (expr instanceof com.thunderduck.expression.CastExpression) {
+            com.thunderduck.expression.CastExpression castExpr =
+                (com.thunderduck.expression.CastExpression) expr;
+            String innerSQL = qualifyCondition(castExpr.expression(), planIdToAlias);
+            return "CAST(" + innerSQL + " AS " + castExpr.targetType().typeName() + ")";
+        }
+
+        // FunctionCall: func(arg1, arg2, ...)
+        if (expr instanceof com.thunderduck.expression.FunctionCall) {
+            com.thunderduck.expression.FunctionCall funcExpr =
+                (com.thunderduck.expression.FunctionCall) expr;
+            List<String> qualifiedArgs = new ArrayList<>();
+            for (Expression arg : funcExpr.arguments()) {
+                qualifiedArgs.add(qualifyCondition(arg, planIdToAlias));
+            }
+            // Use function registry for translation
+            String[] argArray = qualifiedArgs.toArray(new String[0]);
+            try {
+                return com.thunderduck.functions.FunctionRegistry.translate(
+                    funcExpr.functionName(), argArray);
+            } catch (UnsupportedOperationException e) {
+                // Fallback to direct function call
+                return funcExpr.functionName() + "(" + String.join(", ", qualifiedArgs) + ")";
+            }
+        }
+
+        // InExpression: expr IN (val1, val2, ...) or expr NOT IN (...)
+        if (expr instanceof com.thunderduck.expression.InExpression) {
+            com.thunderduck.expression.InExpression inExpr =
+                (com.thunderduck.expression.InExpression) expr;
+            String testSQL = qualifyCondition(inExpr.testExpr(), planIdToAlias);
+            List<String> valuesSQLs = new ArrayList<>();
+            for (Expression val : inExpr.values()) {
+                valuesSQLs.add(qualifyCondition(val, planIdToAlias));
+            }
+            String op = inExpr.isNegated() ? " NOT IN (" : " IN (";
+            return testSQL + op + String.join(", ", valuesSQLs) + ")";
+        }
+
+        // For other expression types (Literal, etc.), use their default SQL representation
         return expr.toSQL();
     }
 

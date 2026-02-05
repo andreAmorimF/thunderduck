@@ -247,3 +247,91 @@ class TestJoinAdvancedDifferential:
 
         assert_dataframes_equal(spark_result, td_result, query_name="left_join_ambiguous")
 
+    def test_self_join_with_alias_dataframe_api(self, spark_reference, spark_thunderduck):
+        """Test self-join using DataFrame.alias() - NOT SQL workaround.
+
+        This is the key test for verifying that df.alias("lower").join(df.alias("higher"), ...)
+        works correctly with column references qualified by the user's alias.
+        """
+        data = [
+            (1, "Alice", 50000),
+            (2, "Bob", 75000),
+            (3, "Charlie", 60000),
+            (4, "Diana", 90000),
+        ]
+
+        df_spark = spark_reference.createDataFrame(data, ["id", "name", "salary"])
+        df_td = spark_thunderduck.createDataFrame(data, ["id", "name", "salary"])
+
+        # Self-join using DataFrame API with aliases
+        # Find all pairs where one person earns less than another
+        lower_spark = df_spark.alias("lower")
+        higher_spark = df_spark.alias("higher")
+
+        lower_td = df_td.alias("lower")
+        higher_td = df_td.alias("higher")
+
+        spark_result = lower_spark.join(
+            higher_spark,
+            lower_spark["salary"] < higher_spark["salary"]
+        ).select(
+            lower_spark["name"].alias("lower_earner"),
+            lower_spark["salary"].alias("lower_salary"),
+            higher_spark["name"].alias("higher_earner"),
+            higher_spark["salary"].alias("higher_salary")
+        ).orderBy("lower_earner", "higher_earner")
+
+        td_result = lower_td.join(
+            higher_td,
+            lower_td["salary"] < higher_td["salary"]
+        ).select(
+            lower_td["name"].alias("lower_earner"),
+            lower_td["salary"].alias("lower_salary"),
+            higher_td["name"].alias("higher_earner"),
+            higher_td["salary"].alias("higher_salary")
+        ).orderBy("lower_earner", "higher_earner")
+
+        assert_dataframes_equal(spark_result, td_result, query_name="self_join_alias_df_api")
+
+    def test_self_join_with_filter_using_alias(self, spark_reference, spark_thunderduck):
+        """Test self-join with filter using DataFrame.alias().
+
+        This tests the case where we have a filter on top of a self-join with aliases.
+        """
+        data = [
+            (1, "Alice", 50000, "Engineering"),
+            (2, "Bob", 75000, "Engineering"),
+            (3, "Charlie", 60000, "Sales"),
+            (4, "Diana", 90000, "Sales"),
+        ]
+
+        df_spark = spark_reference.createDataFrame(data, ["id", "name", "salary", "dept"])
+        df_td = spark_thunderduck.createDataFrame(data, ["id", "name", "salary", "dept"])
+
+        # Self-join to find employees in the same department where one earns more
+        e1_spark = df_spark.alias("e1")
+        e2_spark = df_spark.alias("e2")
+
+        e1_td = df_td.alias("e1")
+        e2_td = df_td.alias("e2")
+
+        # Join and filter: same department, e1 earns less
+        spark_result = e1_spark.join(
+            e2_spark,
+            (e1_spark["dept"] == e2_spark["dept"]) & (e1_spark["salary"] < e2_spark["salary"])
+        ).select(
+            e1_spark["name"].alias("lower_earner"),
+            e2_spark["name"].alias("higher_earner"),
+            e1_spark["dept"].alias("department")
+        ).orderBy("department", "lower_earner")
+
+        td_result = e1_td.join(
+            e2_td,
+            (e1_td["dept"] == e2_td["dept"]) & (e1_td["salary"] < e2_td["salary"])
+        ).select(
+            e1_td["name"].alias("lower_earner"),
+            e2_td["name"].alias("higher_earner"),
+            e1_td["dept"].alias("department")
+        ).orderBy("department", "lower_earner")
+
+        assert_dataframes_equal(spark_result, td_result, query_name="self_join_filter_alias")
