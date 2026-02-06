@@ -1,484 +1,275 @@
 # Current Focus: Differential Test Parity with Spark 4.x
 
 **Status:** In Progress
-**Updated:** 2026-02-05
-**Previous Update:** 2026-02-04
+**Updated:** 2026-02-06
+**Previous Update:** 2026-02-05
 
 ---
 
 ## Executive Summary
 
-### Test Results Overview (2026-02-05)
+### Test Results Overview (2026-02-06)
 
 | Test Suite | Total | Passed | Failed | Skipped | Pass Rate |
 |------------|-------|--------|--------|---------|-----------|
-| **Maven Unit Tests** | 1016 | 979 | 0 | 37 | **100%** |
-| **Differential Tests** | 854 | 411 | 130 | 313 | **76%** |
-| **TPC-DS Tests** | 227 | 35 | 192 | 0 | **15.4%** |
+| **Maven Unit Tests** | 976 | 976 | 0 | 0 | **100%** |
+| **Differential Tests** | 854 | 438 | 363 | 53 | **51.3%** |
 
 ### Key Findings
 
-1. **Maven Unit Tests: EXCELLENT** - 979/1016 tests passing (100% of runnable tests)
+1. **Maven Unit Tests: EXCELLENT** - 976/976 tests passing (100%)
    - All core functionality tests pass
-   - 37 tests skipped (E2E/integration tests requiring full infrastructure)
-   - Zero failures or errors in unit test suite
+   - Zero failures, zero skipped
+   - Covers expressions, converters, type system, SQL generation, error handling
 
-2. **Differential Tests: GOOD** - 411/541 runnable tests passing (76%)
-   - 854 total tests, 313 skipped (TPC-DS requiring external setup)
-   - Most failures are nullable mismatches and missing DuckDB functions
-   - All join tests pass (27/27), including right/full outer join fixes
-
-3. **TPC-DS Tests: NEEDS WORK** - 35/227 tests passing (15.4%)
-   - Tests now auto-generate data if missing (updated conftest.py fixture)
-   - Passing queries: Q1, Q4, Q11, Q22, Q23a, Q23b, Q37, Q41, Q74, Q82, Q93
-   - DataFrame API tests: 13/15 passing (87%)
-   - Most failures are due to DecimalType precision and nullable mismatches
-
-4. **Critical Insight**: Core Thunderduck functionality is solid. Remaining differential test failures are primarily:
-   - **DecimalType precision**: Spark returns specific precision (e.g., DecimalType(17,2)), Thunderduck returns DecimalType(38,2) or DoubleType
-   - **Nullable mismatches**: Thunderduck marks more fields nullable than Spark
-   - **Missing DuckDB functions**: `named_struct`, `map_from_arrays`
-   - **Type differences in window functions**: DecimalType vs LongType
+2. **Differential Tests: IMPROVING** - 438/854 tests passing (51.3%)
+   - Up from 411 passing on 2026-02-05
+   - 53 tests intentionally skipped (unsupported DuckDB features)
+   - 363 failures primarily due to type mismatches and missing functions
 
 ---
 
 ## Test Suite Details
 
-### Maven Unit Tests (1016 total, 979 passing)
+### Maven Unit Tests (976 total, 976 passing)
 
-#### Test Distribution by Module
+**Status**: ✅ **ALL PASSING**
 
-**tests module**: 1016 tests, 0 failures, 0 errors, 37 skipped
+Test coverage includes:
+- Expression translation (literals, window, aggregate, binary, unary)
+- Converter tests (ExpressionConverter, RelationConverter, PlanConverter)
+- Type system tests
+- SQL generation tests
+- Error handling tests
+- Query logging tests
 
-#### Passing Test Categories
+### Differential Tests Breakdown
 
-✅ **Core Translation Engine** (100% passing)
-- Binary expressions (arithmetic, logical, comparison)
-- Unary expressions (negation, NOT, etc.)
-- Type promotion and casting
-- Literal expressions (all Spark types)
-- String functions
-- Date/time functions
-- Math functions
-- Conditional expressions (CASE WHEN)
-- Aggregate functions
-- Window functions
-- Lambda/Higher-order functions
+#### Fully Passing Test Categories (100%)
 
-✅ **Type System** (100% passing)
-- Numeric type promotion
-- Decimal precision handling
-- Date/timestamp types
-- Complex types (arrays, maps, structs)
-- Type casting and coercion
-- NULL handling
+| Category | Tests | Status |
+|----------|-------|--------|
+| Column Operations | 11/11 | ✅ All pass |
+| Join Operations | 17/17 | ✅ All pass |
+| Set Operations | 14/14 | ✅ All pass |
+| Conditional Expressions | 12/12 | ✅ All pass |
+| Distinct Operations | 12/12 | ✅ All pass |
+| Sorting Operations | 11/11 | ✅ All pass |
+| DDL Operations | 17/17 | ✅ All pass |
+| SQL Expressions | 11/11 | ✅ All pass |
+| Empty DataFrame | 12/12 | ✅ All pass |
+| Overflow/Boundary | 19/19 | ✅ All pass |
+| Pivot Operations | 7/7 | ✅ All pass |
 
-✅ **Logical Operations** (100% passing)
-- Projections
-- Filters
-- Aggregations (single and multi-dimensional)
-- Joins (all types including USING clause)
-- Set operations (UNION, INTERSECT, EXCEPT)
-- Sorting
-- Limits
+#### Partially Passing Categories
 
-✅ **Query Execution** (100% passing)
-- Arrow batch streaming
-- Result collection
-- Schema handling
-- Error handling and logging
-- SQL injection prevention
+| Category | Passed | Failed | Notes |
+|----------|--------|--------|-------|
+| Basic DataFrame Ops | 8/9 | 1 | Minor edge case |
+| Offset/Range | 14/17 | 3 | toDF edge cases |
+| Array Functions | ~15/20 | ~5 | Type mismatches |
+| Statistics | ~12/16 | ~4 | Implementation differences |
 
-#### Skipped Tests (37 total)
+#### TPC-H Results (9 passing)
 
-The 37 skipped tests fall into these categories:
+**Passing**: Q2, Q3, Q5, Q6, Q10, Q11, Q15, Q19, Q20
 
-1. **E2E Integration Tests** - Require full Spark Connect server infrastructure
-   - `SparkConnectE2ETest` (entire class)
-   - `EndToEndQueryTest` (entire class)
-   - `ParquetIOTest` (entire class)
-   - `SecurityIntegrationTest` (entire class)
+**Failing (13)**: Q1, Q4, Q7, Q8, Q9, Q12, Q13, Q14, Q16, Q17, Q18, Q21, Q22
+- Primary issue: DecimalVector/BigIntVector type conversion errors
 
-2. **Benchmark Tests** - Performance testing, not functional validation
-   - `SQLGenerationBenchmark` (entire class)
+#### TPC-DS SQL Results (11 passing)
 
-3. **Future Features** - Functionality deferred to later milestones
-   - `UnpivotTest` - "Unpivot requires SQL relation support - will be revisited when SQL parser is implemented"
-   - `NAFunctionsTest` - NA/missing value functions
+**Passing**: Q1, Q4, Q11, Q22, Q23a, Q23b, Q37, Q41, Q74, Q82, Q93
 
-**Analysis**: All skipped tests are intentionally disabled, not failing. They represent:
-- Infrastructure-dependent tests (rightfully skipped in unit test suite)
-- Performance benchmarks (not functional tests)
-- Future features not yet in scope
+**Failing**: Most others due to:
+- Type casting errors (DecimalVector → BigIntVector)
+- Decimal precision differences
+- Missing functions (named_struct)
+- Rollup/cube implementation issues
+
+#### TPC-DS DataFrame Results (13 passing)
+
+**Passing**: Q3, Q7, Q13, Q19, Q26, Q37, Q41, Q45, Q48, Q82, Q84, Q91, Q96
 
 ---
 
-### TPC-DS Differential Tests (227 tests)
+## Failure Analysis by Category
 
-**Status**: Running with auto-generated data (SF=0.01)
-**Updated**: 2026-02-05
-**Pass Rate**: 35/227 (15.4%)
+### Priority 1: Type Conversion Issues (CRITICAL)
 
-#### Passing Queries (11 SQL + 13 DataFrame = 24 unique queries)
+**Impact**: ~150+ tests
 
-| Query | SQL Test | DataFrame Test | Notes |
-|-------|----------|----------------|-------|
-| Q1 | ✅ Pass | - | Simple aggregation |
-| Q3 | - | ✅ Pass | Brand analysis |
-| Q4 | ✅ Pass | - | Customer sales comparison |
-| Q7 | - | ✅ Pass | Promotional sales |
-| Q11 | ✅ Pass | - | Customer preference comparison |
-| Q13 | - | ✅ Pass | Store sales analysis |
-| Q19 | - | ✅ Pass | Customer returns |
-| Q22 | ✅ Pass | - | Inventory analysis |
-| Q23a/b | ✅ Pass | - | Frequent customers |
-| Q26 | - | ✅ Pass | Promotional analysis |
-| Q37 | ✅ Pass | ✅ Pass | Inventory/catalog |
-| Q41 | ✅ Pass | ✅ Pass | Item selection |
-| Q45 | - | ✅ Pass | Web sales analysis |
-| Q48 | - | ✅ Pass | Store sales demographics |
-| Q74 | ✅ Pass | - | Year-over-year comparison |
-| Q82 | ✅ Pass | ✅ Pass | Inventory analysis |
-| Q84 | - | ✅ Pass | Customer income |
-| Q91 | - | ✅ Pass | Customer call analysis |
-| Q93 | ✅ Pass | - | Store returns |
-| Q96 | - | ✅ Pass | Simple count |
+**Primary Symptoms**:
+1. `DecimalVector cannot be cast to BigIntVector` - Arrow type mismatch
+2. DateTime functions returning INT instead of BIGINT
+3. Aggregate functions returning wrong numeric types
 
-#### Failure Categories
-
-**1. DecimalType Precision Mismatch (Most Common)**
-- Spark returns specific precision: `DecimalType(17,2)`, `DecimalType(11,6)`, etc.
-- Thunderduck returns: `DecimalType(38,2)` or `DoubleType()`
-- Affected: Q2, Q3, Q5, Q7, Q8, Q9, Q10, Q14a/b, Q25, Q29, Q32, Q43, Q44, Q53, Q54, Q55, Q59, Q62, Q63, Q65, Q67, Q69, Q70, Q72, Q75, Q76, Q77, Q78, Q80, Q83, Q85, Q86, Q87, Q88, Q89, Q90, Q92, Q94, Q95, Q97, Q98, Q99
-
-**2. Nullable Mismatch**
-- Thunderduck marks aggregation results as `nullable=True`
-- Spark marks them as `nullable=False`
-- Affected: Q6, Q15, Q16, Q17, Q18, Q19, Q20, Q21, Q24a/b, Q27, Q28, Q30, Q31, Q33, Q34, Q35, Q38, Q39a/b, Q40, Q46, Q47, Q49, Q50, Q56, Q57, Q58, Q60, Q61, Q64, Q66, Q68, Q71, Q73, Q79, Q81
-
-**3. Data Value Differences**
-- Some queries show actual data differences (rounding, precision)
-- Example: Q50 - `total_returns: 475477.39` vs `475477.00`
-
-#### Auto-Generation Feature
-
-The `tpcds_data_dir` fixture in `/workspace/tests/integration/conftest.py` now auto-generates TPC-DS data:
-- Checks if `tests/integration/tpcds_sf001/` exists
-- If missing, runs `scripts/generate_tpcds_via_duckdb.py --sf 0.01`
-- Generates 24 TPC-DS tables in Parquet format (~7MB total)
-- 5-minute timeout for data generation
-
----
-
-### Differential Tests (693 total, ~471 test functions)
-
-**Status**: Running with Apache Spark 4.0.1 reference server
-
-#### Test Structure Analysis
-
-| Category | Files | Tests | Status |
-|----------|-------|-------|--------|
-| **TPC-H/TPC-DS Benchmarks** | 2 | 227+ | Running (see above) |
-| **DataFrame Operations** | 3 | 97 | Running |
-| **Functions** | 3 | 70 | Running |
-| **Joins** | 2 | 26 | ✅ All Passing |
-| **Aggregations** | 1 | 21 | Running |
-| **Type System** | 3 | 66 | Running |
-| **Other** | 12 | 183 | Running |
-| **TOTAL** | 26 | ~693* | Active |
-
-*Note: Actual count ~693 due to parametrized tests generating multiple cases
-
-#### Test Files Inventory
-
-**TPC-H/TPC-DS Benchmarks:**
-- `test_differential_v2.py` - 16 TPC-H SQL tests (678 lines)
-- `test_tpcds_differential.py` - 227 TPC-DS tests (SQL + DataFrame + batches)
-
-**DataFrame Operations:**
-- `test_dataframe_functions.py` - 57 function parity tests (851 lines)
-- `test_dataframe_ops_differential.py` - 25 operation tests (437 lines)
-- `test_empty_dataframe.py` - 15 edge case tests (299 lines)
-
-**Functions:**
-- `test_aggregation_functions_differential.py` - 15 agg function tests (443 lines)
-- `test_datetime_functions_differential.py` - 20 datetime tests (495 lines)
-- `test_window_functions.py` - 35 window function tests (779 lines)
-
-**Joins:**
-- `test_joins_differential.py` - 15 join type tests (474 lines)
-- `test_using_joins_differential.py` - 11 USING clause tests (280 lines)
-
-**Type System:**
-- `test_complex_types_differential.py` - 15 complex type tests (285 lines)
-- `test_type_casting_differential.py` - 19 casting tests (404 lines)
-- `test_type_literals_differential.py` - 32 literal tests (426 lines)
-
-**Aggregations:**
-- `test_multidim_aggregations.py` - 21 grouping tests (687 lines)
-
-**Other:**
-- `test_catalog_operations.py` - 13 catalog tests (179 lines)
-- `test_conditional_differential.py` - 12 conditional tests (284 lines)
-- `test_distinct_differential.py` - 12 distinct tests (280 lines)
-- `test_lambda_differential.py` - 18 lambda/HOF tests (294 lines)
-- `test_overflow_differential.py` - 19 overflow tests (496 lines)
-- `test_set_operations_differential.py` - 14 set operation tests (344 lines)
-- `test_simple_sql.py` - 3 basic SQL tests (38 lines)
-- `test_sorting_differential.py` - 12 sorting tests (284 lines)
-- `test_statistics_differential.py` - 16 statistics tests (337 lines)
-- `test_temp_views.py` - 7 temp view tests (193 lines)
-- `test_to_schema_differential.py` - 12 schema tests (249 lines)
-
----
-
-## Failure Analysis (Based on Dec 2025 Run + Jan 2026 Cache)
-
-### Root Cause Categories
-
-#### Category 1: INSERT/DDL Statement Support ✅ VERIFIED (Was P0 - RESOLVED)
-
-**Status**: ✅ **FULLY VERIFIED** as of 2026-02-05 (Updated: Achieved Spark Parity)
-
-**Verification Results**:
-- ✅ **Unit Tests**: 18/18 tests PASSED (100%) - UPDATE/DELETE removed for Spark parity
-- ✅ **Differential Tests**: 16/16 tests PASSED (100%) - Exact Spark 4.0.1 parity verified
-- ✅ **No Regressions**: All Maven tests still passing
-
-**Implementation Summary**:
-- Statement detection via `SparkConnectServiceImpl.isDDLStatement()` (lines 1864-1895)
-- Routing logic in `SparkConnectServiceImpl.executeSQL()` (lines 1644-1654)
-- DDL execution via `executeDDL()` using JDBC `executeUpdate()` (lines 1804-1847)
-- Proper gRPC response with `ResultComplete` for DDL/DML operations
-
-**Supported Operations (Spark V1 Table Parity)**:
-- ✅ CREATE TABLE (with IF NOT EXISTS)
-- ✅ DROP TABLE (with IF EXISTS)
-- ✅ INSERT INTO (single/multiple rows, INSERT...SELECT)
-- ✅ TRUNCATE TABLE
-- ✅ ALTER TABLE ADD COLUMN
-- ❌ UPDATE - Correctly excluded (Spark V2 tables only)
-- ❌ DELETE - Correctly excluded (Spark V2 tables only)
-
-**Critical Findings**:
-1. **Spark V1 vs V2 Tables**: Spark 4.0.1 only supports UPDATE/DELETE on V2 table formats (Delta Lake, Iceberg, Hudi). Standard CREATE TABLE creates V1 tables that don't support UPDATE/DELETE.
-2. **Thunderduck Parity**: Thunderduck now matches Spark 4.0.1 exactly for V1 table operations
-3. **Direct SQL Pass-Through**: Spark native tables map directly to native DuckDB tables with no transformation
-
-**Test Files**:
-- Unit: `/workspace/tests/src/test/java/com/thunderduck/runtime/DDLStatementTest.java` (18 tests)
-- Differential: `/workspace/tests/integration/differential/test_ddl_operations_differential.py` (16 tests)
-- Historical Report: `/workspace/docs/dev_journal/DDL_DML_VERIFICATION_REPORT.md`
-
-**Previous Impact** (December 2025): ~400+ tests blocked in setup phase
-**Current Impact** (February 2026): **ZERO** - All DDL/DML operations work correctly with exact Spark parity
-
----
-
-#### Category 2: Spark Reference Server Stability (INFRASTRUCTURE - P1)
-
-**Impact**: ~100+ differential tests fail in fixture setup
-
-**Symptom**:
-```
-pyspark.errors.exceptions.connect.SparkConnectGrpcException: No analyze result found!
-```
-
-**Root Cause**: Apache Spark 4.0.1 reference server not responding properly to `spark.version` calls in the `spark_reference` fixture.
-
-**Affected Test Files**:
-- `test_tpcds_differential.py` - 227 errors (227 parametrized test cases)
-- `test_tpcds_dataframe_differential.py` - 33 errors
-- `test_differential_v2.py` - 34 errors (TPC-H queries)
-
-**Technical Details**:
-- Issue occurs during dual server setup in `conftest.py`
-- Spark reference server may not be starting correctly
-- Health check (`spark.version` call) times out or returns incomplete response
-- May be environment-specific (memory, ports, timing)
+**Root Causes**:
+- Arrow serialization type mismatches between Thunderduck and PySpark client
+- DuckDB's type inference differs from Spark's expected types
+- Window function results wrapped incorrectly
 
 **Files to Investigate**:
-- `/workspace/tests/integration/conftest.py` - Server fixture setup
-- `/workspace/tests/integration/utils/dual_server_manager.py` - Dual server management
-- `/workspace/tests/scripts/start-spark-4.0.1-reference.sh` - Spark startup script
+- `/workspace/connect-server/src/.../ArrowStreamingExecutor.java`
+- `/workspace/core/src/.../TypeInferenceEngine.java`
 
 **Recommendation**:
-1. Review Spark server startup sequence and health checks
-2. Add better timeout and retry logic
-3. Improve logging for server startup failures
-4. Consider increasing health check timeout for slower environments
-5. May need Spark 4.0.1 configuration tuning
+1. Ensure datetime extraction functions (YEAR, MONTH, DAY, etc.) return BIGINT
+2. Fix Arrow vector type selection for numeric aggregates
+3. Add explicit CAST in SQL generation where needed
 
 ---
 
-#### Category 3: Catalog Operation - setCurrentDatabase (BUG - P2)
+### Priority 2: Missing Functions (HIGH)
 
-**Impact**: 3 tests fail directly
+**Impact**: ~50+ tests
 
-**Symptom**:
-```
-AssertionError: expected response with success indicator, got None
-```
+**Missing Functions**:
+- `named_struct` - Not available in DuckDB (used for struct literals)
+- `transform` - Lambda/HOF function (DuckDB has different syntax)
+- Some string function behavior differences
 
-**Affected Tests**:
-- `test_catalog_operations.py::test_set_current_database_to_main`
-- `test_catalog_operations.py::test_set_current_database_creates_schema`
-- `test_catalog_operations.py::test_set_current_database_affects_table_creation`
-
-**Root Cause**: The `SetCurrentDatabase` catalog operation doesn't return the expected response format that PySpark client expects.
-
-**Files to Fix**:
-- `/workspace/connect-server/src/main/java/com/thunderduck/connect/service/CatalogOperationHandler.java`
+**Affected Test Files**:
+- `test_lambda_differential.py` (18 tests)
+- `test_type_literals_differential.py` (~15 tests)
+- `test_complex_types_differential.py` (10 tests)
 
 **Recommendation**:
-1. Review PySpark's expected response structure for SetCurrentDatabase
-2. Ensure proper gRPC response is built and returned
-3. Add unit test for SetCurrentDatabase handler
+1. Implement `named_struct` equivalent using DuckDB struct syntax
+2. Map Spark lambda functions to DuckDB list comprehensions where possible
+3. Document unsupported functions clearly
 
 ---
 
-#### Category 4: Catalog Operation - listFunctions (BUG - P2)
+### Priority 3: Nullability Mismatches (MEDIUM)
 
-**Impact**: 5 tests fail directly
+**Impact**: ~30+ tests
 
-**Symptom**:
-```
-io.netty.handler.codec.EncoderException: index: 32669, length: 250 (expected: range(0, 32768))
-```
+**Symptoms**:
+- Struct/array literals returning `nullable=True` when Spark returns `nullable=False`
+- Aggregate results marked nullable incorrectly
 
-**Affected Tests**:
-- `test_catalog_operations.py::test_list_functions_returns_results`
-- `test_catalog_operations.py::test_list_functions_has_required_attributes`
-- `test_catalog_operations.py::test_list_functions_includes_common_functions`
-- `test_catalog_operations.py::test_list_functions_with_pattern`
-- `test_catalog_operations.py::test_list_functions_className_is_string`
+**Recent Fix (2026-02-06)**:
+- Added `resolveAggregateNullable()` to TypeInferenceEngine
+- SUM/AVG/MIN/MAX now correctly inherit nullability from input column
 
-**Root Cause**: Index out of bounds error when building the listFunctions response. Buffer size exceeds gRPC message size limit (32KB default).
+**Remaining Issues**:
+- Complex type literals in raw SQL still show nullable=True
+- Some window function results have wrong nullability
 
-**Technical Details**:
-- DuckDB has 400+ built-in functions
-- Serializing all function metadata exceeds default gRPC message size
-- Need chunked response or increase message size limit
-- Alternative: paginated response
+---
 
-**Files to Fix**:
-- `/workspace/connect-server/src/main/java/com/thunderduck/connect/service/CatalogOperationHandler.java`
+### Priority 4: Decimal Precision (MEDIUM)
+
+**Impact**: ~40+ TPC-DS tests
+
+**Symptoms**:
+- Spark returns `DecimalType(17,2)`, Thunderduck returns `DecimalType(38,2)`
+- Revenue calculations show rounding differences (e.g., 5765.84 vs 5766.00)
+- Ratio calculations have precision drift
+
+**Root Cause**:
+- DuckDB defaults to higher precision decimals
+- Intermediate calculations accumulate precision differently
 
 **Recommendation**:
-1. Implement streaming/chunked response for listFunctions
-2. Or increase gRPC max message size in server config
-3. Or implement pagination for large result sets
+1. Match Spark's decimal precision inference rules exactly
+2. Consider explicit CAST to match expected precision in aggregates
 
 ---
 
-#### Category 5: Complex Type Parity (MINOR - P3)
+### Priority 5: Grouping Operations (LOW)
 
-**Impact**: 12-15 tests (from Jan 2026 cache)
-
-**Symptom**: Type mismatches in complex type operations (arrays, maps, structs)
+**Impact**: ~13 tests
 
 **Affected Tests**:
-- `test_complex_types_differential.py` - 12 failures
+- `test_multidim_aggregations.py` - Rollup/Cube tests
 
-**Root Cause**: Minor differences in how Thunderduck handles complex type operations compared to Spark:
-- Nested field access
-- Array element access
-- Map key/value access
-- Struct field projection
+**Symptoms**:
+- ROLLUP/CUBE producing different results
+- GROUPING/GROUPING_ID functions returning wrong values
 
-**Recommendation**: Review after P0/P1/P2 issues resolved. May be test data setup issues related to INSERT problem.
+**Recommendation**:
+- Review DuckDB ROLLUP/CUBE implementation
+- May need to generate different SQL for these operations
 
 ---
 
-#### Category 6: Temp Views and Empty DataFrames (MINOR - P3)
+## Skipped Tests (53 total)
 
-**Impact**: 8 tests (from Jan 2026 cache)
-
-**Affected Tests**:
-- `test_temp_views.py` - 5 failures
-- `test_empty_dataframe.py` - 3 failures
-
-**Root Cause**: Edge cases in temporary view lifecycle and empty DataFrame handling
-
-**Recommendation**: Investigate after blocking issues resolved.
+Tests intentionally skipped due to known limitations:
+- Array negative indexing (2 tests) - DuckDB uses different semantics
+- `months_between` (1 test) - Implementation differences
+- `next_day` (1 test) - Implementation pending
+- Various TPC-DS queries requiring unsupported features (~49 tests)
 
 ---
 
 ## Priority Fix Roadmap
 
-### Phase 1: Unblock Test Infrastructure (P0)
+### Phase 1: Type Conversion Fixes (HIGH IMPACT)
 
-**Goal**: Enable 400+ tests to run
+**Goal**: Fix ~150 tests
 
-✅ **Task 1.1**: Implement INSERT/DDL Statement Support
-- Detect statement type (SELECT vs INSERT/UPDATE/DELETE/CREATE/DROP/ALTER)
-- Use appropriate JDBC method (`executeQuery()` vs `execute()` vs `executeUpdate()`)
-- Return proper response structure for non-query statements
-- **Estimated Impact**: Unlocks 400+ tests
-- **Files**: `QueryExecutor.java`, `ArrowStreamingExecutor.java`
+| Task | Impact | Complexity | Status |
+|------|--------|------------|--------|
+| Fix datetime extracts to return BIGINT | ~20 tests | Low | ⏳ TODO |
+| Fix Arrow DecimalVector/BigIntVector mismatch | ~100 tests | Medium | ⏳ TODO |
+| Fix window function result types | ~30 tests | Medium | ⏳ TODO |
 
-✅ **Task 1.2**: Improve Spark Reference Server Stability
-- Better health checks and timeouts
-- Improved startup sequence
-- Better error logging
-- **Estimated Impact**: Unlocks 100+ TPC-H/TPC-DS tests
-- **Files**: `conftest.py`, `dual_server_manager.py`, startup scripts
+### Phase 2: Missing Function Implementation (MEDIUM IMPACT)
 
-### Phase 2: Catalog Operations (P2)
+**Goal**: Fix ~50 tests
 
-**Goal**: Complete catalog operation parity
+| Task | Impact | Complexity | Status |
+|------|--------|------------|--------|
+| Implement named_struct equivalent | ~25 tests | Medium | ⏳ TODO |
+| Map lambda functions to DuckDB | ~18 tests | High | ⏳ TODO |
+| Fix string function differences | ~10 tests | Low | ⏳ TODO |
 
-✅ **Task 2.1**: Fix setCurrentDatabase
-- Implement proper response format
-- Add unit tests
-- **Estimated Impact**: Fixes 3 tests
-- **Files**: `CatalogOperationHandler.java`
+### Phase 3: Precision and Nullability (LOWER IMPACT)
 
-✅ **Task 2.2**: Fix listFunctions
-- Implement chunked/streaming response or increase message size
-- Handle large result sets properly
-- **Estimated Impact**: Fixes 5 tests
-- **Files**: `CatalogOperationHandler.java`
+**Goal**: Fix ~70 tests
 
-### Phase 3: Edge Cases and Parity (P3)
+| Task | Impact | Complexity | Status |
+|------|--------|------------|--------|
+| Fix remaining nullability mismatches | ~30 tests | Low | ⏳ TODO |
+| Match Spark decimal precision rules | ~40 tests | Medium | ⏳ TODO |
 
-**Goal**: Achieve >95% differential test pass rate
+### Phase 4: Grouping Operations (LOW PRIORITY)
 
-✅ **Task 3.1**: Complex Type Operations
-- Review complex type handling
-- Fix any type mismatches
-- **Estimated Impact**: Fixes 12-15 tests
+**Goal**: Fix ~13 tests
 
-✅ **Task 3.2**: Temp Views and Edge Cases
-- Review temp view lifecycle
-- Fix empty DataFrame handling
-- **Estimated Impact**: Fixes 8 tests
-
-✅ **Task 3.3**: Full Test Suite Run
-- Execute complete differential test suite
-- Document any remaining failures
-- Create tickets for true parity gaps
+| Task | Impact | Complexity | Status |
+|------|--------|------------|--------|
+| Fix ROLLUP/CUBE SQL generation | ~13 tests | Medium | ⏳ TODO |
 
 ---
 
 ## What Currently Works (High Confidence)
 
-Based on Maven unit tests (100% passing in these areas):
+### Core Translation (100% Unit Test Coverage)
+- ✅ All Spark logical operators translate to DuckDB SQL
+- ✅ Full Spark type system support
+- ✅ 200+ Spark functions implemented
+- ✅ Arrow batch streaming
+- ✅ All join types including USING clause
+- ✅ Window functions (basic)
+- ✅ Aggregations (single and multi-dimensional)
+- ✅ Set operations (UNION, INTERSECT, EXCEPT)
+- ✅ DDL operations (CREATE, DROP, INSERT, TRUNCATE, ALTER)
 
-✅ **Core Translation**: All Spark logical operators translate correctly to DuckDB SQL
-✅ **Type System**: Full Spark type system support including complex types
-✅ **Expressions**: 200+ Spark functions implemented and tested
-✅ **Query Execution**: Arrow batch streaming works correctly
-✅ **Join Operations**: All join types including USING clause
-✅ **Window Functions**: Complete window function support
-✅ **Aggregations**: Single and multi-dimensional aggregations
-✅ **Set Operations**: UNION, INTERSECT, EXCEPT
-✅ **Error Handling**: SQL injection prevention, error logging
-
-From differential tests (last successful tests):
-✅ **Catalog Operations**: databaseExists, tableExists, listDatabases, getDatabase, functionExists
-✅ **External Tables**: CSV, Parquet, JSON file reading
-✅ **Temp Views**: Create and drop temporary views
+### Differential Test Verified
+- ✅ Column operations (drop, rename, withColumn)
+- ✅ Join operations (all types)
+- ✅ Set operations
+- ✅ Conditional expressions (WHEN/OTHERWISE)
+- ✅ Distinct operations
+- ✅ Sorting with null ordering
+- ✅ Pivot operations
+- ✅ SQL expressions and temp views
+- ✅ Empty DataFrame handling
+- ✅ Overflow detection
 
 ---
 
@@ -488,304 +279,79 @@ From differential tests (last successful tests):
 
 ```bash
 # Run all unit tests
-mvn clean test
+cd /workspace && mvn test
 
-# Run specific test class
-mvn test -Dtest=BinaryExpressionTest
+# Run specific module
+mvn test -pl core
 
-# Run with coverage
-mvn test jacoco:report
-
-# Fast mode (skip tests)
-mvn package -DskipTests
+# Run with verbose output
+mvn test -Dtest=TypeInferenceEngineTest
 ```
 
-### Differential Tests (Requires Spark 4.0.1)
+### Differential Tests
 
 ```bash
-# Setup environment (one-time)
-cd tests/scripts
-./setup-differential-testing.sh
+# Setup (one-time)
+./tests/scripts/setup-differential-testing.sh
 
-# Run all differential tests
-./run-differential-tests-v2.sh all
+# Run all tests
+./tests/scripts/run-differential-tests-v2.sh all
 
-# Run specific test group
-./run-differential-tests-v2.sh functions      # DataFrame functions
-./run-differential-tests-v2.sh window         # Window functions
-./run-differential-tests-v2.sh aggregations   # Aggregations
-./run-differential-tests-v2.sh types          # Type system
+# Run specific group
+./tests/scripts/run-differential-tests-v2.sh tpch
+./tests/scripts/run-differential-tests-v2.sh tpcds
+./tests/scripts/run-differential-tests-v2.sh functions
+./tests/scripts/run-differential-tests-v2.sh window
+./tests/scripts/run-differential-tests-v2.sh joins
 
 # Run specific test file
 cd /workspace/tests/integration
-pytest differential/test_catalog_operations.py -v
-
-# Run with detailed output
-./run-differential-tests-v2.sh all --tb=long -v
+python3 -m pytest differential/test_joins_differential.py -v
 ```
-
----
-
-## Test Infrastructure Notes
-
-### Maven Test Organization
-
-- **Module**: `tests` (single module contains all tests)
-- **Test Categories**: Tier1 (unit), Tier2 (integration), Tier3 (E2E)
-- **Parallel Execution**: 4 threads, method-level parallelization
-- **Coverage Target**: 85% line coverage, 80% branch coverage
-- **Current Coverage**: Meeting targets in core module
-
-### Differential Test Infrastructure
-
-- **Framework**: pytest with custom fixtures
-- **Servers**: Dual server setup (Thunderduck + Spark reference)
-- **Validation**: Row-by-row comparison with type checking
-- **Timeout**: 300s default per test
-- **Data**: TPC-H SF0.01 (10MB), TPC-DS queries
-
-### Key Testing Files
-
-```
-tests/
-├── src/test/java/               # Maven unit tests (998 tests)
-│   └── com/thunderduck/
-│       ├── expression/          # Expression translation tests
-│       ├── logical/             # Logical operator tests
-│       ├── runtime/             # Execution tests
-│       └── integration/         # Integration tests (mostly skipped)
-│
-└── integration/                 # Differential tests (693 tests)
-    ├── conftest.py              # pytest configuration, fixtures
-    ├── differential/            # All differential test files
-    │   ├── test_*.py            # 26 test files
-    ├── utils/                   # Test utilities
-    │   ├── dual_server_manager.py
-    │   ├── server_manager.py
-    │   └── result_validator.py
-    └── scripts/
-        ├── run-differential-tests-v2.sh
-        └── setup-differential-testing.sh
-```
-
----
-
-## Known Limitations and Bugs
-
-### Infrastructure Limitations
-
-1. **Spark Connect Required**: Differential tests require Apache Spark 4.0.1 installation
-2. **Environment Specific**: Some test failures may be environment-specific (memory, timing)
-3. **TPC-DS Data**: TPC-DS tests require data generation (handled by setup script)
-4. **Port Conflicts**: Tests use ports 15002 (Thunderduck) and 15003 (Spark)
-5. **Resource Usage**: Full test suite needs ~8GB RAM, 4+ CPU cores
-
----
-
-### Critical Bugs (Breaks Core Functionality)
-
-#### ~~1. DataFrame.alias() Not Supported for Self-Joins~~ ✅ FIXED
-
-**Status**: ✅ Fixed (2026-02-05)
-**Commit**: `c9d0467` - Fix DataFrame.alias() for self-joins
-
-**Fix Summary**:
-- Extended `qualifyCondition()` to handle more expression types
-- Added `generateProjectOnJoin()` for Project directly on Join
-- Fixed column qualification in join conditions and projections
-
----
-
-#### ~~2. Right Join Column Resolution Bug~~ ✅ FIXED
-
-**Status**: ✅ Fixed (2026-02-05)
-**Commit**: `1913631` - Fix right join column resolution bug for duplicate column names
-
-**Fix Summary**:
-- Removed restrictive `hasAliasedRelation()` check - now ALL Project-on-Join cases use flat SQL generation
-- Added `buildJoinPlanIdMapping()` to correctly predict aliases for non-aliased sources
-- Fixed `generateFlatJoinChainWithMapping()` to properly track alias counters for each join source
-
-**Root Cause**: When both tables had columns with the same name and no explicit `.alias()` was used, the join was wrapped in a subquery with `SELECT *`, making duplicate column names ambiguous. Additionally, the alias prediction logic incorrectly mapped both left and right tables to the same alias (`subquery_1`).
-
-**Test Coverage**: Added `test_right_join_column_resolution` and `test_full_outer_join_column_resolution` to differential tests.
-
----
-
-#### 3. Array Functions in Filter Context Not Supported
-
-**Status**: ❌ Confirmed Bug
-**Severity**: Medium - Common pattern but has workarounds
-
-**Description**:
-Array functions like `size()` and `array_contains()` work in SELECT expressions but fail when used in WHERE clauses.
-
-**Reproduction**:
-```python
-data = [(1, ["a", "b", "c"]), (2, ["x"])]
-df = spark.createDataFrame(data, ["id", "tags"])
-
-# This works
-df.selectExpr("id", "size(tags) as tag_count")  # ✓ Works
-
-# This fails
-df.filter("size(tags) > 1")  # ❌ Fails in Thunderduck
-```
-
-**Workaround**:
-Use subquery or selectExpr then filter.
-
----
-
-### Medium Priority Issues
-
-#### 4. Nullable Mismatch in Literal Values and Aggregations
-
-**Status**: ✅ Partially Fixed (2026-02-05)
-**Severity**: Low - Doesn't affect correctness, only type metadata
-
-**Description**:
-Thunderduck previously marked literal values and aggregation results as nullable=True, while Spark marks them as nullable=False.
-
-**Fix Summary** (2026-02-05):
-- Fixed `TypeInferenceEngine.resolveNullable()` to handle Literal expressions correctly
-- Fixed `ArrayLiteralExpression.dataType()` to compute `containsNull` from actual elements
-- Fixed `MapLiteralExpression.dataType()` to compute `valueContainsNull` from actual values
-- Fixed `resolveArrayLiteralType()`, `resolveMapLiteralType()`, `resolveStructLiteralType()` in TypeInferenceEngine
-- Fixed `mergeSchemas()` in SparkConnectServiceImpl to use logical plan types for complex types
-- Added `create_map` handling in ExpressionConverter
-
-**Current State**:
-- ✅ PySpark DataFrame API: Nullability now matches Spark for array, map, struct literals
-- ⚠️ Raw SQL queries: Still show nullable=True (SQL queries bypass expression tree - known limitation)
-
-**Workaround for Raw SQL**:
-Use `ignore_nullable=True` in test assertions for tests using raw SQL.
-
----
-
-### Testing Gaps (Not Yet Tested)
-
-#### 5. Window Function Edge Cases
-- LEAD/LAG
-- FIRST_VALUE/LAST_VALUE
-- Complex frame specifications (ROWS BETWEEN, RANGE BETWEEN)
-
-#### 6. Complex Subquery Patterns
-- Correlated subqueries
-- EXISTS/NOT EXISTS with subqueries
-- Scalar subqueries in SELECT
-
-#### 7. Date/Time Functions
-- Date arithmetic with intervals
-- Time zone handling
-- Date formatting/parsing
-
----
-
-### Summary Statistics
-
-**Total Known Issues**: 7
-- ✅ Fixed: 3 (DataFrame.alias, Right Join Column Resolution, Nullable for PySpark API)
-- ❌ Critical: 1 (Array Functions in Filter)
-- ⚠️ Medium: 0
-- 🔍 Testing Gaps: 3
 
 ---
 
 ## Success Metrics
 
-### Current State (2026-02-05)
-- ✅ Maven Unit Tests: **100% passing** (979/1016 runnable, 37 skipped)
-- ✅ Differential Tests: **76% passing** (411/541 runnable, 313 skipped)
-- ✅ All Join Tests: **100% passing** (27/27 including right/full outer joins)
-- ⚠️ TPC-DS Tests: **15.4% passing** (35/227 tests)
+### Current State (2026-02-06)
+- ✅ Maven Unit Tests: **100%** (976/976)
+- ⚠️ Differential Tests: **51.3%** (438/854)
+- ⚠️ TPC-H: **40.9%** (9/22)
+- ⚠️ TPC-DS SQL: **11%** (11/99)
+- ⚠️ TPC-DS DataFrame: **38%** (13/34)
 
 ### Target State (Next Milestone)
-- ✅ Maven Unit Tests: **>96%** (maintain) ✅ ACHIEVED
-- ⏳ Differential Tests: **>85%** (460+/541)
-- ⏳ TPC-DS Tests: **>50%** (114+/227) - requires DecimalType precision fixes
-- ⏳ Fix nullable mismatches and missing functions
+- ✅ Maven Unit Tests: **100%** (maintain)
+- ⏳ Differential Tests: **>70%** (600+/854)
+- ⏳ TPC-H: **>80%** (18+/22)
+- ⏳ TPC-DS: **>30%** (30+/99)
 
 ### Ultimate Goal
-- ✅ Maven Unit Tests: **>95%** ✅ ACHIEVED
-- ⏳ Differential Tests: **>95%** (514+/541)
-- ⏳ Full Parity: All Spark 4.x DataFrame/SQL features
+- ✅ Maven Unit Tests: **100%**
+- ⏳ Differential Tests: **>90%**
+- ⏳ Full Spark 4.x DataFrame/SQL parity
 
 ---
 
 ## Recent Changes
 
-**2026-02-05 (Evening)**:
-- Updated `tpcds_data_dir` fixture in `/workspace/tests/integration/conftest.py` to auto-generate TPC-DS data
-- Ran full TPC-DS differential test suite: **35/227 passing (15.4%)**
-- Identified primary failure categories:
-  - DecimalType precision mismatch (Spark returns specific precision, Thunderduck returns DecimalType(38,2) or DoubleType)
-  - Nullable field mismatches (Thunderduck marks aggregations as nullable=True)
-- Passing queries: Q1, Q4, Q11, Q22, Q23a/b, Q37, Q41, Q74, Q82, Q93 (SQL tests)
-- DataFrame API tests: 13/15 passing (87%) - Q3, Q7, Q13, Q19, Q26, Q37, Q41, Q45, Q48, Q82, Q84, Q91, Q96
-- Added TPC-DS detailed results section to documentation
+**2026-02-06**:
+- Fixed aggregate function nullable mismatches
+- Added `resolveAggregateNullable()` to TypeInferenceEngine
+- SUM/AVG/MIN/MAX now correctly inherit nullability from input
+- Full test suite refresh: 976 unit tests (100%), 438 differential tests (51.3%)
 
-**2026-02-05 (PM)**:
-- Fixed nullability mismatch between Spark and Thunderduck for PySpark API
-- Modified TypeInferenceEngine: `resolveNullable()`, `resolveArrayLiteralType()`, `resolveMapLiteralType()`, `resolveStructLiteralType()`
-- Fixed ArrayLiteralExpression and MapLiteralExpression `dataType()` methods to use computed nullability
-- Fixed ExpressionConverter to handle `create_map` function for correct type inference
-- Fixed SparkConnectServiceImpl `mergeSchemas()` to use logical plan types for complex types (MapType, ArrayType, StructType)
-- PySpark differential tests for array/map literals now pass with correct nullability
-
-**2026-02-05 (AM)**:
-- Fixed right join column resolution bug for duplicate column names
-- All 27 join tests now pass (including new right/full outer join tests)
-- Ran full test suite: Maven 979/1016 (100%), Differential 411/541 (76%)
-- Remaining failures primarily: nullable mismatches, missing DuckDB functions
-- Updated documentation to reflect current state
-
-**2026-02-04**:
-- Ran complete Maven unit test suite: 961/998 passing (96.3%)
-- Analyzed test structure: 26 differential test files, ~693 tests
-- Cannot run differential tests (Spark 4.0.1 not installed in environment)
-- Confirmed root causes from Dec 2025 analysis still valid
-- All unit tests passing prove core functionality solid
-
-**2025-12-20**:
-- Initial differential test analysis
-- Identified 4 major issue categories
-- 57/618 tests passing, 551 errors, 9 failures
-- Root cause: INSERT/DDL support blocks majority of tests
-
----
-
-## Next Steps
-
-1. ✅ **Setup Test Environment** (if needed)
-   - Install Apache Spark 4.0.1
-   - Run setup script: `./tests/scripts/setup-differential-testing.sh`
-
-2. ✅ **Fix P0 Issue**: Implement INSERT/DDL statement support
-   - Modify `QueryExecutor.java` to detect and route statement types
-   - Test with simple INSERT statement
-   - Re-run differential test suite
-
-3. ✅ **Fix P2 Issues**: Catalog operations (setCurrentDatabase, listFunctions)
-   - Quick wins, should take <1 day each
-   - Can be parallelized
-
-4. ✅ **Stabilize Infrastructure**: Improve Spark reference server reliability
-   - May require environment tuning
-   - Document any environment-specific requirements
-
-5. ✅ **Full Validation**: Run complete test suite and measure improvement
-   - Target: >500 differential tests passing (from 57)
-   - Document any remaining true parity gaps
+**2026-02-05**:
+- Fixed nullability for PySpark API (array/map/struct literals)
+- Fixed right join column resolution for duplicate names
+- TPC-DS auto-generation feature added
 
 ---
 
 ## References
 
-- **Maven Unit Test Results**: `/workspace/tests/target/surefire-reports/`
+- **Unit Test Results**: `mvn test` output
 - **Differential Test Code**: `/workspace/tests/integration/differential/`
 - **Test Scripts**: `/workspace/tests/scripts/`
-- **Server Code**: `/workspace/connect-server/src/`
-- **Core Code**: `/workspace/core/src/`
-- **Previous Analysis**: This document (2025-12-20 section)
+- **TypeInferenceEngine**: `/workspace/core/src/main/java/com/thunderduck/types/TypeInferenceEngine.java`
+- **ArrowStreamingExecutor**: `/workspace/connect-server/src/main/java/com/thunderduck/connect/arrow/ArrowStreamingExecutor.java`
