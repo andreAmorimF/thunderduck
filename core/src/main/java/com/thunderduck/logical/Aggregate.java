@@ -240,7 +240,10 @@ public class Aggregate extends LogicalPlan {
         for (AggregateExpression aggExpr : aggregateExpressions) {
             String name = aggExpr.alias() != null ? aggExpr.alias() : aggExpr.toSQL();
             DataType type = inferAggregateReturnType(aggExpr, childSchema);
-            fields.add(new StructField(name, type, aggExpr.nullable()));
+            // Use TypeInferenceEngine to resolve nullability based on argument
+            boolean nullable = TypeInferenceEngine.resolveAggregateNullable(
+                aggExpr.function(), aggExpr.argument(), childSchema);
+            fields.add(new StructField(name, type, nullable));
         }
 
         return new StructType(fields);

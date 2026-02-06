@@ -36,7 +36,7 @@ import com.thunderduck.functions.FunctionCategories;
  *   <li>Column reference: inherits from schema</li>
  *   <li>Arithmetic on nullable: true if any operand nullable</li>
  *   <li>COUNT: false (always returns 0 for empty groups)</li>
- *   <li>SUM/AVG/MIN/MAX: true (empty group → null)</li>
+ *   <li>SUM/AVG/MIN/MAX: depends on argument nullability (non-nullable input → non-nullable result)</li>
  *   <li>Window ranking (ROW_NUMBER, RANK): false</li>
  *   <li>Window analytic (LAG, LEAD): true (unless default provided AND column non-nullable)</li>
  * </ul>
@@ -882,6 +882,62 @@ public final class TypeInferenceEngine {
             default:
                 return argType != null ? argType : StringType.get();
         }
+    }
+
+    /**
+     * Resolves nullability for aggregate functions per Spark semantics.
+     *
+     * <p>Spark rules:
+     * <ul>
+     *   <li>COUNT(*), COUNT(col): always non-nullable (returns 0 for empty groups)</li>
+     *   <li>SUM/AVG/MIN/MAX/FIRST/LAST: non-nullable if input is non-nullable</li>
+     *   <li>COLLECT_LIST/COLLECT_SET: always nullable (array itself can be null)</li>
+     *   <li>Statistical functions (STDDEV, VAR): nullable</li>
+     * </ul>
+     *
+     * @param function the aggregate function name
+     * @param argument the aggregate argument expression (may be null for COUNT(*))
+     * @param schema the schema to resolve argument nullability from
+     * @return true if the aggregate result can be null
+     */
+    public static boolean resolveAggregateNullable(String function, Expression argument, StructType schema) {
+        String funcUpper = function.toUpperCase();
+
+        // COUNT is always non-nullable (returns 0 for empty groups)
+        if (funcUpper.equals("COUNT") || funcUpper.equals("COUNT_DISTINCT")) {
+            return false;
+        }
+
+        // Collection aggregates are always nullable
+        if (funcUpper.equals("COLLECT_LIST") || funcUpper.equals("COLLECT_SET") ||
+            funcUpper.equals("ARRAY_AGG") || funcUpper.equals("LIST") ||
+            funcUpper.equals("LIST_DISTINCT")) {
+            return true;
+        }
+
+        // Statistical functions are always nullable
+        if (funcUpper.equals("STDDEV") || funcUpper.equals("STDDEV_POP") ||
+            funcUpper.equals("STDDEV_SAMP") || funcUpper.equals("VARIANCE") ||
+            funcUpper.equals("VAR_POP") || funcUpper.equals("VAR_SAMP") ||
+            funcUpper.equals("COVAR_POP") || funcUpper.equals("COVAR_SAMP") ||
+            funcUpper.equals("CORR") || funcUpper.equals("PERCENTILE") ||
+            funcUpper.equals("PERCENTILE_APPROX")) {
+            return true;
+        }
+
+        // For SUM/AVG/MIN/MAX/FIRST/LAST: check argument nullability
+        if (funcUpper.equals("SUM") || funcUpper.equals("AVG") ||
+            funcUpper.equals("MIN") || funcUpper.equals("MAX") ||
+            funcUpper.equals("FIRST") || funcUpper.equals("LAST") ||
+            funcUpper.equals("FIRST_VALUE") || funcUpper.equals("LAST_VALUE") ||
+            funcUpper.equals("ANY_VALUE")) {
+            if (argument != null) {
+                return resolveNullable(argument, schema);
+            }
+        }
+
+        // Default: nullable
+        return true;
     }
 
     // ========================================================================
