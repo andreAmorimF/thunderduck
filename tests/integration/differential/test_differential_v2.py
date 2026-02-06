@@ -70,7 +70,6 @@ class TestTPCH_Q1_Differential:
             reference_result,
             test_result,
             query_name="TPC-H Q1",
-            epsilon=1e-6,
             max_diff_rows=5
         )
 
@@ -115,8 +114,7 @@ class TestTPCH_Q3_Differential:
         assert_dataframes_equal(
             reference_result,
             test_result,
-            query_name="TPC-H Q3",
-            epsilon=1e-6
+            query_name="TPC-H Q3"
         )
 
 
@@ -160,8 +158,7 @@ class TestTPCH_Q6_Differential:
         assert_dataframes_equal(
             reference_result,
             test_result,
-            query_name="TPC-H Q6",
-            epsilon=1e-6
+            query_name="TPC-H Q6"
         )
 
 
@@ -216,7 +213,6 @@ class TestTPCH_AllQueries_Differential:
             reference_result,
             test_result,
             query_name=f"TPC-H Q{query_num}",
-            epsilon=1e-6,
             max_diff_rows=5
         )
 
@@ -629,7 +625,7 @@ class TestBasicOperations_Differential:
         ref_result = build_query(spark_reference)
         test_result = build_query(spark_thunderduck)
 
-        assert_dataframes_equal(ref_result, test_result, "simple_groupby")
+        assert_dataframes_equal(ref_result, test_result, "simple_groupby", order_independent=True)
 
     def test_simple_orderby(
         self,
@@ -644,7 +640,7 @@ class TestBasicOperations_Differential:
 
         def build_query(spark):
             lineitem = spark.read.parquet(str(tpch_data_dir / "lineitem.parquet"))
-            return lineitem.orderBy(F.col("l_quantity").desc()).limit(10)
+            return lineitem.orderBy(F.col("l_quantity").desc(), F.col("l_orderkey")).limit(10)
 
         ref_result = build_query(spark_reference)
         test_result = build_query(spark_thunderduck)
@@ -668,6 +664,7 @@ class TestBasicOperations_Differential:
             return (orders
                 .join(lineitem, F.col("o_orderkey") == F.col("l_orderkey"))
                 .select("o_orderkey", "l_quantity")
+                .orderBy("o_orderkey", "l_quantity")
                 .limit(100)
             )
 
