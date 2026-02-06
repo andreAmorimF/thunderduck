@@ -478,17 +478,18 @@ public class FunctionRegistry {
     // ==================== Date/Time Functions ====================
 
     private static void initializeDateFunctions() {
-        // Extract components - direct mappings
-        DIRECT_MAPPINGS.put("year", "year");
-        DIRECT_MAPPINGS.put("month", "month");
-        DIRECT_MAPPINGS.put("day", "day");
-        DIRECT_MAPPINGS.put("dayofmonth", "day");
-        DIRECT_MAPPINGS.put("dayofyear", "dayofyear");
-        DIRECT_MAPPINGS.put("hour", "hour");
-        DIRECT_MAPPINGS.put("minute", "minute");
-        DIRECT_MAPPINGS.put("second", "second");
-        DIRECT_MAPPINGS.put("quarter", "quarter");
-        DIRECT_MAPPINGS.put("weekofyear", "weekofyear");
+        // Extract components - DuckDB returns BIGINT, Spark returns INTEGER
+        // Must cast to INTEGER for Spark compatibility
+        CUSTOM_TRANSLATORS.put("year", args -> "CAST(year(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("month", args -> "CAST(month(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("day", args -> "CAST(day(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("dayofmonth", args -> "CAST(day(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("dayofyear", args -> "CAST(dayofyear(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("hour", args -> "CAST(hour(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("minute", args -> "CAST(minute(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("second", args -> "CAST(second(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("quarter", args -> "CAST(quarter(" + args[0] + ") AS INTEGER)");
+        CUSTOM_TRANSLATORS.put("weekofyear", args -> "CAST(weekofyear(" + args[0] + ") AS INTEGER)");
 
         // dayofweek: Spark returns 1=Sunday...7=Saturday; DuckDB returns 0=Sunday...6=Saturday
         // Need to add 1 to DuckDB result
@@ -667,9 +668,10 @@ public class FunctionRegistry {
     private static void initializeAggregateFunctions() {
         // Basic aggregates
         // SUM needs special handling: DuckDB returns HUGEINT (int128) for integer inputs
-        // to prevent overflow. However, Spark returns BIGINT (int64) and the Spark Connect
-        // protocol doesn't support 128-bit integers. Cast to BIGINT for Spark compatibility.
-        // Note: Very large sums (>9.2 quintillion) will overflow, matching Spark behavior.
+        // SUM translator - basic version for FunctionCall (used in tests and non-aggregate contexts)
+        // NOTE: For actual aggregate queries, Aggregate.AggregateExpression.toSQL() provides
+        // type-aware casting that preserves DECIMAL precision while preventing integer overflow.
+        // This version casts to BIGINT as a default for backwards compatibility.
         CUSTOM_TRANSLATORS.put("sum", args -> {
             if (args.length < 1) {
                 throw new IllegalArgumentException("sum requires at least 1 argument");
@@ -1138,6 +1140,67 @@ public class FunctionRegistry {
         FUNCTION_METADATA.put("from_unixtime", FunctionMetadata.builder("from_unixtime")
             .duckdbName("strftime")  // Placeholder - actual translation in CUSTOM_TRANSLATORS
             .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // DateTime extraction functions return IntegerType (per Spark spec)
+        FUNCTION_METADATA.put("year", FunctionMetadata.builder("year")
+            .duckdbName("year")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("month", FunctionMetadata.builder("month")
+            .duckdbName("month")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("day", FunctionMetadata.builder("day")
+            .duckdbName("day")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("dayofmonth", FunctionMetadata.builder("dayofmonth")
+            .duckdbName("day")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("hour", FunctionMetadata.builder("hour")
+            .duckdbName("hour")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("minute", FunctionMetadata.builder("minute")
+            .duckdbName("minute")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("second", FunctionMetadata.builder("second")
+            .duckdbName("second")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("quarter", FunctionMetadata.builder("quarter")
+            .duckdbName("quarter")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("weekofyear", FunctionMetadata.builder("weekofyear")
+            .duckdbName("weekofyear")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("dayofyear", FunctionMetadata.builder("dayofyear")
+            .duckdbName("dayofyear")
+            .returnType(FunctionMetadata.constantType(IntegerType.get()))
             .nullable(FunctionMetadata.anyArgNullable())
             .build());
     }

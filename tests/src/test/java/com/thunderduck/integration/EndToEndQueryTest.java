@@ -280,7 +280,8 @@ public class EndToEndQueryTest extends TestBase {
             Expression year = FunctionCall.of("year", orderDate, IntegerType.get());
 
             String orderByClause = year.toSQL() + " DESC";
-            assertThat(orderByClause).isEqualTo("year(order_date) DESC");
+            // Year now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(orderByClause).isEqualTo("CAST(year(order_date) AS INTEGER) DESC");
         }
     }
 

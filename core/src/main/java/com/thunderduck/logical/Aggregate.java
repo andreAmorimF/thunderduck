@@ -424,6 +424,33 @@ public class Aggregate extends LogicalPlan {
                 finalArgSQL = "DISTINCT " + argSQL;
             }
 
+            // Type-aware handling for SUM to prevent type mismatches
+            if (function.equalsIgnoreCase("SUM") && argument != null) {
+                com.thunderduck.types.DataType argType = argument.dataType();
+
+                // For integer types, cast to BIGINT to prevent overflow
+                if (argType instanceof com.thunderduck.types.IntegerType ||
+                    argType instanceof com.thunderduck.types.LongType ||
+                    argType instanceof com.thunderduck.types.ShortType ||
+                    argType instanceof com.thunderduck.types.ByteType) {
+                    return "CAST(SUM(" + finalArgSQL + ") AS BIGINT)";
+                }
+
+                // For DECIMAL types, DO NOT cast - preserve precision
+                if (argType instanceof com.thunderduck.types.DecimalType) {
+                    return "SUM(" + finalArgSQL + ")";
+                }
+
+                // For FLOAT/DOUBLE, no cast needed
+                if (argType instanceof com.thunderduck.types.FloatType ||
+                    argType instanceof com.thunderduck.types.DoubleType) {
+                    return "SUM(" + finalArgSQL + ")";
+                }
+
+                // Default: cast to BIGINT for safety
+                return "CAST(SUM(" + finalArgSQL + ") AS BIGINT)";
+            }
+
             // Translate function name using registry (handles sort_array -> list_sort, etc.)
             try {
                 if (finalArgSQL != null) {

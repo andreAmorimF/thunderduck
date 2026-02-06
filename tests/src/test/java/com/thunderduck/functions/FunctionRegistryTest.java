@@ -167,7 +167,8 @@ public class FunctionRegistryTest extends TestBase {
 
             String result = FunctionRegistry.translate("year", "order_date");
 
-            assertThat(result).isEqualTo("year(order_date)");
+            // Year now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(result).isEqualTo("CAST(year(order_date) AS INTEGER)");
         }
 
         @Test
@@ -177,7 +178,8 @@ public class FunctionRegistryTest extends TestBase {
 
             String result = FunctionRegistry.translate("month", "order_date");
 
-            assertThat(result).isEqualTo("month(order_date)");
+            // Month now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(result).isEqualTo("CAST(month(order_date) AS INTEGER)");
         }
 
         @Test
@@ -187,7 +189,8 @@ public class FunctionRegistryTest extends TestBase {
 
             String result = FunctionRegistry.translate("day", "order_date");
 
-            assertThat(result).isEqualTo("day(order_date)");
+            // Day now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(result).isEqualTo("CAST(day(order_date) AS INTEGER)");
         }
 
         @Test

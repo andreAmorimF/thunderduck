@@ -942,7 +942,8 @@ public class ExpressionTranslationTest extends TestBase {
             Expression func = FunctionCall.of("year", arg, IntegerType.get());
 
             String sql = func.toSQL();
-            assertThat(sql).isEqualTo("year(order_date)");
+            // Year now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(sql).isEqualTo("CAST(year(order_date) AS INTEGER)");
         }
 
         @Test
@@ -952,7 +953,8 @@ public class ExpressionTranslationTest extends TestBase {
             Expression func = FunctionCall.of("month", arg, IntegerType.get());
 
             String sql = func.toSQL();
-            assertThat(sql).isEqualTo("month(created_at)");
+            // Month now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(sql).isEqualTo("CAST(month(created_at) AS INTEGER)");
         }
 
         @Test
@@ -962,7 +964,8 @@ public class ExpressionTranslationTest extends TestBase {
             Expression func = FunctionCall.of("day", arg, IntegerType.get());
 
             String sql = func.toSQL();
-            assertThat(sql).isEqualTo("day(birth_date)");
+            // Day now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(sql).isEqualTo("CAST(day(birth_date) AS INTEGER)");
         }
 
         @Test
@@ -1039,7 +1042,8 @@ public class ExpressionTranslationTest extends TestBase {
             Expression year = FunctionCall.of("year", dateAdd, IntegerType.get());
 
             String sql = year.toSQL();
-            assertThat(sql).isEqualTo("year(date_add(order_date, 365))");
+            // Year now casts to INTEGER to match Spark's IntegerType return type
+            assertThat(sql).isEqualTo("CAST(year(date_add(order_date, 365)) AS INTEGER)");
         }
     }
 
