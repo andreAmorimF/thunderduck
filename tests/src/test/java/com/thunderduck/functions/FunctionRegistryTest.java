@@ -238,8 +238,9 @@ public class FunctionRegistryTest extends TestBase {
 
             String result = FunctionRegistry.translate("sum", "amount");
 
-            // SUM is wrapped with CAST to BIGINT for Spark compatibility
-            assertThat(result).containsIgnoringCase("CAST(SUM(amount) AS BIGINT)");
+            // SUM emits plain SUM(...) — type casting is handled by Aggregate.toSQL()
+            // which has schema access to determine the correct target type
+            assertThat(result).isEqualTo("SUM(amount)");
         }
 
         @Test
@@ -316,7 +317,9 @@ public class FunctionRegistryTest extends TestBase {
 
             String result = FunctionRegistry.translate("sum_distinct", "amount");
 
-            assertThat(result).isEqualTo("CAST(SUM(DISTINCT amount) AS BIGINT)");
+            // SUM DISTINCT emits plain SUM(DISTINCT ...) — type casting is handled
+            // by Aggregate.toSQL() which has schema access
+            assertThat(result).isEqualTo("SUM(DISTINCT amount)");
         }
 
         @Test

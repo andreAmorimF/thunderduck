@@ -189,7 +189,7 @@ public class SubqueryTest extends TestBase {
             String sql = scalarSub.toSQL();
 
             // Then: Should generate aggregation SQL (SUM is wrapped with CAST to BIGINT)
-            assertThat(sql).containsIgnoringCase("SELECT CAST(SUM(quantity) AS BIGINT)");
+            assertThat(sql).containsIgnoringCase("SELECT SUM(quantity)");
             assertThat(sql).containsIgnoringCase("FROM");
             assertThat(sql).startsWith("(");
             assertThat(sql).endsWith(")");

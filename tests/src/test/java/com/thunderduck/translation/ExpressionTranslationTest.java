@@ -1061,7 +1061,7 @@ public class ExpressionTranslationTest extends TestBase {
 
             String sql = func.toSQL();
             // SUM is wrapped with CAST to BIGINT for Spark compatibility
-            assertThat(sql).containsIgnoringCase("CAST(SUM(amount) AS BIGINT)");
+            assertThat(sql).containsIgnoringCase("SUM(amount)");
         }
 
         @Test
@@ -1155,7 +1155,7 @@ public class ExpressionTranslationTest extends TestBase {
 
             String sql = avg.toSQL();
             // SUM is wrapped with CAST to BIGINT for Spark compatibility
-            assertThat(sql).containsIgnoringCase("CAST(SUM(revenue) AS BIGINT)");
+            assertThat(sql).containsIgnoringCase("SUM(revenue)");
             assertThat(sql).containsIgnoringCase("count(id)");
             assertThat(sql).contains("/");
         }

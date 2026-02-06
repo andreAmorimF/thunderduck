@@ -3,8 +3,12 @@ package com.thunderduck.logical;
 import com.thunderduck.expression.AliasExpression;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.types.ByteType;
 import com.thunderduck.types.DataType;
 import com.thunderduck.types.DecimalType;
+import com.thunderduck.types.IntegerType;
+import com.thunderduck.types.LongType;
+import com.thunderduck.types.ShortType;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
 import com.thunderduck.types.TypeInferenceEngine;
@@ -139,11 +143,18 @@ public class Aggregate extends LogicalPlan {
         for (AggregateExpression aggExpr : aggregateExpressions) {
             String aggSQL = aggExpr.toSQL();
 
+            // Normalize function name: strip _DISTINCT suffix for matching
+            // (ExpressionConverter appends _DISTINCT to function names for DISTINCT aggregates)
+            String baseFuncName = aggExpr.function().toUpperCase();
+            if (baseFuncName.endsWith("_DISTINCT")) {
+                baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
+            }
+
             // For AVG of decimal columns, wrap with CAST to preserve decimal type
             // (DuckDB returns DOUBLE for AVG, but Spark preserves DECIMAL)
             // Spark AVG of DECIMAL(p,s) returns DECIMAL(p+4, s+4)
             if (childSchema != null &&
-                aggExpr.function().equalsIgnoreCase("AVG") &&
+                baseFuncName.equals("AVG") &&
                 aggExpr.argument() != null) {
 
                 DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
@@ -157,18 +168,22 @@ public class Aggregate extends LogicalPlan {
                 }
             }
 
-            // For SUM of decimal columns, wrap with CAST to match Spark precision rules
-            // Spark: SUM(DECIMAL(p,s)) -> DECIMAL(p+10, s), capped at max precision 38
+            // For SUM, wrap with CAST to match Spark type rules
             if (childSchema != null &&
-                aggExpr.function().equalsIgnoreCase("SUM") &&
+                baseFuncName.equals("SUM") &&
                 aggExpr.argument() != null) {
 
                 DataType argType = resolveExpressionType(aggExpr.argument(), childSchema);
                 if (argType instanceof DecimalType) {
+                    // Spark: SUM(DECIMAL(p,s)) -> DECIMAL(p+10, s), capped at max precision 38
                     DecimalType decType = (DecimalType) argType;
                     int newPrecision = Math.min(decType.precision() + 10, 38);
                     aggSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
                         aggSQL, newPrecision, decType.scale());
+                } else if (argType instanceof IntegerType || argType instanceof LongType ||
+                           argType instanceof ShortType || argType instanceof ByteType) {
+                    // Spark: SUM(int/long/short/byte) -> LongType (BIGINT)
+                    aggSQL = String.format("CAST(%s AS BIGINT)", aggSQL);
                 }
             }
 
@@ -424,31 +439,17 @@ public class Aggregate extends LogicalPlan {
                 finalArgSQL = "DISTINCT " + argSQL;
             }
 
-            // Type-aware handling for SUM to prevent type mismatches
-            if (function.equalsIgnoreCase("SUM") && argument != null) {
-                com.thunderduck.types.DataType argType = argument.dataType();
-
-                // For integer types, cast to BIGINT to prevent overflow
-                if (argType instanceof com.thunderduck.types.IntegerType ||
-                    argType instanceof com.thunderduck.types.LongType ||
-                    argType instanceof com.thunderduck.types.ShortType ||
-                    argType instanceof com.thunderduck.types.ByteType) {
-                    return "CAST(SUM(" + finalArgSQL + ") AS BIGINT)";
+            // SUM type casting is handled by Aggregate.toSQL() which has schema access.
+            // AggregateExpression.toSQL() does NOT have schema access, so argument.dataType()
+            // returns incorrect types (StringType for all column references via UnresolvedColumn).
+            // Just return plain SUM(...) here and let Aggregate.toSQL() add the correct cast.
+            // Also handle "sum_DISTINCT" variant (ExpressionConverter appends _DISTINCT suffix).
+            if (isSumFunction(function) && argument != null) {
+                boolean isDistinctSuffix = function.toUpperCase().endsWith("_DISTINCT");
+                if (distinct || isDistinctSuffix) {
+                    return "SUM(DISTINCT " + argSQL + ")";
                 }
-
-                // For DECIMAL types, DO NOT cast - preserve precision
-                if (argType instanceof com.thunderduck.types.DecimalType) {
-                    return "SUM(" + finalArgSQL + ")";
-                }
-
-                // For FLOAT/DOUBLE, no cast needed
-                if (argType instanceof com.thunderduck.types.FloatType ||
-                    argType instanceof com.thunderduck.types.DoubleType) {
-                    return "SUM(" + finalArgSQL + ")";
-                }
-
-                // Default: cast to BIGINT for safety
-                return "CAST(SUM(" + finalArgSQL + ") AS BIGINT)";
+                return "SUM(" + finalArgSQL + ")";
             }
 
             // Translate function name using registry (handles sort_array -> list_sort, etc.)
@@ -470,6 +471,14 @@ public class Aggregate extends LogicalPlan {
                 sql.append(")");
                 return sql.toString();
             }
+        }
+
+        /**
+         * Checks if a function name is a SUM variant (including sum_DISTINCT suffix).
+         */
+        private static boolean isSumFunction(String funcName) {
+            String upper = funcName.toUpperCase();
+            return upper.equals("SUM") || upper.equals("SUM_DISTINCT");
         }
 
         @Override

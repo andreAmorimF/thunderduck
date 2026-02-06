@@ -15,6 +15,8 @@ import com.thunderduck.expression.WindowFunction;
 
 import java.util.List;
 import com.thunderduck.functions.FunctionCategories;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Centralized engine for type inference and nullability resolution.
@@ -42,6 +44,8 @@ import com.thunderduck.functions.FunctionCategories;
  * </ul>
  */
 public final class TypeInferenceEngine {
+
+    private static final Logger logger = LoggerFactory.getLogger(TypeInferenceEngine.class);
 
     private TypeInferenceEngine() {
         // Utility class - prevent instantiation
@@ -574,15 +578,34 @@ public final class TypeInferenceEngine {
         // Resolve all THEN branch types
         for (Expression thenBranch : caseWhen.thenBranches()) {
             DataType branchType = resolveType(thenBranch, schema);
-            resultType = unifyTypes(resultType, branchType);
+            logger.debug("CASE WHEN THEN branch type: {}", branchType);
+
+            // Skip untyped NULL literals in type unification
+            // These should not affect the result type per Spark semantics
+            if (!isUntypedNull(thenBranch)) {
+                resultType = unifyTypes(resultType, branchType);
+                logger.debug("After unifying THEN: {}", resultType);
+            } else {
+                logger.debug("Skipping untyped NULL in THEN branch");
+            }
         }
 
         // Resolve ELSE branch type if present
         if (caseWhen.elseBranch() != null) {
             DataType elseType = resolveType(caseWhen.elseBranch(), schema);
-            resultType = unifyTypes(resultType, elseType);
+            logger.debug("CASE WHEN ELSE branch type: {}, isUntypedNull: {}",
+                        elseType, isUntypedNull(caseWhen.elseBranch()));
+
+            // Skip untyped NULL literals
+            if (!isUntypedNull(caseWhen.elseBranch())) {
+                resultType = unifyTypes(resultType, elseType);
+                logger.debug("After unifying ELSE: {}", resultType);
+            } else {
+                logger.debug("Skipping untyped NULL in ELSE branch");
+            }
         }
 
+        logger.debug("CASE WHEN final result type: {}", resultType);
         return resultType != null ? resultType : StringType.get();
     }
 
@@ -830,6 +853,12 @@ public final class TypeInferenceEngine {
      */
     public static DataType resolveAggregateReturnType(String function, DataType argType) {
         String func = function.toUpperCase();
+        // Normalize _DISTINCT suffix: SUM_DISTINCT -> SUM, AVG_DISTINCT -> AVG, etc.
+        // ExpressionConverter appends _DISTINCT for DISTINCT aggregates.
+        if (func.endsWith("_DISTINCT") && !func.equals("COUNT_DISTINCT")) {
+            func = func.substring(0, func.length() - "_DISTINCT".length());
+        }
+        logger.debug("resolveAggregateReturnType: function={}, normalized={}, argType={}", function, func, argType);
 
         switch (func) {
             case "COUNT":
@@ -846,7 +875,9 @@ public final class TypeInferenceEngine {
                 if (argType instanceof DecimalType) {
                     DecimalType decType = (DecimalType) argType;
                     int newPrecision = Math.min(decType.precision() + 10, 38);
-                    return new DecimalType(newPrecision, decType.scale());
+                    DataType resultType = new DecimalType(newPrecision, decType.scale());
+                    logger.debug("SUM decimal: input={}, result={}", decType, resultType);
+                    return resultType;
                 }
                 return DoubleType.get();
 
@@ -902,6 +933,10 @@ public final class TypeInferenceEngine {
      */
     public static boolean resolveAggregateNullable(String function, Expression argument, StructType schema) {
         String funcUpper = function.toUpperCase();
+        // Normalize _DISTINCT suffix: SUM_DISTINCT -> SUM, AVG_DISTINCT -> AVG, etc.
+        if (funcUpper.endsWith("_DISTINCT") && !funcUpper.equals("COUNT_DISTINCT")) {
+            funcUpper = funcUpper.substring(0, funcUpper.length() - "_DISTINCT".length());
+        }
 
         // COUNT is always non-nullable (returns 0 for empty groups)
         if (funcUpper.equals("COUNT") || funcUpper.equals("COUNT_DISTINCT")) {
@@ -1065,5 +1100,27 @@ public final class TypeInferenceEngine {
             return ((AliasExpression) expr).expression();
         }
         return expr;
+    }
+
+    /**
+     * Checks if an expression is an untyped NULL literal.
+     *
+     * <p>Untyped NULLs should not participate in CASE WHEN type unification per Spark semantics.
+     * They are represented as Literal(null, StringType) where StringType is used as a placeholder
+     * for truly untyped NULLs from the Spark Connect protocol.
+     *
+     * @param expr the expression to check
+     * @return true if this is an untyped NULL literal, false otherwise
+     */
+    private static boolean isUntypedNull(Expression expr) {
+        if (expr instanceof Literal) {
+            Literal lit = (Literal) expr;
+            // Check if this is a NULL value with StringType (our marker for untyped NULLs)
+            // Typed NULLs (e.g., Literal(null, DecimalType(7,2))) should participate in unification
+            if (lit.isNull() && lit.dataType() instanceof StringType) {
+                return true;
+            }
+        }
+        return false;
     }
 }

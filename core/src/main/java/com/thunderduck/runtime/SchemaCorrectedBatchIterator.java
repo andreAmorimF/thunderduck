@@ -365,6 +365,19 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
                 }
             }
             dstDouble.setValueCount(rowCount);
+        } else if (src instanceof BigIntVector && dst instanceof DecimalVector) {
+            // BigInt to Decimal conversion (safety net for SUM type mismatches)
+            BigIntVector srcLong = (BigIntVector) src;
+            DecimalVector dstDecimal = (DecimalVector) dst;
+            for (int i = 0; i < rowCount; i++) {
+                if (srcLong.isNull(i)) {
+                    dstDecimal.setNull(i);
+                } else {
+                    long value = srcLong.get(i);
+                    dstDecimal.set(i, BigDecimal.valueOf(value));
+                }
+            }
+            dstDecimal.setValueCount(rowCount);
         } else {
             // Fallback: try direct transfer (may fail for incompatible types)
             logger.warn("Attempting direct transfer for potentially incompatible types: {} -> {}",

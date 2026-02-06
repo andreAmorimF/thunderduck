@@ -667,16 +667,15 @@ public class FunctionRegistry {
 
     private static void initializeAggregateFunctions() {
         // Basic aggregates
-        // SUM needs special handling: DuckDB returns HUGEINT (int128) for integer inputs
-        // SUM translator - basic version for FunctionCall (used in tests and non-aggregate contexts)
-        // NOTE: For actual aggregate queries, Aggregate.AggregateExpression.toSQL() provides
-        // type-aware casting that preserves DECIMAL precision while preventing integer overflow.
-        // This version casts to BIGINT as a default for backwards compatibility.
+        // SUM: emit plain SUM(...) without type casting.
+        // Type casting (BIGINT for integers, DECIMAL(p+10,s) for decimals) is handled by
+        // Aggregate.toSQL() which has schema access to determine the correct target type.
+        // FunctionRegistry is schema-unaware, so it must NOT make type assumptions.
         CUSTOM_TRANSLATORS.put("sum", args -> {
             if (args.length < 1) {
                 throw new IllegalArgumentException("sum requires at least 1 argument");
             }
-            return "CAST(SUM(" + args[0] + ") AS BIGINT)";
+            return "SUM(" + args[0] + ")";
         });
         DIRECT_MAPPINGS.put("avg", "avg");
         DIRECT_MAPPINGS.put("mean", "avg");
@@ -740,9 +739,10 @@ public class FunctionRegistry {
                 return "COUNT(DISTINCT ROW(" + String.join(", ", args) + "))";
             }
         });
-        // SUM DISTINCT also needs CAST to BIGINT (same reason as regular SUM above)
+        // SUM DISTINCT: same as SUM, emit plain SQL without type casting.
+        // Type casting is handled by Aggregate.toSQL() with schema access.
         CUSTOM_TRANSLATORS.put("sum_distinct", args ->
-            "CAST(SUM(DISTINCT " + String.join(", ", args) + ") AS BIGINT)");
+            "SUM(DISTINCT " + String.join(", ", args) + ")");
         CUSTOM_TRANSLATORS.put("avg_distinct", args ->
             "AVG(DISTINCT " + String.join(", ", args) + ")");
     }

@@ -2,10 +2,15 @@ package com.thunderduck.expression;
 
 import com.thunderduck.expression.window.WindowFrame;
 import com.thunderduck.logical.Sort;
+import com.thunderduck.types.ByteType;
 import com.thunderduck.types.DataType;
+import com.thunderduck.types.DecimalType;
 import com.thunderduck.types.DoubleType;
+import com.thunderduck.types.FloatType;
 import com.thunderduck.types.IntegerType;
 import com.thunderduck.types.LongType;
+import com.thunderduck.types.ShortType;
+import com.thunderduck.types.StringType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -201,10 +206,37 @@ public class WindowFunction extends Expression {
                 }
                 return LongType.get();
             case "SUM":
-            case "AVG":
-                // Aggregate window functions - return type depends on input
+                // Apply Spark type promotion: SUM(int/long) -> BIGINT, SUM(decimal) -> decimal(p+10,s)
                 if (!arguments.isEmpty() && arguments.get(0).dataType() != null) {
-                    return arguments.get(0).dataType();
+                    DataType argType = arguments.get(0).dataType();
+                    if (argType instanceof IntegerType || argType instanceof LongType ||
+                        argType instanceof ShortType || argType instanceof ByteType) {
+                        return LongType.get();
+                    }
+                    if (argType instanceof FloatType || argType instanceof DoubleType) {
+                        return DoubleType.get();
+                    }
+                    if (argType instanceof DecimalType) {
+                        DecimalType dt = (DecimalType) argType;
+                        int newPrecision = Math.min(dt.precision() + 10, 38);
+                        return new DecimalType(newPrecision, dt.scale());
+                    }
+                    // StringType means unresolved column - default to LongType (most common SUM case)
+                    if (argType instanceof StringType) {
+                        return LongType.get();
+                    }
+                    return argType;
+                }
+                return LongType.get();
+            case "AVG":
+                if (!arguments.isEmpty() && arguments.get(0).dataType() != null) {
+                    DataType argType = arguments.get(0).dataType();
+                    if (argType instanceof DecimalType) {
+                        DecimalType dt = (DecimalType) argType;
+                        int newPrecision = Math.min(dt.precision() + 4, 38);
+                        int newScale = Math.min(dt.scale() + 4, newPrecision);
+                        return new DecimalType(newPrecision, newScale);
+                    }
                 }
                 return DoubleType.get();
             case "MIN":

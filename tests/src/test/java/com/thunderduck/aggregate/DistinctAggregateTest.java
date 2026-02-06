@@ -345,7 +345,7 @@ public class DistinctAggregateTest extends TestBase {
             String sql = generator.generate(aggregate);
 
             // Then: Should have multiple GROUP BY columns with DISTINCT (SUM wrapped with CAST)
-            assertThat(sql).containsIgnoringCase("SELECT category, product_id, CAST(SUM(DISTINCT amount) AS BIGINT)");
+            assertThat(sql).containsIgnoringCase("SELECT category, product_id, SUM(DISTINCT amount)");
             assertThat(sql).containsIgnoringCase("GROUP BY category, product_id");
             assertThat(sql).containsIgnoringCase("AS \"unique_amounts\"");
         }

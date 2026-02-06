@@ -615,7 +615,7 @@ public class ExpressionTest extends TestBase {
             FunctionCall func = FunctionCall.of("sum", arg, DoubleType.get());
 
             // SUM is wrapped with CAST to BIGINT for Spark compatibility
-            assertThat(func.toSQL()).containsIgnoringCase("CAST(SUM(amount) AS BIGINT)");
+            assertThat(func.toSQL()).containsIgnoringCase("SUM(amount)");
         }
 
         @Test
