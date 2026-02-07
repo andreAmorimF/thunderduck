@@ -5,6 +5,7 @@ import com.thunderduck.logical.*;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.BinaryExpression;
 import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.runtime.SparkCompatMode;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
 import java.util.*;
@@ -958,26 +959,15 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
-     * Generates expression SQL with optional CAST for decimal division results.
+     * Generates expression SQL for a WithColumns expression.
+     *
+     * <p>In strict mode, {@code BinaryExpression.toSQL()} emits
+     * {@code spark_decimal_div()} which returns the correct Spark type natively.
+     * In relaxed mode, DuckDB's native types are acceptable. Either way, no
+     * CAST wrapper is needed.
      */
     private String generateExpressionWithCast(Expression expr, StructType childSchema) {
-        String exprSQL = expr.toSQL();
-
-        // Check if expression contains a division that should produce DecimalType
-        // DuckDB calculates decimal division differently than Spark, so we need CAST
-        if (childSchema != null) {
-            com.thunderduck.types.DataType resolvedType =
-                com.thunderduck.types.TypeInferenceEngine.resolveType(expr, childSchema);
-            if (resolvedType instanceof com.thunderduck.types.DecimalType) {
-                com.thunderduck.types.DecimalType decType =
-                    (com.thunderduck.types.DecimalType) resolvedType;
-                if (containsDivision(expr)) {
-                    exprSQL = String.format("CAST(%s AS DECIMAL(%d,%d))",
-                        exprSQL, decType.precision(), decType.scale());
-                }
-            }
-        }
-        return exprSQL;
+        return expr.toSQL();
     }
 
     /**
@@ -1004,35 +994,6 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         visit(plan.child());
         subqueryDepth--;
         sql.append(") AS _withcol_subquery");
-    }
-
-    /**
-     * Checks if an expression contains a division operation.
-     * This includes direct BinaryExpression divisions and divisions nested in other expressions.
-     */
-    private boolean containsDivision(Expression expr) {
-        if (expr instanceof BinaryExpression) {
-            BinaryExpression binExpr = (BinaryExpression) expr;
-            if (binExpr.operator() == BinaryExpression.Operator.DIVIDE) {
-                return true;
-            }
-            // Check children
-            return containsDivision(binExpr.left()) || containsDivision(binExpr.right());
-        }
-        // For other expression types, check if they might contain divisions
-        // (e.g., AliasExpression, FunctionCall with expression arguments)
-        if (expr instanceof com.thunderduck.expression.AliasExpression) {
-            return containsDivision(((com.thunderduck.expression.AliasExpression) expr).expression());
-        }
-        if (expr instanceof com.thunderduck.expression.WindowFunction) {
-            com.thunderduck.expression.WindowFunction wf = (com.thunderduck.expression.WindowFunction) expr;
-            for (Expression arg : wf.arguments()) {
-                if (containsDivision(arg)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     /**
@@ -1501,6 +1462,10 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             BinaryExpression binExpr = (BinaryExpression) expr;
             String leftSQL = qualifyCondition(binExpr.left(), planIdToAlias);
             String rightSQL = qualifyCondition(binExpr.right(), planIdToAlias);
+            if (binExpr.operator() == BinaryExpression.Operator.DIVIDE
+                    && SparkCompatMode.isStrictMode()) {
+                return String.format("spark_decimal_div(%s, %s)", leftSQL, rightSQL);
+            }
             return "(" + leftSQL + " " + binExpr.operator().symbol() + " " + rightSQL + ")";
         }
 
