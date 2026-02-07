@@ -290,5 +290,100 @@
                 </plugins>
             </build>
         </profile>
+
+        <!-- Build Extension Profile (builds and bundles DuckDB extension) -->
+        <profile>
+            <id>build-extension</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>build-duckdb-extension</id>
+                                <phase>generate-resources</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <!-- Validate extension directory exists -->
+                                        <available file="${project.basedir}/duckdb_ext/Makefile"
+                                                  property="extension.dir.exists"/>
+                                        <fail unless="extension.dir.exists"
+                                              message="duckdb_ext/Makefile not found. Extension source missing."/>
+
+                                        <!-- Platform detection using Ant conditions -->
+                                        <condition property="extension.platform" value="linux_amd64">
+                                            <and>
+                                                <os family="unix"/>
+                                                <not><os family="mac"/></not>
+                                                <or>
+                                                    <equals arg1="${os.arch}" arg2="amd64"/>
+                                                    <equals arg1="${os.arch}" arg2="x86_64"/>
+                                                </or>
+                                            </and>
+                                        </condition>
+                                        <condition property="extension.platform" value="linux_arm64">
+                                            <and>
+                                                <os family="unix"/>
+                                                <not><os family="mac"/></not>
+                                                <equals arg1="${os.arch}" arg2="aarch64"/>
+                                            </and>
+                                        </condition>
+                                        <condition property="extension.platform" value="osx_arm64">
+                                            <and>
+                                                <os family="mac"/>
+                                                <equals arg1="${os.arch}" arg2="aarch64"/>
+                                            </and>
+                                        </condition>
+                                        <condition property="extension.platform" value="osx_amd64">
+                                            <and>
+                                                <os family="mac"/>
+                                                <or>
+                                                    <equals arg1="${os.arch}" arg2="x86_64"/>
+                                                    <equals arg1="${os.arch}" arg2="amd64"/>
+                                                </or>
+                                            </and>
+                                        </condition>
+
+                                        <!-- Fail if platform couldn't be detected -->
+                                        <fail unless="extension.platform"
+                                              message="Could not detect platform. os.name=${os.name}, os.arch=${os.arch}"/>
+
+                                        <echo message="Building DuckDB extension for platform: ${extension.platform}"/>
+
+                                        <!-- Build extension using Make -->
+                                        <exec executable="make" dir="${project.basedir}/duckdb_ext"
+                                              failonerror="true">
+                                            <env key="GEN" value="ninja"/>
+                                            <arg value="release"/>
+                                        </exec>
+
+                                        <!-- Verify output exists -->
+                                        <available file="${project.basedir}/duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension"
+                                                  property="extension.built"/>
+                                        <fail unless="extension.built"
+                                              message="Extension build completed but output file not found. Check DuckDB version alignment."/>
+
+                                        <!-- Create target directory -->
+                                        <mkdir dir="${project.basedir}/core/src/main/resources/extensions/${extension.platform}"/>
+
+                                        <!-- Copy extension to resources -->
+                                        <copy file="${project.basedir}/duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension"
+                                              tofile="${project.basedir}/core/src/main/resources/extensions/${extension.platform}/thdck_spark_funcs.duckdb_extension"
+                                              overwrite="true"/>
+
+                                        <echo message="Extension bundled at: core/src/main/resources/extensions/${extension.platform}/thdck_spark_funcs.duckdb_extension"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>

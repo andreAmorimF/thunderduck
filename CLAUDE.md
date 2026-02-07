@@ -234,8 +234,21 @@ When comparing results with potential ties:
 
 ### Building & Bundling
 
+**Maven Profile** (Recommended):
 ```bash
-# Build extension (from project root)
+# Without extension (relaxed mode, default)
+mvn clean package -DskipTests
+
+# With extension (strict mode) - builds and bundles automatically
+mvn clean package -DskipTests -Pbuild-extension
+
+# The extension will be built and bundled for the current platform only
+# For multi-platform builds (CI/CD), build on each platform separately
+```
+
+**Manual Build** (for development):
+```bash
+# Build extension separately
 cd duckdb_ext && GEN=ninja make release && cd ..
 
 # Bundle for current platform
@@ -247,6 +260,8 @@ cp duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb
 # Rebuild JAR with extension included
 mvn clean package -DskipTests
 ```
+
+**Prerequisites**: CMake, Ninja, and a C++ compiler (GCC 9+ or Clang 10+)
 
 > Full architecture details: [docs/architect/SPARK_COMPAT_EXTENSION.md](docs/architect/SPARK_COMPAT_EXTENSION.md)
 
@@ -377,6 +392,9 @@ Claude: *commits the changes*
 ```bash
 # Full clean build (always do this before testing)
 mvn -f /workspace/pom.xml clean package -DskipTests -q
+
+# Build WITH extension (strict Spark compatibility mode)
+mvn -f /workspace/pom.xml clean package -DskipTests -q -Pbuild-extension
 
 # Install core to local repo (REQUIRED before `mvn test -pl tests`)
 mvn -f /workspace/pom.xml install -pl core -DskipTests -q

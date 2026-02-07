@@ -127,9 +127,27 @@ Current versions:
 
 ## Maven Integration
 
-### Optional Build Step
+### Maven Profile: `build-extension`
 
-The extension build is **not part of the default Maven lifecycle**. It uses CMake/Make and produces platform-specific native binaries that are placed as resources in the `core` module.
+The extension build is **integrated into Maven via a profile**. When activated, it automatically builds and bundles the extension for the current platform.
+
+#### Usage
+
+```bash
+# Without extension (relaxed mode, default)
+mvn clean package -DskipTests
+
+# With extension (strict mode) - builds and bundles automatically
+mvn clean package -DskipTests -Pbuild-extension
+```
+
+The `build-extension` profile:
+1. Detects the current platform (e.g., `linux_amd64`, `osx_arm64`)
+2. Runs `make release` in `duckdb_ext/` with `GEN=ninja`
+3. Copies the compiled `.duckdb_extension` to `core/src/main/resources/extensions/<platform>/`
+4. Includes it in the final JAR during packaging
+
+**Prerequisites**: CMake, Ninja, and a C++ compiler (GCC 9+ or Clang 10+)
 
 #### Resource Layout
 
@@ -146,23 +164,23 @@ core/src/main/resources/
         └── thdck_spark_funcs.duckdb_extension
 ```
 
-#### Build Workflow
+**Note**: Each build produces an extension for the **current platform only**. Multi-platform JARs require building on each target platform separately.
+
+#### Manual Build Workflow (Alternative)
+
+For development or troubleshooting:
 
 ```bash
-# 1. Standard Maven build (works without extension)
-mvn clean package -DskipTests
+# 1. Build extension manually
+cd duckdb_ext && GEN=ninja make release && cd ..
 
-# 2. Optional: build the extension for current platform
-cd duckdb_ext
-GEN=ninja make release
-
-# 3. Copy to resources (platform-specific)
-PLATFORM=$(cd duckdb_ext && duckdb -c "PRAGMA platform" 2>/dev/null || echo "linux_amd64")
+# 2. Copy to resources (platform-specific)
+PLATFORM=linux_amd64  # or osx_arm64, linux_arm64, etc.
 mkdir -p core/src/main/resources/extensions/$PLATFORM
 cp duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
    core/src/main/resources/extensions/$PLATFORM/
 
-# 4. Rebuild to include extension in JAR
+# 3. Rebuild to include extension in JAR
 mvn clean package -DskipTests
 ```
 
@@ -176,16 +194,17 @@ strategy:
     include:
       - os: ubuntu-latest
         arch: amd64
-        platform: linux_amd64
       - os: ubuntu-latest
         arch: arm64
-        platform: linux_arm64
       - os: macos-latest
         arch: arm64
-        platform: osx_arm64
+
+steps:
+  - name: Build with extension
+    run: mvn clean package -DskipTests -Pbuild-extension
 ```
 
-Each platform artifact is collected and placed under `core/src/main/resources/extensions/` before the final Maven package step.
+Each platform artifact is built independently and includes the extension for that platform.
 
 ## Runtime Loading
 

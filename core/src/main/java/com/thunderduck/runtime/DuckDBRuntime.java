@@ -5,8 +5,14 @@ import org.duckdb.DuckDBDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
@@ -67,16 +73,21 @@ public class DuckDBRuntime implements AutoCloseable {
 
         logger.info("Creating DuckDB runtime with URL: {}", jdbcUrl);
 
-        // Configure connection properties for streaming results
+        // Configure connection properties for streaming results and unsigned extensions
         // This enables true streaming where results are not fully materialized
         // before iteration begins - critical for memory-efficient large result handling
         Properties props = new Properties();
         props.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, "true");
+        props.setProperty("allow_unsigned_extensions", "true");
 
         // Create and configure connection with streaming enabled
         Connection rawConn = DriverManager.getConnection(jdbcUrl, props);
         this.connection = rawConn.unwrap(DuckDBConnection.class);
         configureConnection();
+
+        // Attempt to load bundled extensions
+        boolean extensionLoaded = loadBundledExtensions();
+        // TODO: Pass extensionLoaded to FunctionRegistry when that integration is ready
 
         logger.info("DuckDB runtime initialized with streaming results enabled");
     }
@@ -221,6 +232,72 @@ public class DuckDBRuntime implements AutoCloseable {
      */
     public boolean isClosed() {
         return closed;
+    }
+
+    /**
+     * Load bundled extensions from classpath resources.
+     *
+     * <p>This method queries the DuckDB platform (e.g., "linux_amd64") and attempts
+     * to load the thdck_spark_funcs extension if bundled for this platform.
+     *
+     * @return true if extension was loaded successfully, false otherwise
+     */
+    private boolean loadBundledExtensions() {
+        try {
+            // Query PRAGMA platform to get OS/arch string
+            String platform;
+            try (Statement stmt = connection.createStatement();
+                 ResultSet rs = stmt.executeQuery("PRAGMA platform")) {
+                if (!rs.next()) {
+                    logger.warn("Could not determine platform via PRAGMA platform");
+                    return false;
+                }
+                platform = rs.getString(1);
+            }
+
+            logger.debug("Detected platform: {}", platform);
+
+            // Try to load thdck_spark_funcs extension
+            return loadExtensionResource(platform, "thdck_spark_funcs");
+        } catch (SQLException e) {
+            logger.warn("Failed to load bundled extensions: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Load a specific extension from classpath resources.
+     *
+     * @param platform the platform identifier (e.g., "linux_amd64")
+     * @param extName the extension name (without .duckdb_extension suffix)
+     * @return true if extension was loaded successfully, false otherwise
+     */
+    private boolean loadExtensionResource(String platform, String extName) {
+        String resourcePath = "/extensions/" + platform + "/" + extName + ".duckdb_extension";
+        try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                logger.info("Extension '{}' not bundled for platform: {}", extName, platform);
+                return false;
+            }
+
+            // Extract to temp file
+            Path tempDir = Files.createTempDirectory("thunderduck-ext-");
+            Path tempFile = tempDir.resolve(extName + ".duckdb_extension");
+            Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            tempFile.toFile().deleteOnExit();
+            tempDir.toFile().deleteOnExit();
+
+            // Load extension
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute("LOAD '" + tempFile.toAbsolutePath() + "'");
+            }
+
+            logger.info("Extension '{}' loaded successfully", extName);
+            return true;
+        } catch (IOException | SQLException e) {
+            logger.warn("Failed to load extension '{}': {}", extName, e.getMessage());
+            return false;
+        }
     }
 
     /**
