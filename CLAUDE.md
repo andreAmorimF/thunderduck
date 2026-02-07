@@ -120,17 +120,21 @@ thunderduck/
 ├── README.md                            # Project overview
 ├── CLAUDE.md                            # Project rules (this file)
 ├── CURRENT_FOCUS_*.md                   # Active work items
-├── docs/
-│   ├── MVP_IMPLEMENTATION_PLAN.md       # Archived MVP roadmap
-│   ├── SPARK_CONNECT_PROTOCOL_SPEC.md   # Protocol reference
-│   ├── Testing_Strategy.md              # Testing approach
-│   ├── architect/                       # Architecture documentation
-│   └── dev_journal/                     # Completion reports
-└── tests/
-    └── scripts/                         # Test runner scripts
+├── core/                                # Core translation engine (Java)
+├── connect-server/                      # Spark Connect gRPC server (Java)
+├── duckdb_ext/                          # Optional DuckDB C extension (C++)
+├── tests/                               # Integration & E2E tests
+│   └── scripts/                         # Test runner scripts
+└── docs/
+    ├── MVP_IMPLEMENTATION_PLAN.md       # Archived MVP roadmap
+    ├── SPARK_CONNECT_PROTOCOL_SPEC.md   # Protocol reference
+    ├── Testing_Strategy.md              # Testing approach
+    ├── architect/                       # Architecture documentation
+    │   └── SPARK_COMPAT_EXTENSION.md    # Extension architecture
+    └── dev_journal/                     # Completion reports
 ```
 
-**Last Updated**: 2025-12-10
+**Last Updated**: 2026-02-07
 
 ## Spark Parity Requirements
 
@@ -195,6 +199,58 @@ When comparing results with potential ties:
 **Goal**: Drop-in replacement for Spark, not "Spark-like" behavior.
 
 **Last Updated**: 2025-10-27
+
+## Spark Compatibility Extension (`duckdb_ext/`)
+
+**Architectural Decision**: Some Spark operations cannot be faithfully replicated using vanilla DuckDB functions (e.g., decimal division always casts to DOUBLE, losing precision). Thunderduck uses an optional DuckDB C extension to implement these operations with exact Spark semantics.
+
+### Two Compatibility Modes
+
+| Mode | Extension | Compatibility | Use Case |
+|------|-----------|--------------|----------|
+| **Relaxed** (default) | Not loaded | ~85% Spark compat | General analytics, development |
+| **Strict** | Loaded | ~100% Spark compat | Production parity, numeric-sensitive workloads |
+
+### How It Works
+
+1. Extension is built separately via CMake (`cd duckdb_ext && GEN=ninja make release`)
+2. Compiled `.duckdb_extension` binary is placed in `core/src/main/resources/extensions/<platform>/`
+3. `DuckDBRuntime` auto-detects and loads the extension at connection creation
+4. `FunctionRegistry` checks extension availability and maps to extension functions when loaded
+5. If extension is absent or fails to load, server continues with vanilla DuckDB functions
+
+### Key Rules
+
+- Extension build is **NOT** part of the default Maven lifecycle — it's a separate CMake step
+- Extension DuckDB version **must exactly match** the `duckdb_jdbc` Maven dependency version
+- Extension is **unsigned** — requires `allow_unsigned_extensions=true` connection property
+- Extension loading is **per-connection** — each `DuckDBRuntime` instance loads independently
+
+### Current Extension Functions
+
+| Function | Replaces | Purpose |
+|----------|----------|---------|
+| `spark_decimal_div(a, b)` | `a / b` (decimal) | Spark 4.1 decimal division with ROUND_HALF_UP |
+
+### Building & Bundling
+
+```bash
+# Build extension (from project root)
+cd duckdb_ext && GEN=ninja make release && cd ..
+
+# Bundle for current platform
+PLATFORM=linux_amd64  # or osx_arm64, linux_arm64, etc.
+mkdir -p core/src/main/resources/extensions/$PLATFORM
+cp duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
+   core/src/main/resources/extensions/$PLATFORM/
+
+# Rebuild JAR with extension included
+mvn clean package -DskipTests
+```
+
+> Full architecture details: [docs/architect/SPARK_COMPAT_EXTENSION.md](docs/architect/SPARK_COMPAT_EXTENSION.md)
+
+**Last Updated**: 2026-02-07
 
 ## Spark Connect Server Configuration
 
@@ -313,3 +369,88 @@ Claude: *commits the changes*
 ```
 
 **Last Updated**: 2025-12-16
+
+## Development Cheatsheet
+
+### Build
+
+```bash
+# Full clean build (always do this before testing)
+mvn -f /workspace/pom.xml clean package -DskipTests -q
+
+# Install core to local repo (REQUIRED before `mvn test -pl tests`)
+mvn -f /workspace/pom.xml install -pl core -DskipTests -q
+
+# Kill servers + rebuild (common combo)
+pkill -9 -f java 2>/dev/null; sleep 2; mvn -f /workspace/pom.xml clean package -DskipTests -q
+```
+
+### Integration Tests (pytest)
+
+Run from `/workspace/tests/integration`. Fixtures auto-start both servers. Use `python3` (no `python`).
+
+```bash
+# Env vars prefix (always include)
+ENV="THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true COLLECT_TIMEOUT=30"
+
+# ALL differential tests
+cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_differential_v2.py -v --tb=short
+
+# Single parameterized SQL query (e.g., Q7)
+cd /workspace/tests/integration && $ENV python3 -m pytest "differential/test_differential_v2.py::TestTPCH_AllQueries_Differential[7]" -v --tb=long
+
+# Single dedicated SQL test (Q1, Q3, Q6 have their own classes)
+cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_differential_v2.py::TestTPCH_Q1_Differential -v --tb=long
+
+# Single DataFrame test (zero-padded numbers)
+cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_tpch_differential.py::TestTPCHDifferential::test_q01_dataframe -v --tb=long
+
+# Basic operations only
+cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_differential_v2.py::TestBasicOperations_Differential -v --tb=long
+
+# Sanity check only
+cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_differential_v2.py::TestDifferential_Sanity -v --tb=long
+```
+
+**Test naming conventions:**
+- Q1, Q3, Q6: dedicated classes `TestTPCH_Q1_Differential` etc.
+- Q2, Q4, Q5, Q7-Q22: parameterized `TestTPCH_AllQueries_Differential[N]`
+- DataFrame: `TestTPCHDifferential::test_q01_dataframe` (in `test_tpch_differential.py`)
+
+### Java Unit Tests
+
+```bash
+mvn -f /workspace/pom.xml install -pl core -DskipTests -q  # install core first
+mvn -f /workspace/pom.xml test -pl tests                    # run tests module
+mvn -f /workspace/pom.xml test -pl tests -Dtest=TypeInferenceEngineTest  # single class
+```
+
+### Server Management
+
+Ports: Thunderduck = `15002`, Spark Reference = `15003`. Pytest fixtures auto-manage servers.
+
+```bash
+pkill -9 -f java 2>/dev/null          # kill all servers
+pkill -9 -f thunderduck-connect-server # kill Thunderduck only
+```
+
+### Change-and-Test Workflow
+
+```bash
+pkill -9 -f java 2>/dev/null; sleep 2
+mvn -f /workspace/pom.xml clean package -DskipTests -q
+cd /workspace/tests/integration && THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true COLLECT_TIMEOUT=30 \
+  python3 -m pytest "differential/test_differential_v2.py::TestTPCH_AllQueries_Differential[7]" -v --tb=long
+pkill -9 -f java 2>/dev/null
+```
+
+### Key Data & SQL Paths
+
+| Resource | Path |
+|----------|------|
+| TPC-H parquet data | `tests/integration/tpch_sf001/*.parquet` |
+| TPC-H SQL queries | `tests/integration/sql/tpch_queries/q{1-22}.sql` |
+| Test conftest | `tests/integration/conftest.py` |
+| DataFrame diff util | `tests/integration/utils/dataframe_diff.py` |
+
+**Last Updated**: 2026-02-06

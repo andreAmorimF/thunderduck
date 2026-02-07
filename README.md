@@ -258,6 +258,47 @@ mvn clean install -pl connect-server
 mvn clean install -pl tests
 ```
 
+### Spark Compatibility Extension (Optional)
+
+Thunderduck includes an optional DuckDB C extension (`duckdb_ext/`) that implements Spark-precise numerical semantics. Without it, Thunderduck uses vanilla DuckDB functions which cover ~85% of Spark compatibility. With the extension loaded, operations like decimal division use exact Spark rounding and type rules.
+
+**When you need it**: Workloads that depend on exact decimal precision, `ROUND_HALF_UP` rounding, or strict Spark type compatibility.
+
+**When you don't**: General analytics where approximate numeric equivalence is acceptable.
+
+#### Building the Extension
+
+Prerequisites: CMake 3.5+, C++17 compiler, Ninja (recommended)
+
+```bash
+# Build for current platform
+cd duckdb_ext
+GEN=ninja make release
+
+# Output: build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension
+```
+
+#### Bundling with Thunderduck
+
+Copy the compiled extension into the `core` module's resources so it gets packaged into the JAR:
+
+```bash
+# Determine current platform
+PLATFORM=$(duckdb -c "PRAGMA platform" 2>/dev/null || echo "linux_amd64")
+
+# Copy extension binary
+mkdir -p core/src/main/resources/extensions/$PLATFORM
+cp duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
+   core/src/main/resources/extensions/$PLATFORM/
+
+# Rebuild to include extension in JAR
+mvn clean package -DskipTests
+```
+
+When the server starts, it auto-detects and loads bundled extensions. If no extension is found for the current platform, the server starts normally using vanilla DuckDB functions.
+
+> See [Spark Compatibility Extension Architecture](docs/architect/SPARK_COMPAT_EXTENSION.md) for full details on the two-mode compatibility design.
+
 ### Verify Installation
 
 ```bash
@@ -293,13 +334,18 @@ thunderduck/
 │   │   ├── service/           # Spark Connect service handlers
 │   │   └── session/           # Session management
 │   └── pom.xml
+├── duckdb_ext/                # Optional DuckDB C extension (Spark-precise semantics)
+│   ├── src/                   # Extension source (C++)
+│   ├── test/sql/              # Extension SQL tests
+│   ├── docs/                  # Integration guide
+│   ├── CMakeLists.txt         # CMake build config
+│   └── Makefile               # Build shortcuts
 ├── tests/                     # Comprehensive test suite
 │   ├── src/test/java/         # Java unit tests
-│   ├── integration/           # Python differential tests (266 tests)
+│   ├── integration/           # Python differential tests (832 tests)
 │   │   └── sql/               # TPC-H and TPC-DS SQL queries
 │   └── pom.xml
 └── docs/                      # Documentation
-    ├── TPC_H_BENCHMARK.md     # TPC-H benchmark guide
     ├── SPARK_CONNECT_PROTOCOL_SPEC.md
     └── architect/             # Architecture design documents
 ```
