@@ -122,7 +122,7 @@ thunderduck/
 ├── CURRENT_FOCUS_*.md                   # Active work items
 ├── core/                                # Core translation engine (Java)
 ├── connect-server/                      # Spark Connect gRPC server (Java)
-├── duckdb_ext/                          # Optional DuckDB C extension (C++)
+├── thunderduck-duckdb-extension/                          # Optional DuckDB C extension (C++)
 ├── tests/                               # Integration & E2E tests
 │   └── scripts/                         # Test runner scripts
 └── docs/
@@ -200,7 +200,7 @@ When comparing results with potential ties:
 
 **Last Updated**: 2025-10-27
 
-## Spark Compatibility Extension (`duckdb_ext/`)
+## Spark Compatibility Extension (`thunderduck-duckdb-extension/`)
 
 **Architectural Decision**: Some Spark operations cannot be faithfully replicated using vanilla DuckDB functions (e.g., decimal division always casts to DOUBLE, losing precision). Thunderduck uses an optional DuckDB C extension to implement these operations with exact Spark semantics.
 
@@ -213,8 +213,8 @@ When comparing results with potential ties:
 
 ### How It Works
 
-1. Extension is built separately via CMake (`cd duckdb_ext && GEN=ninja make release`)
-2. Compiled `.duckdb_extension` binary is placed in `core/src/main/resources/extensions/<platform>/`
+1. Extension is built separately via CMake (`cd thunderduck-duckdb-extension && GEN=ninja make release`)
+2. Compiled `.thunderduck-duckdb-extensionension` binary is placed in `core/src/main/resources/extensions/<platform>/`
 3. `DuckDBRuntime` auto-detects and loads the extension at connection creation
 4. `FunctionRegistry` checks extension availability and maps to extension functions when loaded
 5. If extension is absent or fails to load, server continues with vanilla DuckDB functions
@@ -247,19 +247,19 @@ mvn clean package -DskipTests -Pbuild-extension
 ```
 
 **Build performance**: The Maven profile uses CMake with Ninja directly (bypassing `make`).
-The build is **incremental** — `duckdb_ext/build/release/` persists across `mvn clean`
+The build is **incremental** — `thunderduck-duckdb-extension/build/release/` persists across `mvn clean`
 (Maven only cleans `target/` dirs). First build compiles DuckDB core (~2-5 min),
 subsequent builds only recompile changed extension files (seconds).
 
 **Manual Build** (for extension development/verification):
 ```bash
 # Full DuckDB + extension build (equivalent to what Maven does)
-cd duckdb_ext && GEN=ninja make release && cd ..
+cd thunderduck-duckdb-extension && GEN=ninja make release && cd ..
 
 # Bundle for current platform
 PLATFORM=linux_amd64  # or osx_arm64, linux_arm64, etc.
 mkdir -p core/src/main/resources/extensions/$PLATFORM
-cp duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
+cp thunderduck-duckdb-extension/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.thunderduck-duckdb-extensionension \
    core/src/main/resources/extensions/$PLATFORM/
 
 # Rebuild JAR with extension included

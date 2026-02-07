@@ -53,23 +53,22 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .eggs/
-<<<<<<< HEAD
 .ruff_cache/
 .mypy_cache/
 .coverage
 htmlcov/
-=======
 .venv/
 .env
 
 # Claude Code authentication (auto-generated, keep secret)
 .devcontainer/.claude-token
 .devcontainer/.claude-oauth.json
-
-# Claude Code authentication (auto-generated, keep secret)
 .devcontainer/.claude-auth-token
 .devcontainer/.claude-base-url
 .devcontainer/.claude-custom-headers
 
 # Generated TPC-DS test data
 tests/integration/tpcds_sf001/
+
+# Bundled extension binaries (platform-specific, built via -Pbuild-extension)
+core/src/main/resources/extensions/

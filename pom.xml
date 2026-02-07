@@ -310,10 +310,10 @@
                                 <configuration>
                                     <target>
                                         <!-- Validate extension directory exists -->
-                                        <available file="${maven.multiModuleProjectDirectory}/duckdb_ext/CMakeLists.txt"
+                                        <available file="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension/CMakeLists.txt"
                                                   property="extension.dir.exists"/>
                                         <fail unless="extension.dir.exists"
-                                              message="duckdb_ext/CMakeLists.txt not found. Extension source missing."/>
+                                              message="thunderduck-duckdb-extension/CMakeLists.txt not found. Extension source missing."/>
 
                                         <!-- Platform detection using Ant conditions -->
                                         <condition property="extension.platform" value="linux_amd64">
@@ -356,30 +356,30 @@
                                         <echo message="Building DuckDB extension for platform: ${extension.platform}"/>
 
                                         <!-- Configure: use DuckDB as CMake source with our extension config.
-                                             Build is incremental - duckdb_ext/build/release/ persists across
+                                             Build is incremental - thunderduck-duckdb-extension/build/release/ persists across
                                              mvn clean, so only the first build compiles DuckDB core (~2-5 min).
                                              Subsequent builds only recompile changed extension files (seconds). -->
-                                        <exec executable="cmake" dir="${maven.multiModuleProjectDirectory}/duckdb_ext"
+                                        <exec executable="cmake" dir="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension"
                                               failonerror="true">
                                             <arg value="-G"/>
                                             <arg value="Ninja"/>
                                             <arg value="-DFORCE_COLORED_OUTPUT=1"/>
                                             <arg value="-DEXTENSION_STATIC_BUILD=1"/>
-                                            <arg value="-DDUCKDB_EXTENSION_CONFIGS=${maven.multiModuleProjectDirectory}/duckdb_ext/extension_config.cmake"/>
+                                            <arg value="-DDUCKDB_EXTENSION_CONFIGS=${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension/extension_config.cmake"/>
                                             <arg value="-DCMAKE_BUILD_TYPE=Release"/>
                                             <arg value="-S"/>
-                                            <arg value="${maven.multiModuleProjectDirectory}/duckdb_ext/duckdb"/>
+                                            <arg value="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension/duckdb"/>
                                             <arg value="-B"/>
-                                            <arg value="${maven.multiModuleProjectDirectory}/duckdb_ext/build/release"/>
+                                            <arg value="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension/build/release"/>
                                         </exec>
 
                                         <!-- Build (incremental - only recompiles changed files).
                                              Limit parallelism to 4 jobs to avoid OOM on machines with
                                              limited RAM (DuckDB unity build units are memory-hungry). -->
-                                        <exec executable="cmake" dir="${maven.multiModuleProjectDirectory}/duckdb_ext"
+                                        <exec executable="cmake" dir="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension"
                                               failonerror="true">
                                             <arg value="--build"/>
-                                            <arg value="${maven.multiModuleProjectDirectory}/duckdb_ext/build/release"/>
+                                            <arg value="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension/build/release"/>
                                             <arg value="--config"/>
                                             <arg value="Release"/>
                                             <arg value="--parallel"/>
@@ -387,7 +387,7 @@
                                         </exec>
 
                                         <!-- Verify output exists -->
-                                        <available file="${maven.multiModuleProjectDirectory}/duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension"
+                                        <available file="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.thunderduck-duckdb-extensionension"
                                                   property="extension.built"/>
                                         <fail unless="extension.built"
                                               message="Extension build completed but output file not found. Check DuckDB version alignment."/>
@@ -396,11 +396,11 @@
                                         <mkdir dir="${maven.multiModuleProjectDirectory}/core/src/main/resources/extensions/${extension.platform}"/>
 
                                         <!-- Copy extension to resources -->
-                                        <copy file="${maven.multiModuleProjectDirectory}/duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension"
-                                              tofile="${maven.multiModuleProjectDirectory}/core/src/main/resources/extensions/${extension.platform}/thdck_spark_funcs.duckdb_extension"
+                                        <copy file="${maven.multiModuleProjectDirectory}/thunderduck-duckdb-extension/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.thunderduck-duckdb-extensionension"
+                                              tofile="${maven.multiModuleProjectDirectory}/core/src/main/resources/extensions/${extension.platform}/thdck_spark_funcs.thunderduck-duckdb-extensionension"
                                               overwrite="true"/>
 
-                                        <echo message="Extension bundled at: core/src/main/resources/extensions/${extension.platform}/thdck_spark_funcs.duckdb_extension"/>
+                                        <echo message="Extension bundled at: core/src/main/resources/extensions/${extension.platform}/thdck_spark_funcs.thunderduck-duckdb-extensionension"/>
                                     </target>
                                 </configuration>
                             </execution>

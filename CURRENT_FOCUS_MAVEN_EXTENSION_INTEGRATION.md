@@ -228,7 +228,7 @@ For development convenience, pre-build extensions on high-memory machines and co
 
 ```bash
 # On 32GB+ machine
-cd duckdb_ext && GEN=ninja make release
+cd thunderduck-duckdb-extension && GEN=ninja make release
 
 # Copy to resources
 mkdir -p ../core/src/main/resources/extensions/linux_amd64

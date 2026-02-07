@@ -260,7 +260,7 @@ mvn clean install -pl tests
 
 ### Spark Compatibility Extension (Optional)
 
-Thunderduck includes an optional DuckDB C extension (`duckdb_ext/`) that implements Spark-precise numerical semantics. Without it, Thunderduck uses vanilla DuckDB functions which cover ~85% of Spark compatibility. With the extension loaded, operations like decimal division use exact Spark rounding and type rules.
+Thunderduck includes an optional DuckDB C extension (`thunderduck-duckdb-extension/`) that implements Spark-precise numerical semantics. Without it, Thunderduck uses vanilla DuckDB functions which cover ~85% of Spark compatibility. With the extension loaded, operations like decimal division use exact Spark rounding and type rules.
 
 **When you need it**: Workloads that depend on exact decimal precision, `ROUND_HALF_UP` rounding, or strict Spark type compatibility.
 
@@ -272,7 +272,7 @@ Prerequisites: CMake 3.5+, C++17 compiler, Ninja (recommended)
 
 ```bash
 # Build for current platform
-cd duckdb_ext
+cd thunderduck-duckdb-extension
 GEN=ninja make release
 
 # Output: build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension
@@ -288,7 +288,7 @@ PLATFORM=$(duckdb -c "PRAGMA platform" 2>/dev/null || echo "linux_amd64")
 
 # Copy extension binary
 mkdir -p core/src/main/resources/extensions/$PLATFORM
-cp duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
+cp thunderduck-duckdb-extension/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
    core/src/main/resources/extensions/$PLATFORM/
 
 # Rebuild to include extension in JAR
@@ -334,7 +334,7 @@ thunderduck/
 │   │   ├── service/           # Spark Connect service handlers
 │   │   └── session/           # Session management
 │   └── pom.xml
-├── duckdb_ext/                # Optional DuckDB C extension (Spark-precise semantics)
+├── thunderduck-duckdb-extension/                # Optional DuckDB C extension (Spark-precise semantics)
 │   ├── src/                   # Extension source (C++)
 │   ├── test/sql/              # Extension SQL tests
 │   ├── docs/                  # Integration guide

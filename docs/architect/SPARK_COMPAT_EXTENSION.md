@@ -74,7 +74,7 @@ These differences cannot be fixed by SQL generation alone (e.g., wrapping in `CA
 - Required for workloads that depend on precise numeric reproducibility
 - Enables 100% differential test pass rate
 
-## Extension Module: `duckdb_ext/`
+## Extension Module: `thunderduck-duckdb-extension/`
 
 ### Current Functions
 
@@ -97,7 +97,7 @@ These differences cannot be fixed by SQL generation alone (e.g., wrapping in `CA
 The extension uses CMake (DuckDB's standard extension build system):
 
 ```bash
-cd duckdb_ext
+cd thunderduck-duckdb-extension
 
 # Build for current platform
 GEN=ninja make release
@@ -143,7 +143,7 @@ mvn clean package -DskipTests -Pbuild-extension
 
 The `build-extension` profile:
 1. Detects the current platform (e.g., `linux_amd64`, `osx_arm64`)
-2. Runs `make release` in `duckdb_ext/` with `GEN=ninja`
+2. Runs `make release` in `thunderduck-duckdb-extension/` with `GEN=ninja`
 3. Copies the compiled `.duckdb_extension` to `core/src/main/resources/extensions/<platform>/`
 4. Includes it in the final JAR during packaging
 
@@ -172,12 +172,12 @@ For development or troubleshooting:
 
 ```bash
 # 1. Build extension manually
-cd duckdb_ext && GEN=ninja make release && cd ..
+cd thunderduck-duckdb-extension && GEN=ninja make release && cd ..
 
 # 2. Copy to resources (platform-specific)
 PLATFORM=linux_amd64  # or osx_arm64, linux_arm64, etc.
 mkdir -p core/src/main/resources/extensions/$PLATFORM
-cp duckdb_ext/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
+cp thunderduck-duckdb-extension/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
    core/src/main/resources/extensions/$PLATFORM/
 
 # 3. Rebuild to include extension in JAR
@@ -276,7 +276,7 @@ The existing differential test suite validates end-to-end correctness:
 
 ### Extension Unit Tests (SQL)
 
-The `duckdb_ext/test/sql/` directory contains DuckDB SQL tests that validate the extension in isolation:
+The `thunderduck-duckdb-extension/test/sql/` directory contains DuckDB SQL tests that validate the extension in isolation:
 
 ```sql
 -- Spark precision rules
@@ -288,11 +288,11 @@ SELECT spark_decimal_div(CAST(1 AS DECIMAL(10,2)), CAST(3 AS DECIMAL(10,2)));
 
 | File | Role |
 |------|------|
-| `duckdb_ext/CMakeLists.txt` | Extension build configuration |
-| `duckdb_ext/src/thdck_spark_funcs_extension.cpp` | Extension entry point, function registration |
-| `duckdb_ext/src/include/spark_precision.hpp` | Spark 4.1 decimal type rules |
-| `duckdb_ext/src/include/decimal_division.hpp` | ROUND_HALF_UP division with 256-bit arithmetic |
-| `duckdb_ext/src/include/wide_integer.hpp` | 256-bit integer support |
-| `duckdb_ext/docs/thunderduck-integration.md` | Runtime integration guide |
+| `thunderduck-duckdb-extension/CMakeLists.txt` | Extension build configuration |
+| `thunderduck-duckdb-extension/src/thdck_spark_funcs_extension.cpp` | Extension entry point, function registration |
+| `thunderduck-duckdb-extension/src/include/spark_precision.hpp` | Spark 4.1 decimal type rules |
+| `thunderduck-duckdb-extension/src/include/decimal_division.hpp` | ROUND_HALF_UP division with 256-bit arithmetic |
+| `thunderduck-duckdb-extension/src/include/wide_integer.hpp` | 256-bit integer support |
+| `thunderduck-duckdb-extension/docs/thunderduck-integration.md` | Runtime integration guide |
 | `core/.../runtime/DuckDBRuntime.java` | Extension loading at connection creation |
 | `core/.../functions/FunctionRegistry.java` | Conditional function mapping |
