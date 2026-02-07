@@ -17,8 +17,8 @@
         <maven.compiler.release>17</maven.compiler.release>
 
         <!-- Dependency versions -->
-        <!-- Upgraded from 1.4.1.0 to 1.4.3.0 LTS (Dec 2025) for bug fixes -->
-        <duckdb.version>1.4.3.0</duckdb.version>
+        <!-- Upgraded to 1.4.4.0 (Jan 2026) to match extension DuckDB version -->
+        <duckdb.version>1.4.4.0</duckdb.version>
         <arrow.version>18.3.0</arrow.version>
         <spark.version>4.1.1</spark.version>
         <!-- Updated to match Spark 4.1.1 for binary compatibility -->
@@ -310,10 +310,10 @@
                                 <configuration>
                                     <target>
                                         <!-- Validate extension directory exists -->
-                                        <available file="${maven.multiModuleProjectDirectory}/duckdb_ext/Makefile"
+                                        <available file="${maven.multiModuleProjectDirectory}/duckdb_ext/CMakeLists.txt"
                                                   property="extension.dir.exists"/>
                                         <fail unless="extension.dir.exists"
-                                              message="duckdb_ext/Makefile not found. Extension source missing."/>
+                                              message="duckdb_ext/CMakeLists.txt not found. Extension source missing."/>
 
                                         <!-- Platform detection using Ant conditions -->
                                         <condition property="extension.platform" value="linux_amd64">
@@ -355,11 +355,35 @@
 
                                         <echo message="Building DuckDB extension for platform: ${extension.platform}"/>
 
-                                        <!-- Build extension using Make -->
-                                        <exec executable="make" dir="${maven.multiModuleProjectDirectory}/duckdb_ext"
+                                        <!-- Configure: use DuckDB as CMake source with our extension config.
+                                             Build is incremental - duckdb_ext/build/release/ persists across
+                                             mvn clean, so only the first build compiles DuckDB core (~2-5 min).
+                                             Subsequent builds only recompile changed extension files (seconds). -->
+                                        <exec executable="cmake" dir="${maven.multiModuleProjectDirectory}/duckdb_ext"
                                               failonerror="true">
-                                            <env key="GEN" value="ninja"/>
-                                            <arg value="release"/>
+                                            <arg value="-G"/>
+                                            <arg value="Ninja"/>
+                                            <arg value="-DFORCE_COLORED_OUTPUT=1"/>
+                                            <arg value="-DEXTENSION_STATIC_BUILD=1"/>
+                                            <arg value="-DDUCKDB_EXTENSION_CONFIGS=${maven.multiModuleProjectDirectory}/duckdb_ext/extension_config.cmake"/>
+                                            <arg value="-DCMAKE_BUILD_TYPE=Release"/>
+                                            <arg value="-S"/>
+                                            <arg value="${maven.multiModuleProjectDirectory}/duckdb_ext/duckdb"/>
+                                            <arg value="-B"/>
+                                            <arg value="${maven.multiModuleProjectDirectory}/duckdb_ext/build/release"/>
+                                        </exec>
+
+                                        <!-- Build (incremental - only recompiles changed files).
+                                             Limit parallelism to 4 jobs to avoid OOM on machines with
+                                             limited RAM (DuckDB unity build units are memory-hungry). -->
+                                        <exec executable="cmake" dir="${maven.multiModuleProjectDirectory}/duckdb_ext"
+                                              failonerror="true">
+                                            <arg value="--build"/>
+                                            <arg value="${maven.multiModuleProjectDirectory}/duckdb_ext/build/release"/>
+                                            <arg value="--config"/>
+                                            <arg value="Release"/>
+                                            <arg value="--parallel"/>
+                                            <arg value="4"/>
                                         </exec>
 
                                         <!-- Verify output exists -->

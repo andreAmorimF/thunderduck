@@ -189,30 +189,30 @@ RUN java -version && mvn -version && gradle -version
 # Alternative: Use system GCC (already installed via build-essential)
 # Note: build-essential (GCC/G++) is already installed in base configuration
 # ------------------------------------------------------------------------------
-# RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc && \
-#     echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" > /etc/apt/sources.list.d/llvm.list && \
-#     apt-get update && apt-get install -y \
+ RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc && \
+     echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" > /etc/apt/sources.list.d/llvm.list && \
+     apt-get update && apt-get install -y \
 #     # LLVM 18 core package
-#     llvm-18 \
+     llvm-18 \
 #     # Clang C/C++ compiler
-#     clang-18 \
+     clang-18 \
 #     # Clang C++ standard library
-#     libc++-18-dev \
-#     libc++abi-18-dev \
+     libc++-18-dev \
+     libc++abi-18-dev \
 #     # LLDB debugger
-#     lldb-18 \
+     lldb-18 \
 #     # LLD linker (faster than GNU ld)
-#     lld-18 \
+     lld-18 \
 #     # Clang code formatting tool
-#     clang-format-18 \
+     clang-format-18 \
 #     # Clang static analyzer
-#     clang-tidy-18 \
-#     && apt-get clean \
-#     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+     clang-tidy-18 \
+     && apt-get clean \
+     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 #
 # # Set LLVM 18 as default (optional)
-# # RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100 && \
-# #     update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+RUN update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100 && \
+    update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
 #
 # # Verify installation
 # # RUN clang-18 --version && lldb-18 --version

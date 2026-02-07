@@ -246,9 +246,14 @@ mvn clean package -DskipTests -Pbuild-extension
 # For multi-platform builds (CI/CD), build on each platform separately
 ```
 
-**Manual Build** (for development):
+**Build performance**: The Maven profile uses CMake with Ninja directly (bypassing `make`).
+The build is **incremental** — `duckdb_ext/build/release/` persists across `mvn clean`
+(Maven only cleans `target/` dirs). First build compiles DuckDB core (~2-5 min),
+subsequent builds only recompile changed extension files (seconds).
+
+**Manual Build** (for extension development/verification):
 ```bash
-# Build extension separately
+# Full DuckDB + extension build (equivalent to what Maven does)
 cd duckdb_ext && GEN=ninja make release && cd ..
 
 # Bundle for current platform
@@ -262,6 +267,11 @@ mvn clean package -DskipTests
 ```
 
 **Prerequisites**: CMake, Ninja, and a C++ compiler (GCC 9+ or Clang 10+)
+
+**Important**: The extension is statically linked against DuckDB (required because JDBC loads
+its native library with `RTLD_LOCAL`, making DuckDB symbols unavailable for dynamic resolution).
+This is why a full DuckDB compilation is needed, but incremental caching makes it fast after
+the initial build.
 
 > Full architecture details: [docs/architect/SPARK_COMPAT_EXTENSION.md](docs/architect/SPARK_COMPAT_EXTENSION.md)
 
@@ -394,6 +404,7 @@ Claude: *commits the changes*
 mvn -f /workspace/pom.xml clean package -DskipTests -q
 
 # Build WITH extension (strict Spark compatibility mode)
+# First build compiles DuckDB core (~2-5 min), subsequent builds are incremental (seconds)
 mvn -f /workspace/pom.xml clean package -DskipTests -q -Pbuild-extension
 
 # Install core to local repo (REQUIRED before `mvn test -pl tests`)
