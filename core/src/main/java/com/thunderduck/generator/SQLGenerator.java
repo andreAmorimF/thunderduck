@@ -690,6 +690,9 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             Join j = (Join) plan;
             return hasAliasedRelation(j.left()) || hasAliasedRelation(j.right());
         }
+        if (plan instanceof Filter) {
+            return hasAliasedRelation(((Filter) plan).child());
+        }
         return false;
     }
 
@@ -1164,6 +1167,191 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
+     * Attempts to generate a flat SQL statement for nested semi/anti join chains.
+     *
+     * <p>When semi/anti joins are stacked (e.g., Q21: anti(semi(filter(join chain)))),
+     * the standard approach wraps each left side in a subquery, hiding user-defined
+     * aliases like "l1" from the EXISTS/NOT EXISTS conditions. This method detects
+     * such chains and generates flat SQL where the base join chain's aliases remain
+     * visible to all EXISTS/NOT EXISTS clauses.
+     *
+     * @param plan the semi or anti join to attempt flat generation for
+     * @return true if flat generation was used, false to fall back to standard approach
+     */
+    private boolean tryGenerateFlatSemiAntiJoin(Join plan) {
+        // Collect the chain of semi/anti joins walking down the left side
+        List<Join> semiAntiChain = new java.util.ArrayList<>();
+        semiAntiChain.add(plan);
+
+        LogicalPlan current = plan.left();
+        while (current instanceof Join) {
+            Join j = (Join) current;
+            if (j.joinType() == Join.JoinType.LEFT_SEMI || j.joinType() == Join.JoinType.LEFT_ANTI) {
+                semiAntiChain.add(j);
+                current = j.left();
+            } else {
+                break;
+            }
+        }
+
+        // Need at least 2 semi/anti joins in the chain for this optimization to matter
+        if (semiAntiChain.size() < 2) {
+            return false;
+        }
+
+        // Walk through stacked filters to collect filter conditions
+        List<Expression> filterConditions = new java.util.ArrayList<>();
+        while (current instanceof Filter) {
+            filterConditions.add(((Filter) current).condition());
+            current = ((Filter) current).child();
+        }
+
+        // The base must be a regular Join with aliased children (looking through filters)
+        if (!(current instanceof Join) || !hasAliasedChildren((Join) current)) {
+            return false;
+        }
+
+        Join baseJoin = (Join) current;
+
+        // Collect any additional filter conditions that are interleaved within the join chain.
+        // The join chain may have Filters on the left side of joins (e.g., Join(Filter(...Join...), table)).
+        // We need to extract these filters and flatten the entire chain.
+        List<Expression> innerFilterConditions = new java.util.ArrayList<>();
+        baseJoin = flattenJoinFilters(baseJoin, innerFilterConditions);
+
+        // Build the plan_id → alias mapping from the base join chain
+        Map<Long, String> planIdToAlias = new HashMap<>();
+
+        // Generate: SELECT * FROM <flat join chain> WHERE <filters> AND EXISTS/NOT EXISTS ...
+        sql.append("SELECT * FROM ");
+        generateFlatJoinChainWithMapping(baseJoin, planIdToAlias);
+
+        // Also collect plan_ids from each semi/anti join's right side
+        // so that qualifyCondition can resolve columns in the EXISTS conditions
+        for (Join semiAnti : semiAntiChain) {
+            LogicalPlan rightPlan = semiAnti.right();
+            String rightAlias;
+            if (rightPlan instanceof AliasedRelation) {
+                rightAlias = SQLQuoting.quoteIdentifier(((AliasedRelation) rightPlan).alias());
+            } else {
+                // Predict what alias will be generated (don't consume it yet)
+                rightAlias = "subquery_" + (aliasCounter + 1 + semiAntiChain.indexOf(semiAnti));
+            }
+            collectPlanIds(rightPlan, rightAlias, planIdToAlias);
+        }
+
+        // Build WHERE clause: inner filters + outer filters + EXISTS/NOT EXISTS
+        boolean hasWhere = false;
+
+        // Add inner filter conditions (from within the join chain) first
+        for (Expression filterCond : innerFilterConditions) {
+            if (!hasWhere) {
+                sql.append(" WHERE ");
+                hasWhere = true;
+            } else {
+                sql.append(" AND ");
+            }
+            sql.append("(").append(qualifyCondition(filterCond, planIdToAlias)).append(")");
+        }
+
+        // Add outer filter conditions (between semi/anti chain and base join)
+        for (Expression filterCond : filterConditions) {
+            if (!hasWhere) {
+                sql.append(" WHERE ");
+                hasWhere = true;
+            } else {
+                sql.append(" AND ");
+            }
+            sql.append("(").append(qualifyCondition(filterCond, planIdToAlias)).append(")");
+        }
+
+        // Add EXISTS/NOT EXISTS for each semi/anti join
+        for (Join semiAnti : semiAntiChain) {
+            if (!hasWhere) {
+                sql.append(" WHERE ");
+                hasWhere = true;
+            } else {
+                sql.append(" AND ");
+            }
+
+            if (semiAnti.joinType() == Join.JoinType.LEFT_ANTI) {
+                sql.append("NOT ");
+            }
+
+            // Generate EXISTS (SELECT 1 FROM <right> WHERE <condition>)
+            LogicalPlan rightPlan = semiAnti.right();
+            sql.append("EXISTS (SELECT 1 FROM ");
+
+            if (rightPlan instanceof AliasedRelation) {
+                AliasedRelation aliased = (AliasedRelation) rightPlan;
+                String childSource = getDirectlyAliasableSource(aliased.child());
+                if (childSource != null) {
+                    sql.append(childSource).append(" AS ").append(SQLQuoting.quoteIdentifier(aliased.alias()));
+                } else {
+                    sql.append("(");
+                    subqueryDepth++;
+                    visit(aliased.child());
+                    subqueryDepth--;
+                    sql.append(") AS ").append(SQLQuoting.quoteIdentifier(aliased.alias()));
+                }
+            } else {
+                String rightSource = getDirectlyAliasableSource(rightPlan);
+                if (rightSource != null) {
+                    sql.append(rightSource).append(" AS ").append(generateSubqueryAlias());
+                } else {
+                    sql.append("(");
+                    subqueryDepth++;
+                    visit(rightPlan);
+                    subqueryDepth--;
+                    sql.append(") AS ").append(generateSubqueryAlias());
+                }
+            }
+
+            if (semiAnti.condition() != null) {
+                sql.append(" WHERE ");
+                sql.append(qualifyCondition(semiAnti.condition(), planIdToAlias));
+            }
+
+            sql.append(")");
+        }
+
+        return true;
+    }
+
+    /**
+     * Flattens a join tree by extracting Filter nodes from the left side of joins.
+     *
+     * <p>When a join chain has Filters interleaved (e.g., Join(Filter(Join(...)), table)),
+     * this method reconstructs the join tree with the Filters removed and their conditions
+     * collected separately. This allows generateFlatJoinChainWithMapping to produce a
+     * completely flat FROM clause.
+     *
+     * @param join the join to flatten
+     * @param filterConditions list to collect extracted filter conditions into
+     * @return the reconstructed join tree without interleaved Filters
+     */
+    private Join flattenJoinFilters(Join join, List<Expression> filterConditions) {
+        LogicalPlan left = join.left();
+
+        // Peel off any Filters on the left side
+        while (left instanceof Filter) {
+            filterConditions.add(((Filter) left).condition());
+            left = ((Filter) left).child();
+        }
+
+        // If the left is itself a join, recursively flatten it too
+        if (left instanceof Join) {
+            left = flattenJoinFilters((Join) left, filterConditions);
+        }
+
+        // If we peeled any filters, reconstruct the join with the new left
+        if (left != join.left()) {
+            return new Join(left, join.right(), join.joinType(), join.condition(), join.usingColumns());
+        }
+        return join;
+    }
+
+    /**
      * Visits a Join node.
      * Builds SQL directly in buffer to avoid corruption.
      *
@@ -1178,6 +1366,11 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // Handle SEMI and ANTI joins differently (using EXISTS/NOT EXISTS)
         if (plan.joinType() == Join.JoinType.LEFT_SEMI ||
             plan.joinType() == Join.JoinType.LEFT_ANTI) {
+
+            // Try flat generation for nested semi/anti join chains
+            if (tryGenerateFlatSemiAntiJoin(plan)) {
+                return;
+            }
 
             // For semi/anti joins, we need to use WHERE EXISTS/NOT EXISTS
             // SELECT * FROM left WHERE [NOT] EXISTS (SELECT 1 FROM right WHERE condition)
