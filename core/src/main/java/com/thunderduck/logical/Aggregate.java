@@ -128,11 +128,14 @@ public class Aggregate extends LogicalPlan {
 
         // Add aggregate expressions
         for (AggregateExpression aggExpr : aggregateExpressions) {
-            String aggSQL = aggExpr.toSQL();
+            String aggSQL;
 
-            // In strict mode, route SUM/AVG/COUNT to extension aggregate functions.
-            // In relaxed mode, use plain DuckDB aggregates (no CASTs, no rewrites).
-            if (com.thunderduck.runtime.SparkCompatMode.isStrictMode()) {
+            if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
+                // Transform aggregate function names in the AST, then render
+                Expression transformed = com.thunderduck.generator.SQLGenerator.transformAggregateExpression(aggExpr.rawExpression());
+                aggSQL = transformed.toSQL();
+            } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
+                aggSQL = aggExpr.toSQL();
                 // Normalize function name: strip _DISTINCT suffix for matching
                 String baseFuncName = aggExpr.function().toUpperCase();
                 if (baseFuncName.endsWith("_DISTINCT")) {
@@ -144,6 +147,8 @@ public class Aggregate extends LogicalPlan {
                 } else if (baseFuncName.equals("AVG")) {
                     aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
                 }
+            } else {
+                aggSQL = aggExpr.toSQL();
             }
 
             // Add alias if provided
@@ -213,10 +218,17 @@ public class Aggregate extends LogicalPlan {
         // Add aggregate fields
         for (AggregateExpression aggExpr : aggregateExpressions) {
             String name = aggExpr.alias() != null ? aggExpr.alias() : aggExpr.toSQL();
-            DataType type = inferAggregateReturnType(aggExpr, childSchema);
-            // Use TypeInferenceEngine to resolve nullability based on argument
-            boolean nullable = TypeInferenceEngine.resolveAggregateNullable(
-                aggExpr.function(), aggExpr.argument(), childSchema);
+            DataType type;
+            boolean nullable;
+
+            if (aggExpr.isComposite()) {
+                type = TypeInferenceEngine.resolveType(aggExpr.rawExpression(), childSchema);
+                nullable = true; // composite aggregates can be null
+            } else {
+                type = inferAggregateReturnType(aggExpr, childSchema);
+                nullable = TypeInferenceEngine.resolveAggregateNullable(
+                    aggExpr.function(), aggExpr.argument(), childSchema);
+            }
             fields.add(new StructField(name, type, nullable));
         }
 
@@ -293,6 +305,7 @@ public class Aggregate extends LogicalPlan {
         private final Expression argument;
         private final String alias;
         private final boolean distinct;
+        private final Expression rawExpression;
 
         /**
          * Creates an aggregate expression with optional DISTINCT modifier.
@@ -307,6 +320,7 @@ public class Aggregate extends LogicalPlan {
             this.argument = argument;
             this.alias = alias;
             this.distinct = distinct;
+            this.rawExpression = null;
         }
 
         /**
@@ -318,6 +332,21 @@ public class Aggregate extends LogicalPlan {
          */
         public AggregateExpression(String function, Expression argument, String alias) {
             this(function, argument, alias, false);
+        }
+
+        /**
+         * Creates a composite aggregate expression (e.g., SUM(a) / SUM(b), SUM(a) * 0.5).
+         * The raw expression tree already has correct toSQL() rendering.
+         *
+         * @param rawExpression the composite expression tree
+         * @param alias the result column alias (can be null)
+         */
+        public AggregateExpression(Expression rawExpression, String alias) {
+            this.function = null;
+            this.argument = null;
+            this.alias = alias;
+            this.distinct = false;
+            this.rawExpression = Objects.requireNonNull(rawExpression, "rawExpression must not be null");
         }
 
         /**
@@ -356,8 +385,29 @@ public class Aggregate extends LogicalPlan {
             return distinct;
         }
 
+        /**
+         * Returns whether this is a composite aggregate expression (e.g., SUM(a) / SUM(b)).
+         *
+         * @return true if this wraps a raw expression tree
+         */
+        public boolean isComposite() {
+            return rawExpression != null;
+        }
+
+        /**
+         * Returns the raw expression for composite aggregates.
+         *
+         * @return the raw expression tree, or null for simple aggregates
+         */
+        public Expression rawExpression() {
+            return rawExpression;
+        }
+
         @Override
         public com.thunderduck.types.DataType dataType() {
+            if (rawExpression != null) {
+                return rawExpression.dataType();
+            }
             // Type inference will depend on the function
             // For now, return the argument type (will be improved later)
             return argument != null ? argument.dataType() : null;
@@ -365,6 +415,9 @@ public class Aggregate extends LogicalPlan {
 
         @Override
         public boolean nullable() {
+            if (rawExpression != null) {
+                return true; // composite aggregates can be null
+            }
             // COUNT always returns non-null (0 for empty groups)
             String funcUpper = function.toUpperCase();
             if (funcUpper.equals("COUNT")) {
@@ -376,6 +429,11 @@ public class Aggregate extends LogicalPlan {
 
         @Override
         public String toSQL() {
+            // Composite aggregate: delegate to raw expression tree
+            if (rawExpression != null) {
+                return rawExpression.toSQL();
+            }
+
             // Build argument SQL first
             String argSQL;
             if (argument != null) {

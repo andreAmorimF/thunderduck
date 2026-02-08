@@ -578,9 +578,11 @@ class TestTPCHDifferential:
         Correlated subquery via join with pre-aggregated AVG per part."""
         def build_q17(session):
             # Pre-compute average quantity per part
+            # Rename l_partkey to avoid ambiguity when joining back to lineitem
             avg_qty = session.table("lineitem") \
                 .groupBy("l_partkey") \
-                .agg((F.avg("l_quantity") * 0.2).alias("avg_qty_threshold"))
+                .agg((F.avg("l_quantity") * 0.2).alias("avg_qty_threshold")) \
+                .withColumnRenamed("l_partkey", "avg_l_partkey")
 
             return session.table("part") \
                 .filter(
@@ -588,7 +590,7 @@ class TestTPCHDifferential:
                     (F.col("p_container") == "MED BOX")
                 ) \
                 .join(session.table("lineitem"), F.col("p_partkey") == F.col("l_partkey")) \
-                .join(avg_qty, F.col("l_partkey") == avg_qty["l_partkey"]) \
+                .join(avg_qty, F.col("l_partkey") == F.col("avg_l_partkey")) \
                 .filter(F.col("l_quantity") < F.col("avg_qty_threshold")) \
                 .agg(
                     (F.sum("l_extendedprice") / 7.0).alias("avg_yearly")

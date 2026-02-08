@@ -382,7 +382,10 @@ public class RelationConverter {
                     }
                 }
             } else {
-                logger.warn("Unexpected aggregate expression type: {}", expr.getClass().getSimpleName());
+                // Composite aggregate expression (e.g., SUM(a) / SUM(b), SUM(a) * 0.5)
+                // The expression tree already has correct toSQL() rendering
+                logger.debug("Composite aggregate expression: {}", expr.getClass().getSimpleName());
+                aggExprs.add(new com.thunderduck.logical.Aggregate.AggregateExpression(expr, alias));
                 continue;
             }
 

@@ -1075,11 +1075,14 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         // Add aggregate expressions
         for (Aggregate.AggregateExpression aggExpr : plan.aggregateExpressions()) {
-            String aggSQL = aggExpr.toSQL();
+            String aggSQL;
 
-            // In strict mode, route SUM/AVG/COUNT to extension aggregate functions.
-            // In relaxed mode, use plain DuckDB aggregates (no CASTs, no rewrites).
-            if (com.thunderduck.runtime.SparkCompatMode.isStrictMode()) {
+            if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
+                // Transform aggregate function names in the AST, then render
+                com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression());
+                aggSQL = transformed.toSQL();
+            } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
+                aggSQL = aggExpr.toSQL();
                 // Normalize function name: strip _DISTINCT suffix for matching
                 String baseFuncName = aggExpr.function().toUpperCase();
                 if (baseFuncName.endsWith("_DISTINCT")) {
@@ -1091,6 +1094,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 } else if (baseFuncName.equals("AVG")) {
                     aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
                 }
+            } else {
+                aggSQL = aggExpr.toSQL();
             }
 
             // Add alias if provided
@@ -1135,6 +1140,55 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(" HAVING ");
             sql.append(plan.havingCondition().toSQL());
         }
+    }
+
+    /**
+     * Transforms aggregate function names in an expression tree for strict mode.
+     * Recursively walks the AST and replaces SUM/AVG with spark_sum/spark_avg.
+     * This is type-safe: only transforms actual FunctionCall nodes, never column names.
+     *
+     * @param expr the expression to transform
+     * @return the transformed expression (or original if no changes needed)
+     */
+    public static com.thunderduck.expression.Expression transformAggregateExpression(com.thunderduck.expression.Expression expr) {
+        if (expr instanceof com.thunderduck.expression.FunctionCall) {
+            com.thunderduck.expression.FunctionCall func = (com.thunderduck.expression.FunctionCall) expr;
+            String name = func.functionName().toLowerCase();
+            if (name.equals("sum") || name.equals("sum_distinct")) {
+                return new com.thunderduck.expression.FunctionCall("spark_sum", func.arguments(), func.dataType(), func.nullable());
+            }
+            if (name.equals("avg") || name.equals("avg_distinct")) {
+                return new com.thunderduck.expression.FunctionCall("spark_avg", func.arguments(), func.dataType(), func.nullable());
+            }
+            return expr;
+        }
+        if (expr instanceof com.thunderduck.expression.BinaryExpression) {
+            com.thunderduck.expression.BinaryExpression bin = (com.thunderduck.expression.BinaryExpression) expr;
+            com.thunderduck.expression.Expression newLeft = transformAggregateExpression(bin.left());
+            com.thunderduck.expression.Expression newRight = transformAggregateExpression(bin.right());
+            if (newLeft != bin.left() || newRight != bin.right()) {
+                return new com.thunderduck.expression.BinaryExpression(newLeft, bin.operator(), newRight);
+            }
+            return expr;
+        }
+        if (expr instanceof com.thunderduck.expression.CastExpression) {
+            com.thunderduck.expression.CastExpression cast = (com.thunderduck.expression.CastExpression) expr;
+            com.thunderduck.expression.Expression newInner = transformAggregateExpression(cast.expression());
+            if (newInner != cast.expression()) {
+                return new com.thunderduck.expression.CastExpression(newInner, cast.targetType());
+            }
+            return expr;
+        }
+        if (expr instanceof com.thunderduck.expression.UnaryExpression) {
+            com.thunderduck.expression.UnaryExpression unary = (com.thunderduck.expression.UnaryExpression) expr;
+            com.thunderduck.expression.Expression newOperand = transformAggregateExpression(unary.operand());
+            if (newOperand != unary.operand()) {
+                return new com.thunderduck.expression.UnaryExpression(unary.operator(), newOperand);
+            }
+            return expr;
+        }
+        // Literals, columns, etc. — no transformation needed
+        return expr;
     }
 
     /**

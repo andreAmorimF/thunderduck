@@ -117,7 +117,7 @@ public class FunctionCall extends Expression {
     public String toSQL() {
         // Convert arguments to SQL strings
         String[] argStrings = arguments.stream()
-            .map(Expression::toString)
+            .map(Expression::toSQL)
             .toArray(String[]::new);
 
         // Translate using function registry
