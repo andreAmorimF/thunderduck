@@ -201,6 +201,15 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(") AS ");
             sql.append(SQLQuoting.quoteIdentifier(plan.alias()));
         }
+        // Append column aliases if present (e.g., AS alias (col1, col2))
+        if (!plan.columnAliases().isEmpty()) {
+            sql.append(" (");
+            for (int i = 0; i < plan.columnAliases().size(); i++) {
+                if (i > 0) sql.append(", ");
+                sql.append(SQLQuoting.quoteIdentifier(plan.columnAliases().get(i)));
+            }
+            sql.append(")");
+        }
     }
 
     /**

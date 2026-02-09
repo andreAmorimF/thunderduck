@@ -3,6 +3,7 @@ package com.thunderduck.logical;
 import com.thunderduck.generator.SQLQuoting;
 import com.thunderduck.types.StructType;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -25,6 +26,7 @@ public final class AliasedRelation extends LogicalPlan {
 
     private final LogicalPlan child;
     private final String alias;
+    private final List<String> columnAliases;
 
     /**
      * Creates an aliased relation.
@@ -33,9 +35,23 @@ public final class AliasedRelation extends LogicalPlan {
      * @param alias the user-provided alias
      */
     public AliasedRelation(LogicalPlan child, String alias) {
+        this(child, alias, Collections.emptyList());
+    }
+
+    /**
+     * Creates an aliased relation with column aliases.
+     * Column aliases rename the output columns of the child relation.
+     * e.g., {@code (subquery) AS alias (col1, col2)}
+     *
+     * @param child the underlying relation
+     * @param alias the user-provided alias
+     * @param columnAliases optional column aliases
+     */
+    public AliasedRelation(LogicalPlan child, String alias, List<String> columnAliases) {
         super(Collections.singletonList(child));
         this.child = Objects.requireNonNull(child, "child must not be null");
         this.alias = Objects.requireNonNull(alias, "alias must not be null");
+        this.columnAliases = columnAliases != null ? columnAliases : Collections.emptyList();
         if (alias.isEmpty()) {
             throw new IllegalArgumentException("alias must not be empty");
         }
@@ -59,12 +75,31 @@ public final class AliasedRelation extends LogicalPlan {
         return alias;
     }
 
+    /**
+     * Returns the optional column aliases.
+     *
+     * @return the column aliases (empty list if none)
+     */
+    public List<String> columnAliases() {
+        return columnAliases;
+    }
+
     @Override
     public String toSQL(SQLGenerator generator) {
         // Generate SQL with explicit alias
         String childSql = generator.generate(child);
-        return String.format("SELECT * FROM (%s) AS %s",
-            childSql, SQLQuoting.quoteIdentifier(alias));
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM (").append(childSql).append(") AS ");
+        sb.append(SQLQuoting.quoteIdentifier(alias));
+        if (!columnAliases.isEmpty()) {
+            sb.append(" (");
+            for (int i = 0; i < columnAliases.size(); i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(SQLQuoting.quoteIdentifier(columnAliases.get(i)));
+            }
+            sb.append(")");
+        }
+        return sb.toString();
     }
 
     @Override

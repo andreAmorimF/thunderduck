@@ -7,6 +7,7 @@ import com.thunderduck.connect.session.SessionManager;
 import com.thunderduck.connect.sql.SQLParameterSubstitution;
 import com.thunderduck.generator.SQLGenerator;
 import com.thunderduck.logical.LogicalPlan;
+import com.thunderduck.parser.SparkSQLParser;
 import com.thunderduck.runtime.ArrowBatchIterator;
 import com.thunderduck.runtime.ArrowStreamingExecutor;
 import com.thunderduck.runtime.QueryExecutor;
@@ -155,10 +156,11 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     showStringVertical = showString.getVertical();
 
                     if (input.hasSql()) {
-                        // SparkSQL not yet supported - pending SQL parser integration
-                        throw new UnsupportedOperationException(
-                            "spark.sql() is not yet supported. Please use DataFrame API instead. " +
-                            "SQL support will be added in a future release.");
+                        // Parse SparkSQL via the ANTLR parser
+                        SQL innerSqlRelation = input.getSql();
+                        String innerQuery = innerSqlRelation.getQuery();
+                        logger.info("ShowString with spark.sql() query: {}", innerQuery);
+                        sql = transformSparkSQL(innerQuery);
                     } else {
                         // Deserialize non-SQL relation and generate SQL
                         try {
@@ -192,8 +194,8 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         logger.info("After parameter substitution: {}", query);
                     }
 
-                    // Pass through to DuckDB with SQL preprocessing
-                    sql = query;
+                    // Transform SparkSQL to DuckDB SQL via parser
+                    sql = transformSparkSQL(query);
                 } else if (root.hasCatalog()) {
                     // Handle catalog operations (dropTempView, etc.)
                     executeCatalogOperation(root.getCatalog(), session, responseObserver);
@@ -233,7 +235,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                 }
 
                 if (query != null && !query.isEmpty()) {
-                    sql = query;
+                    sql = transformSparkSQL(query);
                 } else {
                     logger.error("SqlCommand has no query");
                     throw new IllegalArgumentException("SqlCommand has no query");
@@ -680,10 +682,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
 
                     // Check if this is a SQL query (special handling needed)
                     if (plan.hasRoot() && plan.getRoot().hasSql()) {
-                        // Direct SQL query - infer schema using LIMIT 0
+                        // Direct SQL query - parse and transform via SparkSQL parser
                         sql = plan.getRoot().getSql().getQuery();
-                        // Apply SQL preprocessing for Spark compatibility
-                        sql = preprocessSQL(sql);
+                        // Transform SparkSQL to DuckDB SQL (parser + preprocessing)
+                        sql = transformSparkSQL(sql);
                         logger.debug("Analyzing SQL query schema: {}", sql.substring(0, Math.min(100, sql.length())));
                         schema = inferSchemaFromDuckDB(sql, sessionId);
                         // In strict mode, fix nullable flags and decimal precision for SQL queries
@@ -704,8 +706,8 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                             sql = sqlCommand.getSql();
                         }
 
-                        // Apply SQL preprocessing for Spark compatibility
-                        sql = preprocessSQL(sql);
+                        // Transform SparkSQL to DuckDB SQL (parser + preprocessing)
+                        sql = transformSparkSQL(sql);
                         logger.debug("Analyzing SQL command schema: {}", sql.substring(0, Math.min(100, sql.length())));
                         schema = inferSchemaFromDuckDB(sql, sessionId);
                         // In strict mode, fix nullable flags and decimal precision for SQL queries
@@ -811,6 +813,30 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
      * @param sql Original SQL query
      * @return Preprocessed SQL query
      */
+    private String transformSparkSQL(String sparkSQL) {
+        // Attempt to parse SparkSQL -> LogicalPlan -> DuckDB SQL
+        try {
+            SparkSQLParser parser = SparkSQLParser.getInstance();
+            LogicalPlan plan = parser.parse(sparkSQL);
+            String duckdbSQL = sqlGenerator.generate(plan);
+            logger.info("SparkSQL parser transformed: {} -> {}", sparkSQL, duckdbSQL);
+
+            // Parser-generated SQL is already valid DuckDB SQL.
+            // Only apply strict-mode aggregate function replacements (spark_sum, spark_avg)
+            // Skip the destructive regex preprocessing (TRUNC, backtick, count renaming, etc.)
+            if (SparkCompatMode.isStrictMode()) {
+                duckdbSQL = duckdbSQL.replaceAll("(?i)\\bSUM\\s*\\(", "spark_sum(");
+                duckdbSQL = duckdbSQL.replaceAll("(?i)\\bAVG\\s*\\(", "spark_avg(");
+            }
+            return duckdbSQL;
+        } catch (Exception e) {
+            // Parser failed - fall back to direct preprocessing (legacy path)
+            logger.info("SparkSQL parser fell back to preprocessSQL for: {} ({})",
+                sparkSQL, e.getMessage());
+            return preprocessSQL(sparkSQL);
+        }
+    }
+
     private String preprocessSQL(String sql) {
         // Translate Spark SQL backticks to DuckDB double quotes for identifier quoting
         sql = sql.replace('`', '"');
