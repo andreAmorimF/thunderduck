@@ -1056,6 +1056,11 @@ public class ExpressionConverter {
         String functionName;
         List<com.thunderduck.expression.Expression> arguments;
 
+        // Unwrap AliasExpression if present (Spark may wrap the function in an alias)
+        if (function instanceof AliasExpression) {
+            function = ((AliasExpression) function).expression();
+        }
+
         if (function instanceof FunctionCall) {
             FunctionCall fc = (FunctionCall) function;
             functionName = fc.functionName();

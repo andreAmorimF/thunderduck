@@ -324,8 +324,9 @@ public final class WindowFunction implements Expression {
         // Special case: COUNT(*) - output * without quotes
         if (arguments.size() == 1 &&
             function.equalsIgnoreCase("COUNT") &&
-            arguments.get(0) instanceof Literal &&
-            "*".equals(((Literal) arguments.get(0)).value())) {
+            (arguments.get(0) instanceof StarExpression ||
+             (arguments.get(0) instanceof Literal &&
+              "*".equals(((Literal) arguments.get(0)).value())))) {
             sql.append("*");
         } else {
             for (int i = 0; i < argsToOutput; i++) {

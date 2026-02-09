@@ -837,18 +837,18 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         // Translate Spark SQL backticks to DuckDB double quotes for identifier quoting
         sql = sql.replace('`', '"');
 
-        // Fix count(*) column naming to match Spark (only if not already aliased)
+        // Fix count(*) column naming to match Spark (only if not already aliased or followed by OVER)
         String sqlLower = sql.toLowerCase();
         if (!sqlLower.contains("order by")) {
             // Simple case: no ORDER BY in the query
-            sql = sql.replaceAll("(?i)count\\s*\\(\\s*\\*\\s*\\)(?!\\s+as\\s+|\\s*[><=!]|\\s+(?!(?i)from|where|group|order|having|limit|union|intersect|except|join|on|and|or|into|by|desc|asc|with|select)(?-i)[a-z_][a-z0-9_]*)", "count(*) AS \"count(1)\"");
+            sql = sql.replaceAll("(?i)count\\s*\\(\\s*\\*\\s*\\)(?!\\s+as\\s+|\\s+over\\s*\\(|\\s*[><=!]|\\s+(?!(?i)from|where|group|order|having|limit|union|intersect|except|join|on|and|or|into|by|desc|asc|with|select|over)(?-i)[a-z_][a-z0-9_]*)", "count(*) AS \"count(1)\"");
         } else {
             // Complex case: need to avoid ORDER BY context
             int orderByIndex = sqlLower.lastIndexOf("order by");
             String beforeOrderBy = sql.substring(0, orderByIndex);
             String orderByClause = sql.substring(orderByIndex);
 
-            beforeOrderBy = beforeOrderBy.replaceAll("(?i)count\\s*\\(\\s*\\*\\s*\\)(?!\\s+as\\s+|\\s*[><=!]|\\s+(?!(?i)from|where|group|order|having|limit|union|intersect|except|join|on|and|or|into|by|desc|asc|with|select)(?-i)[a-z_][a-z0-9_]*)", "count(*) AS \"count(1)\"");
+            beforeOrderBy = beforeOrderBy.replaceAll("(?i)count\\s*\\(\\s*\\*\\s*\\)(?!\\s+as\\s+|\\s+over\\s*\\(|\\s*[><=!]|\\s+(?!(?i)from|where|group|order|having|limit|union|intersect|except|join|on|and|or|into|by|desc|asc|with|select|over)(?-i)[a-z_][a-z0-9_]*)", "count(*) AS \"count(1)\"");
             sql = beforeOrderBy + orderByClause;
         }
 

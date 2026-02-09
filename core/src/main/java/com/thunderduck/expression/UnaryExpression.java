@@ -32,7 +32,13 @@ public final class UnaryExpression implements Expression {
         NOT("NOT", "logical NOT"),
         BITWISE_NOT("~", "bitwise NOT"),
         IS_NULL("IS NULL", "null check"),
-        IS_NOT_NULL("IS NOT NULL", "not null check");
+        IS_NOT_NULL("IS NOT NULL", "not null check"),
+        IS_TRUE("IS TRUE", "true check"),
+        IS_NOT_TRUE("IS NOT TRUE", "not true check"),
+        IS_FALSE("IS FALSE", "false check"),
+        IS_NOT_FALSE("IS NOT FALSE", "not false check"),
+        IS_UNKNOWN("IS UNKNOWN", "unknown check"),
+        IS_NOT_UNKNOWN("IS NOT UNKNOWN", "not unknown check");
 
         private final String symbol;
         private final String description;
@@ -55,7 +61,10 @@ public final class UnaryExpression implements Expression {
         }
 
         public boolean isPostfix() {
-            return this == IS_NULL || this == IS_NOT_NULL;
+            return this == IS_NULL || this == IS_NOT_NULL ||
+                   this == IS_TRUE || this == IS_NOT_TRUE ||
+                   this == IS_FALSE || this == IS_NOT_FALSE ||
+                   this == IS_UNKNOWN || this == IS_NOT_UNKNOWN;
         }
     }
 
@@ -93,9 +102,12 @@ public final class UnaryExpression implements Expression {
 
     @Override
     public DataType dataType() {
-        // NOT, IS NULL, IS NOT NULL return boolean
+        // Boolean-result operators
         if (operator == Operator.NOT || operator == Operator.IS_NULL ||
-            operator == Operator.IS_NOT_NULL) {
+            operator == Operator.IS_NOT_NULL ||
+            operator == Operator.IS_TRUE || operator == Operator.IS_NOT_TRUE ||
+            operator == Operator.IS_FALSE || operator == Operator.IS_NOT_FALSE ||
+            operator == Operator.IS_UNKNOWN || operator == Operator.IS_NOT_UNKNOWN) {
             return com.thunderduck.types.BooleanType.get();
         }
 
@@ -105,8 +117,11 @@ public final class UnaryExpression implements Expression {
 
     @Override
     public boolean nullable() {
-        // IS NULL and IS NOT NULL always return non-null boolean
-        if (operator == Operator.IS_NULL || operator == Operator.IS_NOT_NULL) {
+        // IS NULL/NOT NULL and IS TRUE/FALSE/UNKNOWN always return non-null boolean
+        if (operator == Operator.IS_NULL || operator == Operator.IS_NOT_NULL ||
+            operator == Operator.IS_TRUE || operator == Operator.IS_NOT_TRUE ||
+            operator == Operator.IS_FALSE || operator == Operator.IS_NOT_FALSE ||
+            operator == Operator.IS_UNKNOWN || operator == Operator.IS_NOT_UNKNOWN) {
             return false;
         }
 
@@ -191,5 +206,29 @@ public final class UnaryExpression implements Expression {
      */
     public static UnaryExpression isNotNull(Expression operand) {
         return new UnaryExpression(Operator.IS_NOT_NULL, operand);
+    }
+
+    public static UnaryExpression isTrue(Expression operand) {
+        return new UnaryExpression(Operator.IS_TRUE, operand);
+    }
+
+    public static UnaryExpression isNotTrue(Expression operand) {
+        return new UnaryExpression(Operator.IS_NOT_TRUE, operand);
+    }
+
+    public static UnaryExpression isFalse(Expression operand) {
+        return new UnaryExpression(Operator.IS_FALSE, operand);
+    }
+
+    public static UnaryExpression isNotFalse(Expression operand) {
+        return new UnaryExpression(Operator.IS_NOT_FALSE, operand);
+    }
+
+    public static UnaryExpression isUnknown(Expression operand) {
+        return new UnaryExpression(Operator.IS_UNKNOWN, operand);
+    }
+
+    public static UnaryExpression isNotUnknown(Expression operand) {
+        return new UnaryExpression(Operator.IS_NOT_UNKNOWN, operand);
     }
 }

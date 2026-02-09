@@ -582,24 +582,23 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         }
 
         if (pred.kind.getType() ==
-                org.apache.spark.sql.catalyst.parser.SqlBaseLexer.TRUE ||
-            pred.kind.getType() ==
-                org.apache.spark.sql.catalyst.parser.SqlBaseLexer.FALSE ||
-            pred.kind.getType() ==
+                org.apache.spark.sql.catalyst.parser.SqlBaseLexer.TRUE) {
+            return negated ? UnaryExpression.isNotTrue(value) : UnaryExpression.isTrue(value);
+        }
+        if (pred.kind.getType() ==
+                org.apache.spark.sql.catalyst.parser.SqlBaseLexer.FALSE) {
+            return negated ? UnaryExpression.isNotFalse(value) : UnaryExpression.isFalse(value);
+        }
+        if (pred.kind.getType() ==
                 org.apache.spark.sql.catalyst.parser.SqlBaseLexer.UNKNOWN) {
-            String keyword = pred.kind.getText().toUpperCase();
-            String notStr = negated ? "NOT " : "";
-            return new RawSQLExpression(
-                value.toSQL() + " IS " + notStr + keyword);
+            return negated ? UnaryExpression.isNotUnknown(value) : UnaryExpression.isUnknown(value);
         }
 
         if (pred.kind.getType() ==
                 org.apache.spark.sql.catalyst.parser.SqlBaseLexer.DISTINCT) {
-            // IS [NOT] DISTINCT FROM
+            // IS [NOT] DISTINCT FROM — null-safe equality
             Expression right = visitValueExpr(pred.right);
-            String notStr = negated ? "NOT " : "";
-            return new RawSQLExpression(
-                value.toSQL() + " IS " + notStr + "DISTINCT FROM " + right.toSQL());
+            return new IsDistinctFromExpression(value, right, negated);
         }
 
         throw new UnsupportedOperationException(
@@ -711,8 +710,8 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
             if (base instanceof UnresolvedColumn col) {
                 return new UnresolvedColumn(field, col.columnName());
             }
-            // Complex dereference - use raw SQL
-            return new RawSQLExpression(base.toSQL() + "." + quoteIdentifierIfNeeded(field));
+            // Complex dereference — proper AST node
+            return new FieldAccessExpression(base, field);
         }
 
         // Star expression: * or table.*
@@ -751,12 +750,11 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
 
         // Row constructor: (a, b, c)
         if (ctx instanceof SqlBaseParser.RowConstructorContext row) {
-            List<String> parts = new ArrayList<>();
+            List<Expression> elements = new ArrayList<>();
             for (SqlBaseParser.NamedExpressionContext named : row.namedExpression()) {
-                Expression e = visitExpr(named.expression());
-                parts.add(e.toSQL());
+                elements.add(visitExpr(named.expression()));
             }
-            return new RawSQLExpression("(" + String.join(", ", parts) + ")");
+            return new RowConstructorExpression(elements);
         }
 
         // EXTRACT(field FROM source)
@@ -841,20 +839,24 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
 
         // STRUCT constructor
         if (ctx instanceof SqlBaseParser.StructContext structCtx) {
-            List<String> parts = new ArrayList<>();
+            List<String> fieldNames = new ArrayList<>();
+            List<Expression> fieldValues = new ArrayList<>();
+            boolean allNamed = true;
             for (SqlBaseParser.NamedExpressionContext named : structCtx.argument) {
                 Expression e = visitExpr(named.expression());
-                String alias = null;
+                fieldValues.add(e);
                 if (named.name != null) {
-                    alias = getErrorCapturingIdentifierText(named.name);
-                }
-                if (alias != null) {
-                    parts.add(alias + " := " + e.toSQL());
+                    fieldNames.add(getErrorCapturingIdentifierText(named.name));
                 } else {
-                    parts.add(e.toSQL());
+                    allNamed = false;
                 }
             }
-            return new RawSQLExpression("struct_pack(" + String.join(", ", parts) + ")");
+            if (allNamed && !fieldNames.isEmpty()) {
+                return new StructLiteralExpression(fieldNames, fieldValues);
+            }
+            // Positional fields — use struct_pack function call
+            return new FunctionCall("struct_pack", fieldValues,
+                UnresolvedType.expressionString(), false);
         }
 
         // CURRENT_DATE, CURRENT_TIMESTAMP, etc.
@@ -924,8 +926,8 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         // Handle COUNT(*)
         if (funcName.equalsIgnoreCase("count") && args.isEmpty() &&
             ctx.argument.isEmpty() && ctx.getText().contains("*")) {
-            // count(*) - use Literal("*") as the argument for proper AST representation
-            args = List.of(new RawSQLExpression("*"));
+            // count(*) — use StarExpression for proper AST representation
+            args = List.of(new StarExpression());
         }
 
         boolean hasFilter = ctx.where != null;
@@ -942,7 +944,13 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
                 UnresolvedType.expressionString(), true, isDistinct);
         }
 
-        // Complex case: function has SQL modifiers (FILTER, OVER, WITHIN GROUP, NULLS).
+        // Window-only case (no FILTER/WITHIN GROUP): construct WindowFunction AST
+        if (hasWindow && !hasFilter && !hasWithinGroup) {
+            return buildWindowFunctionAST(funcName, args, isDistinct, hasNullsOption,
+                hasNullsOption ? ctx.nullsOption : null, ctx.windowSpec());
+        }
+
+        // Complex case: function has FILTER, WITHIN GROUP, or mixed modifiers.
         // Build the base function call via FunctionCall.toSQL() for proper name translation,
         // then append modifiers and wrap in RawSQLExpression.
         FunctionCall baseCall = new FunctionCall(funcName, args,
@@ -971,7 +979,7 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
             sql.append(")");
         }
 
-        // Handle OVER (window function)
+        // Handle OVER (window function) — only reached when FILTER/WITHIN GROUP also present
         if (hasWindow) {
             sql.append(" OVER ");
             sql.append(buildWindowSpec(ctx.windowSpec()));
@@ -985,6 +993,149 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         }
 
         return new RawSQLExpression(sql.toString());
+    }
+
+    /**
+     * Builds a WindowFunction AST node from parsed components.
+     * Handles IGNORE/RESPECT NULLS by encoding them in the argument list
+     * for first/last/nth_value, or falling back to RawSQLExpression for others.
+     */
+    private Expression buildWindowFunctionAST(String funcName, List<Expression> args,
+            boolean isDistinct, boolean hasNullsOption, Token nullsOption,
+            SqlBaseParser.WindowSpecContext windowSpec) {
+
+        // Handle DISTINCT: WindowFunction doesn't support DISTINCT directly.
+        // Fall back to RawSQLExpression for DISTINCT window functions.
+        if (isDistinct) {
+            FunctionCall baseCall = new FunctionCall(funcName, args,
+                UnresolvedType.expressionString(), true, true);
+            StringBuilder sql = new StringBuilder(baseCall.toSQL());
+            sql.append(" OVER ").append(buildWindowSpec(windowSpec));
+            if (hasNullsOption) {
+                sql.append(" ").append(nullsOption.getText().toUpperCase()).append(" NULLS");
+            }
+            return new RawSQLExpression(sql.toString());
+        }
+
+        // Handle nullsOption for functions that WindowFunction doesn't manage internally
+        String funcUpper = funcName.toUpperCase();
+        boolean isFirstLast = funcUpper.equals("FIRST") || funcUpper.equals("FIRST_VALUE") ||
+                              funcUpper.equals("LAST") || funcUpper.equals("LAST_VALUE");
+        boolean isNthValue = funcUpper.equals("NTH_VALUE");
+
+        if (hasNullsOption && !isFirstLast && !isNthValue) {
+            // WindowFunction only handles IGNORE NULLS for first/last/nth_value.
+            // For other functions with NULLS option, fall back to RawSQLExpression.
+            FunctionCall baseCall = new FunctionCall(funcName, args,
+                UnresolvedType.expressionString(), true, false);
+            StringBuilder sql = new StringBuilder(baseCall.toSQL());
+            sql.append(" OVER ").append(buildWindowSpec(windowSpec));
+            sql.append(" ").append(nullsOption.getText().toUpperCase()).append(" NULLS");
+            return new RawSQLExpression(sql.toString());
+        }
+
+        // Parse window specification into AST components
+        if (windowSpec instanceof SqlBaseParser.WindowRefContext ref) {
+            String windowName = getErrorCapturingIdentifierText(ref.name);
+            return new WindowFunction(funcName, args, windowName);
+        }
+
+        if (windowSpec instanceof SqlBaseParser.WindowDefContext def) {
+            List<Expression> partitionBy = new ArrayList<>();
+            for (SqlBaseParser.ExpressionContext partExpr : def.partition) {
+                partitionBy.add(visitExpr(partExpr));
+            }
+
+            List<Sort.SortOrder> orderBy = new ArrayList<>();
+            if (def.sortItem() != null) {
+                for (SqlBaseParser.SortItemContext si : def.sortItem()) {
+                    orderBy.add(parseSortItem(si));
+                }
+            }
+
+            WindowFrame frame = null;
+            if (def.windowFrame() != null) {
+                frame = parseWindowFrame(def.windowFrame());
+            }
+
+            return new WindowFunction(funcName, args, partitionBy, orderBy, frame);
+        }
+
+        // Fallback: unrecognized window spec type
+        FunctionCall baseCall = new FunctionCall(funcName, args,
+            UnresolvedType.expressionString(), true, false);
+        return new RawSQLExpression(baseCall.toSQL() + " OVER " + buildWindowSpec(windowSpec));
+    }
+
+    private Sort.SortOrder parseSortItem(SqlBaseParser.SortItemContext si) {
+        Expression expr = visitExpr(si.expression());
+
+        Sort.SortDirection direction = Sort.SortDirection.ASCENDING;
+        if (si.ordering != null && si.ordering.getType() ==
+                org.apache.spark.sql.catalyst.parser.SqlBaseLexer.DESC) {
+            direction = Sort.SortDirection.DESCENDING;
+        }
+
+        Sort.NullOrdering nullOrdering;
+        if (si.nullOrder != null) {
+            nullOrdering = si.nullOrder.getType() ==
+                org.apache.spark.sql.catalyst.parser.SqlBaseLexer.FIRST ?
+                Sort.NullOrdering.NULLS_FIRST : Sort.NullOrdering.NULLS_LAST;
+        } else {
+            // Default: ASC → NULLS FIRST, DESC → NULLS LAST (matches Spark convention)
+            nullOrdering = direction == Sort.SortDirection.ASCENDING ?
+                Sort.NullOrdering.NULLS_FIRST : Sort.NullOrdering.NULLS_LAST;
+        }
+
+        return new Sort.SortOrder(expr, direction, nullOrdering);
+    }
+
+    private WindowFrame parseWindowFrame(SqlBaseParser.WindowFrameContext ctx) {
+        String frameTypeStr = ctx.frameType.getText().toUpperCase();
+        WindowFrame.FrameType frameType = switch (frameTypeStr) {
+            case "ROWS" -> WindowFrame.FrameType.ROWS;
+            case "RANGE" -> WindowFrame.FrameType.RANGE;
+            case "GROUPS" -> WindowFrame.FrameType.GROUPS;
+            default -> throw new UnsupportedOperationException(
+                "Unsupported frame type: " + frameTypeStr);
+        };
+
+        FrameBoundary start = parseFrameBound(ctx.start);
+        FrameBoundary end;
+        if (ctx.BETWEEN() != null) {
+            end = parseFrameBound(ctx.end);
+        } else {
+            // Without BETWEEN, the frame is from `start` to CURRENT ROW
+            end = FrameBoundary.CurrentRow.getInstance();
+        }
+
+        return new WindowFrame(frameType, start, end);
+    }
+
+    private FrameBoundary parseFrameBound(SqlBaseParser.FrameBoundContext ctx) {
+        if (ctx.UNBOUNDED() != null) {
+            String boundType = ctx.boundType.getText().toUpperCase();
+            return boundType.equals("PRECEDING") ?
+                FrameBoundary.UnboundedPreceding.getInstance() :
+                FrameBoundary.UnboundedFollowing.getInstance();
+        }
+        if (ctx.CURRENT() != null) {
+            return FrameBoundary.CurrentRow.getInstance();
+        }
+        // Expression-based bound (e.g., "3 PRECEDING" or "5 FOLLOWING")
+        Expression expr = visitExpr(ctx.expression());
+        String boundType = ctx.boundType.getText().toUpperCase();
+        // The expression should be a numeric literal
+        long offset = 1;
+        if (expr instanceof Literal) {
+            Object val = ((Literal) expr).value();
+            if (val instanceof Number) {
+                offset = ((Number) val).longValue();
+            }
+        }
+        return boundType.equals("PRECEDING") ?
+            new FrameBoundary.Preceding(offset) :
+            new FrameBoundary.Following(offset);
     }
 
     private String buildWindowSpec(SqlBaseParser.WindowSpecContext ctx) {
