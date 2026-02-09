@@ -2,398 +2,156 @@
 
 This file contains project-specific rules and guidelines for working with thunderduck.
 
-## Project Vision and Value Proposition
+## Project Vision
 
-**Critical Context**: Understand this before working on Thunderduck.
-
-### The Core Insight
-
-Analysis of hundreds of thousands of real-world Spark workloads reveals that **most don't actually need distributed computing**. They could run faster and cheaper on a single large server node.
-
-### Why This Matters Now
-
-The economics of computing have fundamentally shifted:
-- **Past**: 2x hardware = 4x+ cost → distributed computing made economic sense
-- **Today**: Linear pricing at cloud providers → 200 CPU / 1TB RAM machines are cost-effective
-- **Result**: Single-node compute eliminates shuffles, network bottlenecks, and coordination overhead
-
-### The Problem
-
-Organizations have massive investments in Spark codebases but:
-- Their workloads don't need distributed compute
-- Spark local mode is slow (JVM overhead, row-based processing, poor utilization)
-- Rewriting to a different system is prohibitively expensive
-
-### Thunderduck's Value Proposition
-
-**Keep your Spark API, get single-node DuckDB performance.**
-
-Thunderduck is a migration path for the "post-Big Data" era:
-- Drop-in Spark Connect server (works with existing PySpark/Scala code)
-- Translates Spark operations to DuckDB SQL
-- 5-10x faster than Spark local mode, 6-8x better memory efficiency
-- Zero code changes required for compatible workloads
-
-### Target Audience
-
-Organizations that:
-1. Have existing Spark codebases (significant investment)
-2. Discovered their workloads fit on a single node
-3. Want better performance without rewriting everything
-
-**This is NOT for**: Workloads that genuinely require distributed compute (100TB+ datasets, streaming at scale).
-
-**Last Updated**: 2025-12-17
+**Keep your Spark API, get single-node DuckDB performance.** Thunderduck is a drop-in Spark Connect server backed by DuckDB for workloads that don't need distributed compute. See [docs/PROJECT_VISION.md](docs/PROJECT_VISION.md) for full context.
 
 ## Workflow Orchestration
 
 ### 1. Plan Mode Default
-Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)If something goes sideways, STOP and re-plan immediately - don't keep pushingUse plan mode for verification steps, not just buildingWrite detailed specs upfront to reduce ambiguity
+Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions). If something goes sideways, STOP and re-plan immediately. Write detailed specs upfront to reduce ambiguity.
 
-### 2. Subagent Strategy to keep main context window clean
-Offload research, exploration, and parallel analysis to subagentsFor complex problems, throw more compute at it via subagentsOne task per subagent for focused execution.
-**Use subagent for running compile tasks**: every time you need to recompile the project by running maven, use a subagent and let it return success if the compilation succeeded or the focused error message
-**Use subagent for running test suites**: every time you need to run unit or integration tests, use a subagent and let it return a summary of number of tests succeeded, failed and which tests specifically failed, further analysis of failing tests can be done by running subagents for singular tests and they should return a summary of the output.
+### 2. Subagent Strategy
+Offload research, exploration, and parallel analysis to subagents. One task per subagent for focused execution.
+- **Compile tasks**: Use a subagent for Maven builds. Return success or the focused error message.
+- **Test suites**: Use a subagent. Return: Total/Passed/Failed/Errors counts, list of failed tests with one-line error summaries, and the exact command used.
 
 ### 3. Self-Improvement Loop
-After ANY correction from the user: update 'tasks/lessons.md' with the patternWrite rules for yourself that prevent the same mistakeRuthlessly iterate on these lessons until mistake rate dropsReview lessons at session start for relevant project
+After ANY correction from the user: update `tasks/lessons.md` with the pattern. Review lessons at session start.
 
 ### 4. Verification Before Done
-Never mark a task complete without proving it worksDiff behavior between main and your changes when relevantAsk yourself: "Would a staff engineer approve this?"Run tests, check logs, demonstrate correctness
+Never mark a task complete without proving it works. Run tests, check logs, demonstrate correctness.
 
 ### 5. Demand Elegance (Balanced)
-For non-trivial changes: pause and ask "is there a more elegant way?"If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"Skip this for simple, obvious fixes - don't over-engineerChallenge your own work before presenting it
+For non-trivial changes: pause and ask "is there a more elegant way?" Skip for simple, obvious fixes.
 
 ### 6. Autonomous Bug Fixing
-When given a bug report: just fix it. Don't ask for hand-holdingPoint at logs, errors, failing tests -> then resolve themZero context switching required from the userGo fix failing CI tests without being told how
+When given a bug report: just fix it. Point at logs, errors, failing tests, then resolve them.
 
 ## Task Management
-**Plan First**: Write plan to 'tasks/todo.md' with checkable items
-**Verify Plan**: Check in before starting implementation
-**Track Progress**: Mark items complete as you go
-**Explain Changes**: High-level summary at each step
-**Document Results**: Add review to 'tasks/todo.md'
-**Capture Lessons**: Update 'tasks/lessons.md' after corrections
+**Plan First**: Write plan to `tasks/todo.md` with checkable items. **Track Progress**: Mark items complete as you go. **Capture Lessons**: Update `tasks/lessons.md` after corrections.
 
 ## Core Principles
 **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 
-## Documentation Structure Rules
+## Architecture Quick-Reference
 
-**Permanent Rule**: The thunderduck project follows a focused documentation structure:
+### Key Classes and Their Responsibilities
 
-1. **Current focus documents** (in workspace root, prefixed with `CURRENT_FOCUS_`)
-   - Active work items and immediate priorities
-   - Only documents related to the current milestone/focus area
-   - Removed or archived when focus shifts
+| Layer | Class | Responsibility |
+|-------|-------|---------------|
+| **Converter** | `RelationConverter` | Converts Spark Connect protobuf to logical plan nodes |
+| **Converter** | `ExpressionConverter` | Converts Spark expression protos to Expression AST |
+| **Logical** | `Aggregate`, `Join`, `Filter`, `Project`, etc. | Logical plan nodes with `toSQL(SQLGenerator)` and `inferSchema()` |
+| **Expression** | `FunctionCall`, `BinaryExpression`, `CastExpression`, etc. | Expression AST nodes with `toSQL()` and `dataType()` |
+| **Generator** | `SQLGenerator` | Visits logical plan tree, generates DuckDB SQL |
+| **Runtime** | `DuckDBRuntime` | Manages DuckDB connections, extension loading |
+| **Runtime** | `SparkCompatMode` | Strict/relaxed mode detection |
+| **Functions** | `FunctionRegistry` | Maps Spark function names to DuckDB equivalents |
+| **Types** | `TypeInferenceEngine` | Resolves expression types, aggregate return types |
 
-2. **Permanent documentation** (in `docs/`)
-   - `docs/MVP_IMPLEMENTATION_PLAN.md` - Original 16-week MVP roadmap (archived)
-   - `docs/architect/` - Architecture decisions and designs
-   - `docs/dev_journal/` - Developer journal with milestone completion reports
-   - `docs/SPARK_CONNECT_PROTOCOL_SPEC.md` - Protocol reference
-   - `docs/Testing_Strategy.md` - Testing approach
+### CRITICAL: Dual SQL Generation Paths
 
-3. **Developer journal** (`docs/dev_journal/`)
-   - Completion reports after each milestone, prefixed with `M[X]_` (e.g., `M1_`, `M2_`)
-   - X is a monotonically increasing number indicating chronological order
-   - Each report documents achievements, decisions, and lessons learned
+Several components have TWO code paths for SQL generation. Changes must be applied to BOTH:
 
-4. **Test infrastructure** (in `tests/scripts/`)
-   - Test runner scripts and utilities
+| Component | Path 1 (Plan Node) | Path 2 (SQLGenerator) | When Path 2 is Used |
+|-----------|--------------------|-----------------------|---------------------|
+| **Aggregate** | `Aggregate.toSQL()` | `SQLGenerator.visitAggregate()` | When SQLGenerator visits the plan tree |
+| **Join** | `Join.toSQL()` via `visitJoin()` | `generateFlatJoinChainWithMapping()` | When join chain optimization is triggered by Project/Filter above Join |
 
-### Enforcement
+**Rule:** When modifying SQL generation for aggregates or joins, ALWAYS check both paths.
 
-When creating new documentation:
-- **DO** use `CURRENT_FOCUS_` prefix for active work documents in workspace root
-- **DO** move completed focus documents to `docs/` or `docs/dev_journal/`
-- **DO** keep workspace root clean - only README.md, CLAUDE.md, and CURRENT_FOCUS_* files
-- **DO NOT** create planning documents without the `CURRENT_FOCUS_` prefix
-- **DO NOT** leave stale focus documents - archive or remove when done
-
-### Current Structure
+### Expression Hierarchy
 
 ```
-thunderduck/
-├── README.md                            # Project overview
-├── CLAUDE.md                            # Project rules (this file)
-├── CURRENT_FOCUS_*.md                   # Active work items
-├── core/                                # Core translation engine (Java)
-├── connect-server/                      # Spark Connect gRPC server (Java)
-├── thunderduck-duckdb-extension/                          # Optional DuckDB C extension (C++)
-├── tests/                               # Integration & E2E tests
-│   └── scripts/                         # Test runner scripts
-└── docs/
-    ├── MVP_IMPLEMENTATION_PLAN.md       # Archived MVP roadmap
-    ├── SPARK_CONNECT_PROTOCOL_SPEC.md   # Protocol reference
-    ├── Testing_Strategy.md              # Testing approach
-    ├── architect/                       # Architecture documentation
-    │   └── SPARK_COMPAT_EXTENSION.md    # Extension architecture
-    └── dev_journal/                     # Completion reports
+Expression (abstract)
+  +-- FunctionCall         # func(args...) -- uses FunctionRegistry for translation
+  +-- BinaryExpression     # left OP right
+  +-- UnaryExpression      # OP operand
+  +-- CastExpression       # CAST(expr AS type)
+  +-- Literal              # constant values
+  +-- UnresolvedColumn     # column references
+  +-- AliasExpression      # expr AS alias
+  +-- Aggregate.AggregateExpression  # AGG(arg) or composite (rawExpression)
 ```
 
-**Last Updated**: 2026-02-07
+### Raw SQL vs DataFrame API Code Paths
+
+Raw SQL (`spark.sql("SELECT ...")`) goes directly to DuckDB -- no logical plan, no type inference. DataFrame API goes through converter -> logical plan -> SQLGenerator -> DuckDB with full type awareness.
+
+**Implication:** Fixes to type inference or SQL rewriting in the logical plan layer do NOT affect raw SQL queries.
+
+## Known Gotchas
+
+1. **toSQL() vs toString()**: Expression rendering MUST use `toSQL()`, not `toString()`. The `toString()` method is for debug logging only. Bug example: `FunctionCall.toSQL()` was calling `Expression::toString` on arguments instead of `Expression::toSQL`.
+
+2. **Composite aggregate expressions**: When adding new expression types that can appear inside aggregates (e.g., BinaryExpression wrapping FunctionCalls), ensure `RelationConverter.convertAggregate()` handles them. The default `else` branch previously silently dropped non-FunctionCall expressions.
+
+3. **Semi/Anti join in flat join chains**: The join chain optimizer (`generateFlatJoinChainWithMapping`) does NOT convert semi/anti joins to EXISTS subqueries. Only `visitJoin()` does this correctly. If a semi/anti join appears in a chain, the chain must break at that point.
+
+4. **DuckDB SEMI JOIN syntax**: DuckDB supports `SEMI JOIN` and `ANTI JOIN` (without the `LEFT` prefix). Using `LEFT SEMI JOIN` causes parser errors.
+
+5. **Maven -q flag hides errors**: When using `mvn -q`, build failures may show exit code 1 but no error details. Remove `-q` when debugging build failures.
+
+6. **Session-scoped test servers**: Test servers (port 15002/15003) are session-scoped -- started once, reused across all test classes. No automatic health checks or restarts between classes. If a server becomes unresponsive, subsequent test classes fail.
+
+7. **Always clean build before testing**: Never test with a stale build. Always run `mvn clean package -DskipTests` before integration tests.
 
 ## Spark Parity Requirements
 
 **Critical Rule**: Thunderduck must match Spark EXACTLY, not just produce equivalent results.
 
-### Numeric Type Compatibility
-
-Thunderduck must match Spark's:
 - **Return types**: If Spark returns DOUBLE, Thunderduck must return DOUBLE (not BIGINT)
 - **Rounding conventions**: Must match Spark's rounding behavior
-- **Arithmetic properties**: Integer division, modulo, overflow behavior must match
 - **Type coercion**: Implicit casts must follow Spark's rules
 - **NULL handling**: Must match Spark's null propagation
 
-### Examples of WRONG Behavior
-
-❌ **Wrong**: Spark returns `64.0` (DOUBLE), Thunderduck returns `64` (BIGINT)
-- Even though 64.0 == 64 numerically, the TYPE mismatch breaks compatibility
-- Client code expecting DOUBLE will fail with BIGINT
-
-❌ **Wrong**: Spark returns `java.sql.Date`, Thunderduck returns `null`
-- Even if other columns are correct, missing a column value is wrong
-
-❌ **Wrong**: Spark rounds `3.5` to `4`, Thunderduck rounds to `3`
-- Numerical precision matters for reproducibility
-
-### What This Means
-
-When validating correctness:
-1. **Row-by-row value comparison** ✅ (what we do now)
-2. **Type-by-type comparison** ✅ (what we need to add)
-3. **Precision/rounding validation** ✅ (required)
-
-If Thunderduck produces "close enough" results, **that's not good enough**.
-If types don't match exactly, **that's a bug that must be fixed**.
-
-### Testing Standard
-
-Differential tests must validate:
-- ✓ Same number of rows
-- ✓ Same column names
-- ✓ **Same column TYPES** (not just convertible types)
-- ✓ Same values (with appropriate epsilon for floats)
-- ✓ Same null handling
-- ✓ Same sort order (with exceptions noted below)
-
-### Sort Order and Tie-Breaking
-
-**Important**: When ORDER BY results in ties (multiple rows with equal sort keys), the order of tied rows is **non-deterministic** in SQL. This is expected behavior in both Spark and Thunderduck.
-
-**Examples**:
-- Query: `ORDER BY cnt` where multiple states have same count
-- Result: States with same count may appear in any order
-- Status: **CORRECT** - this is SQL standard behavior
-
-**Testing Approach**:
-When comparing results with potential ties:
-1. **Option A**: Sort both result sets by ALL columns before comparing (order-independent)
-2. **Option B**: Note that specific tie-breaking order doesn't matter (values are correct)
-3. **Option C**: Add secondary sort keys to make ORDER BY deterministic
+Differential tests must validate: same row count, same column names, **same column types**, same values (with epsilon for floats), same null handling, same sort order (ties are non-deterministic per SQL standard).
 
 **Goal**: Drop-in replacement for Spark, not "Spark-like" behavior.
 
-**Last Updated**: 2025-10-27
+## Spark Compatibility Extension
 
-## Spark Compatibility Extension (`thunderduck-duckdb-extension/`)
+Two modes: **Relaxed** (default, no extension, ~85% compat) and **Strict** (extension loaded, ~100% compat).
 
-**Architectural Decision**: Some Spark operations cannot be faithfully replicated using vanilla DuckDB functions (e.g., decimal division always casts to DOUBLE, losing precision). Thunderduck uses an optional DuckDB C extension to implement these operations with exact Spark semantics.
-
-### Two Compatibility Modes
-
-| Mode | Extension | Compatibility | Use Case |
-|------|-----------|--------------|----------|
-| **Relaxed** (default) | Not loaded | ~85% Spark compat | General analytics, development |
-| **Strict** | Loaded | ~100% Spark compat | Production parity, numeric-sensitive workloads |
-
-### How It Works
-
-1. Extension is built separately via CMake (`cd thunderduck-duckdb-extension && GEN=ninja make release`)
-2. Compiled `.duckdb_extension` binary is placed in `core/src/main/resources/extensions/<platform>/`
-3. `DuckDBRuntime` auto-detects and loads the extension at connection creation
-4. `FunctionRegistry` checks extension availability and maps to extension functions when loaded
-5. If extension is absent or fails to load, server continues with vanilla DuckDB functions
-
-### Key Rules
-
-- Extension build is **NOT** part of the default Maven lifecycle — it's a separate CMake step
-- Extension DuckDB version **must exactly match** the `duckdb_jdbc` Maven dependency version
-- Extension is **unsigned** — requires `allow_unsigned_extensions=true` connection property
-- Extension loading is **per-connection** — each `DuckDBRuntime` instance loads independently
-
-### Current Extension Functions
-
-| Function | Replaces | Purpose |
-|----------|----------|---------|
-| `spark_decimal_div(a, b)` | `a / b` (decimal) | Spark 4.1 decimal division with ROUND_HALF_UP |
-
-### Building & Bundling
-
-**Maven Profile** (Recommended):
 ```bash
-# Without extension (relaxed mode, default)
+# Build WITHOUT extension (relaxed mode, default)
 mvn clean package -DskipTests
 
-# With extension (strict mode) - builds and bundles automatically
+# Build WITH extension (strict mode)
 mvn clean package -DskipTests -Pbuild-extension
-
-# The extension will be built and bundled for the current platform only
-# For multi-platform builds (CI/CD), build on each platform separately
 ```
 
-**Build performance**: The Maven profile uses CMake with Ninja directly (bypassing `make`).
-The build is **incremental** — `thunderduck-duckdb-extension/build/release/` persists across `mvn clean`
-(Maven only cleans `target/` dirs). First build compiles DuckDB core (~2-5 min),
-subsequent builds only recompile changed extension files (seconds).
+Key rules: Extension build is NOT part of default Maven lifecycle. Extension DuckDB version must exactly match `duckdb_jdbc` dependency. Extension is unsigned (requires `allow_unsigned_extensions=true`).
 
-**Manual Build** (for extension development/verification):
-```bash
-# Full DuckDB + extension build (equivalent to what Maven does)
-cd thunderduck-duckdb-extension && GEN=ninja make release && cd ..
-
-# Bundle for current platform
-PLATFORM=linux_amd64  # or osx_arm64, linux_arm64, etc.
-mkdir -p core/src/main/resources/extensions/$PLATFORM
-cp thunderduck-duckdb-extension/build/release/extension/thdck_spark_funcs/thdck_spark_funcs.duckdb_extension \
-   core/src/main/resources/extensions/$PLATFORM/
-
-# Rebuild JAR with extension included
-mvn clean package -DskipTests
-```
-
-**Prerequisites**: CMake, Ninja, and a C++ compiler (GCC 9+ or Clang 10+)
-
-**Important**: The extension is statically linked against DuckDB (required because JDBC loads
-its native library with `RTLD_LOCAL`, making DuckDB symbols unavailable for dynamic resolution).
-This is why a full DuckDB compilation is needed, but incremental caching makes it fast after
-the initial build.
-
-> Full architecture details: [docs/architect/SPARK_COMPAT_EXTENSION.md](docs/architect/SPARK_COMPAT_EXTENSION.md)
-
-**Last Updated**: 2026-02-07
+> Full details: [docs/architect/SPARK_COMPAT_EXTENSION.md](docs/architect/SPARK_COMPAT_EXTENSION.md)
 
 ## Spark Connect Server Configuration
 
-**Critical**: The following configuration is required for the ThunderDuck Spark Connect Server to work correctly.
+**Protobuf**: Use `provided` scope for `spark-connect_2.13` dependency to avoid `VerifyError` from version mismatch.
 
-### Protobuf Dependency Configuration
+**Arrow JVM Flags**: Required on ALL platforms: `--add-opens=java.base/java.nio=ALL-UNNAMED`
 
-**Issue**: Spark Connect includes pre-compiled protobuf classes that can cause `VerifyError` at runtime if version mismatch occurs.
+**Error if missing**: `java.lang.RuntimeException: Failed to initialize MemoryUtil.`
 
-**Solution**: Use `provided` scope for `spark-connect_2.13` dependency:
-```xml
-<dependency>
-    <groupId>org.apache.spark</groupId>
-    <artifactId>spark-connect_2.13</artifactId>
-    <version>${spark.version}</version>
-    <scope>provided</scope>  <!-- CRITICAL: Must be 'provided' not 'compile' -->
-</dependency>
-```
+**Server cleanup**: Always kill server processes after tests: `pkill -9 -f java 2>/dev/null`
 
-**Reason**: This prevents bundling Spark's pre-compiled protobuf classes which were compiled with a different protobuf version, avoiding runtime `VerifyError`.
+> Full details: [docs/architect/PROTOBUF_AND_ARROW_CONFIGURATION.md](docs/architect/PROTOBUF_AND_ARROW_CONFIGURATION.md)
 
-### Apache Arrow JVM Requirements (Spark 4.0.x)
+## Documentation Structure Rules
 
-**Issue**: Apache Arrow requires special JVM flags on ALL platforms to access internal Java NIO classes. As of Spark 4.0.x, these flags are required everywhere (not just ARM64).
+1. **Current focus documents** (workspace root, `CURRENT_FOCUS_*` prefix) -- active work items
+2. **Permanent documentation** (`docs/`) -- architecture decisions, dev journal, specs
+3. **Developer journal** (`docs/dev_journal/`) -- milestone reports prefixed `M[X]_`
+4. **Test infrastructure** (`tests/scripts/`) -- test runner scripts
 
-**Required JVM Flags**:
-```bash
---add-opens=java.base/java.nio=ALL-UNNAMED
-```
-
-**How to Run Server**:
-```bash
-# Option 1: Direct JAR execution (recommended for production)
-java --add-opens=java.base/java.nio=ALL-UNNAMED \
-     -jar connect-server/target/thunderduck-connect-server-*.jar
-
-# Option 2: Using Maven exec plugin
-export MAVEN_OPTS="--add-opens=java.base/java.nio=ALL-UNNAMED"
-mvn exec:java -pl connect-server \
-    -Dexec.mainClass="com.thunderduck.connect.server.SparkConnectServer"
-
-# Option 3: Using start-server.sh script (already configured)
-./tests/scripts/start-server.sh
-```
-
-**Error if Missing**:
-```
-java.lang.RuntimeException: Failed to initialize MemoryUtil.
-You must start Java with `--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED`
-```
-
-### Key Learnings
-
-1. **Always use clean builds** when diagnosing server issues: `mvn clean compile` or `mvn clean package`
-2. **Dependency scoping matters**: `compile` vs `provided` scope can cause runtime class conflicts
-3. **JVM flags required on ALL platforms**: As of Spark 4.0.x, `--add-opens` flags are needed everywhere
-4. **Test with actual client**: Always test with PySpark 4.0.x client after server changes
-
-### Server Process Cleanup (IMPORTANT)
-
-**Critical Rule**: After running E2E tests or any tests that start the Thunderduck server, ALWAYS kill the server process when done.
-
-**Why**: Background server processes can accumulate and cause port conflicts, resource exhaustion, and confusing test failures.
-
-**How to cleanup**:
-```bash
-# Kill all thunderduck server processes
-pkill -9 -f thunderduck-connect-server
-
-# Or kill all java processes (more aggressive)
-pkill -9 -f java
-```
-
-**Best Practice**: When running tests:
-1. Kill any existing server before starting a new one
-2. After tests complete, kill the server
-3. Periodically check for dangling processes: `ps aux | grep thunderduck`
-
-**Last Updated**: 2025-12-16
-**Fix Applied**: See `/workspace/docs/PROTOBUF_FIX_REPORT.md` for detailed resolution history
-- Always do a full clean and rebuild before testing, you keep making the mistake to test with old build and be surprised that code changes have had no effect
+Keep workspace root clean: only README.md, CLAUDE.md, and CURRENT_FOCUS_* files. Archive stale focus documents.
 
 ## Git Commit Workflow
 
-**Critical Rule**: NEVER commit code without user review first.
-
-### Commit Process
-
-1. **Show changes first**: Always show the user a summary of changes before committing
-2. **Wait for approval**: Do NOT commit until the user explicitly approves
-3. **Only commit when asked**: The user must explicitly request a commit (e.g., "commit this", "let's commit")
-
-### What This Means
-
-- After implementing features or making changes, STOP and summarize what was done
-- Let the user review the code/changes before committing
-- If the user says "commit" or asks to commit, THEN proceed with the commit
-- Do NOT assume that completing a task means you should commit
-
-### Examples
-
-**WRONG**:
-```
-User: "Add function X"
-Claude: *implements function X*
-Claude: *immediately commits without asking*
-```
-
-**CORRECT**:
-```
-User: "Add function X"
-Claude: *implements function X*
-Claude: "I've added function X. Here's what changed: [summary]. Let me know when you'd like to commit."
-User: "looks good, commit it"
-Claude: *commits the changes*
-```
-
-**Last Updated**: 2025-12-16
+**Critical Rule**: NEVER commit code without user review first. Show changes, wait for explicit approval, then commit.
 
 ## Development Cheatsheet
 
@@ -404,7 +162,6 @@ Claude: *commits the changes*
 mvn -f /workspace/pom.xml clean package -DskipTests -q
 
 # Build WITH extension (strict Spark compatibility mode)
-# First build compiles DuckDB core (~2-5 min), subsequent builds are incremental (seconds)
 mvn -f /workspace/pom.xml clean package -DskipTests -q -Pbuild-extension
 
 # Install core to local repo (REQUIRED before `mvn test -pl tests`)
@@ -412,28 +169,26 @@ mvn -f /workspace/pom.xml install -pl core -DskipTests -q
 
 # Kill servers + rebuild (common combo)
 pkill -9 -f java 2>/dev/null; sleep 2; mvn -f /workspace/pom.xml clean package -DskipTests -q
+
+# Build WITHOUT quiet mode (for debugging build failures)
+mvn -f /workspace/pom.xml clean package -DskipTests 2>&1 | tail -100
+
+# Build single module only (faster iteration)
+mvn -f /workspace/pom.xml compile -pl core -DskipTests
+mvn -f /workspace/pom.xml compile -pl connect-server -DskipTests
 ```
 
 ### Spark Compatibility Mode
 
 ```bash
-# Strict mode (extension must be loaded, server fails if missing)
-THUNDERDUCK_COMPAT_MODE=strict python3 -m pytest ...
-
-# Relaxed mode (no extension, vanilla DuckDB)
-THUNDERDUCK_COMPAT_MODE=relaxed python3 -m pytest ...
-
-# Auto mode (default: loads extension if available)
-python3 -m pytest ...
-
-# Server CLI flags (alternative to env var)
-java -jar connect-server.jar --strict
-java -jar connect-server.jar --relaxed
+THUNDERDUCK_COMPAT_MODE=strict python3 -m pytest ...   # strict mode
+THUNDERDUCK_COMPAT_MODE=relaxed python3 -m pytest ...  # relaxed mode
+python3 -m pytest ...                                   # auto mode (default)
 ```
 
 ### Integration Tests (pytest)
 
-Run from `/workspace/tests/integration`. Fixtures auto-start both servers. Use `python3` (no `python`).
+Run from `/workspace/tests/integration`. Fixtures auto-start both servers. Use `python3` (not `python`).
 
 ```bash
 # Env vars prefix (always include)
@@ -451,11 +206,8 @@ cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_diff
 # Single DataFrame test (zero-padded numbers)
 cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_tpch_differential.py::TestTPCHDifferential::test_q01_dataframe -v --tb=long
 
-# Basic operations only
-cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_differential_v2.py::TestBasicOperations_Differential -v --tb=long
-
-# Sanity check only
-cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_differential_v2.py::TestDifferential_Sanity -v --tb=long
+# Run both test suites together (catches cross-suite server issues)
+cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_tpch_differential.py differential/test_differential_v2.py -v --tb=short
 ```
 
 **Test naming conventions:**
@@ -499,4 +251,4 @@ pkill -9 -f java 2>/dev/null
 | Test conftest | `tests/integration/conftest.py` |
 | DataFrame diff util | `tests/integration/utils/dataframe_diff.py` |
 
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-09
