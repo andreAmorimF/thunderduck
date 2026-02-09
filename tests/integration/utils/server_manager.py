@@ -30,8 +30,9 @@ class ServerManager:
             self.server_jar = self.workspace_dir / "connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar"
 
     def is_port_available(self) -> bool:
-        """Check if the port is available"""
+        """Check if the port is available (tolerates TIME_WAIT connections)"""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind((self.host, self.port))
                 return True
