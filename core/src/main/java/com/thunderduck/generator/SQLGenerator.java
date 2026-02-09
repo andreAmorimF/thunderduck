@@ -505,16 +505,15 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * Gets the SQL keyword for a join type.
      */
     private String getJoinKeyword(Join.JoinType joinType) {
-        switch (joinType) {
-            case INNER: return "INNER JOIN";
-            case LEFT: return "LEFT OUTER JOIN";
-            case RIGHT: return "RIGHT OUTER JOIN";
-            case FULL: return "FULL OUTER JOIN";
-            case CROSS: return "CROSS JOIN";
-            case LEFT_SEMI: return "SEMI JOIN";
-            case LEFT_ANTI: return "ANTI JOIN";
-            default: throw new UnsupportedOperationException("Unknown join type: " + joinType);
-        }
+        return switch (joinType) {
+            case INNER     -> "INNER JOIN";
+            case LEFT      -> "LEFT OUTER JOIN";
+            case RIGHT     -> "RIGHT OUTER JOIN";
+            case FULL      -> "FULL OUTER JOIN";
+            case CROSS     -> "CROSS JOIN";
+            case LEFT_SEMI -> "SEMI JOIN";
+            case LEFT_ANTI -> "ANTI JOIN";
+        };
     }
 
     /**
@@ -738,38 +737,12 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         String source = plan.source();
         TableScan.TableFormat format = plan.format();
 
-        switch (format) {
-            case TABLE:
-                // Regular DuckDB table - use table name directly with proper quoting
-                sql.append("SELECT * FROM ");
-                sql.append(quoteIdentifier(source));
-                break;
-
-            case PARQUET:
-                // Use DuckDB's read_parquet function with safe quoting
-                sql.append("SELECT * FROM read_parquet(");
-                sql.append(quoteFilePath(source));
-                sql.append(")");
-                break;
-
-            case DELTA:
-                // Use DuckDB's delta_scan function with safe quoting
-                sql.append("SELECT * FROM delta_scan(");
-                sql.append(quoteFilePath(source));
-                sql.append(")");
-                break;
-
-            case ICEBERG:
-                // Use DuckDB's iceberg_scan function with safe quoting
-                sql.append("SELECT * FROM iceberg_scan(");
-                sql.append(quoteFilePath(source));
-                sql.append(")");
-                break;
-
-            default:
-                throw new UnsupportedOperationException(
-                    "Unsupported table format: " + format);
-        }
+        sql.append(switch (format) {
+            case TABLE   -> "SELECT * FROM " + quoteIdentifier(source);
+            case PARQUET -> "SELECT * FROM read_parquet(" + quoteFilePath(source) + ")";
+            case DELTA   -> "SELECT * FROM delta_scan(" + quoteFilePath(source) + ")";
+            case ICEBERG -> "SELECT * FROM iceberg_scan(" + quoteFilePath(source) + ")";
+        });
     }
 
     /**
@@ -1550,26 +1523,15 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             }
 
             // JOIN type
-            switch (plan.joinType()) {
-                case INNER:
-                    sql.append(" INNER JOIN ");
-                    break;
-                case LEFT:
-                    sql.append(" LEFT OUTER JOIN ");
-                    break;
-                case RIGHT:
-                    sql.append(" RIGHT OUTER JOIN ");
-                    break;
-                case FULL:
-                    sql.append(" FULL OUTER JOIN ");
-                    break;
-                case CROSS:
-                    sql.append(" CROSS JOIN ");
-                    break;
-                default:
-                    throw new UnsupportedOperationException(
-                        "Unexpected join type: " + plan.joinType());
-            }
+            sql.append(switch (plan.joinType()) {
+                case INNER     -> " INNER JOIN ";
+                case LEFT      -> " LEFT OUTER JOIN ";
+                case RIGHT     -> " RIGHT OUTER JOIN ";
+                case FULL      -> " FULL OUTER JOIN ";
+                case CROSS     -> " CROSS JOIN ";
+                case LEFT_SEMI -> " SEMI JOIN ";
+                case LEFT_ANTI -> " ANTI JOIN ";
+            });
 
             // RIGHT SIDE - use direct aliasing for TableScan, handle AliasedRelation, wrap others
             if (rightPlan instanceof AliasedRelation) {
@@ -1749,25 +1711,16 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * @return the source SQL if directly aliasable, or null if wrapping is needed
      */
     private String getDirectlyAliasableSource(LogicalPlan plan) {
-        if (!(plan instanceof TableScan)) {
+        if (!(plan instanceof TableScan scan)) {
             return null;
         }
-
-        TableScan scan = (TableScan) plan;
         String source = scan.source();
-
-        switch (scan.format()) {
-            case TABLE:
-                return quoteIdentifier(source);
-            case PARQUET:
-                return "read_parquet(" + quoteFilePath(source) + ")";
-            case DELTA:
-                return "delta_scan(" + quoteFilePath(source) + ")";
-            case ICEBERG:
-                return "iceberg_scan(" + quoteFilePath(source) + ")";
-            default:
-                return null;
-        }
+        return switch (scan.format()) {
+            case TABLE   -> quoteIdentifier(source);
+            case PARQUET -> "read_parquet(" + quoteFilePath(source) + ")";
+            case DELTA   -> "delta_scan(" + quoteFilePath(source) + ")";
+            case ICEBERG -> "iceberg_scan(" + quoteFilePath(source) + ")";
+        };
     }
 
     /**

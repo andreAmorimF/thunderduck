@@ -85,37 +85,22 @@ public class TypeMapper {
         String normalized = duckdbType.trim().toUpperCase();
 
         // Handle primitive types
-        switch (normalized) {
-            case "TINYINT":
-                return ByteType.get();
-            case "SMALLINT":
-                return ShortType.get();
-            case "INTEGER":
-            case "INT":
-                return IntegerType.get();
-            case "BIGINT":
-                return LongType.get();
-            case "FLOAT":
-            case "REAL":
-                return FloatType.get();
-            case "DOUBLE":
-            case "DOUBLE PRECISION":
-                return DoubleType.get();
-            case "VARCHAR":
-            case "TEXT":
-            case "STRING":
-                return StringType.get();
-            case "BOOLEAN":
-            case "BOOL":
-                return BooleanType.get();
-            case "DATE":
-                return DateType.get();
-            case "TIMESTAMP":
-            case "TIMESTAMP WITHOUT TIME ZONE":
-                return TimestampType.get();
-            case "BLOB":
-            case "BYTEA":
-                return BinaryType.get();
+        DataType primitive = switch (normalized) {
+            case "TINYINT"                   -> ByteType.get();
+            case "SMALLINT"                  -> ShortType.get();
+            case "INTEGER", "INT"            -> IntegerType.get();
+            case "BIGINT"                    -> LongType.get();
+            case "FLOAT", "REAL"             -> FloatType.get();
+            case "DOUBLE", "DOUBLE PRECISION" -> DoubleType.get();
+            case "VARCHAR", "TEXT", "STRING"  -> StringType.get();
+            case "BOOLEAN", "BOOL"           -> BooleanType.get();
+            case "DATE"                      -> DateType.get();
+            case "TIMESTAMP", "TIMESTAMP WITHOUT TIME ZONE" -> TimestampType.get();
+            case "BLOB", "BYTEA"             -> BinaryType.get();
+            default -> null;
+        };
+        if (primitive != null) {
+            return primitive;
         }
 
         // Handle DECIMAL(p,s)
