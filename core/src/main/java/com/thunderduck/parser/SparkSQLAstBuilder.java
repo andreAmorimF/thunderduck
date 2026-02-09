@@ -760,9 +760,28 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         }
 
         // EXTRACT(field FROM source)
+        // Map to Spark function equivalents (year, month, etc.) which go through
+        // FunctionRegistry CUSTOM_TRANSLATORS for proper CAST(... AS INTEGER) wrapping.
+        // Unmapped fields fall back to raw EXTRACT(...) syntax.
         if (ctx instanceof SqlBaseParser.ExtractContext extract) {
             String field = getIdentifierText(extract.field);
             Expression source = visitValueExpr(extract.source);
+            String sparkFunc = switch (field.toUpperCase()) {
+                case "YEAR" -> "year";
+                case "MONTH" -> "month";
+                case "DAY" -> "day";
+                case "HOUR" -> "hour";
+                case "MINUTE" -> "minute";
+                case "SECOND" -> "second";
+                case "QUARTER" -> "quarter";
+                case "DOY" -> "dayofyear";
+                case "DOW" -> "dayofweek";
+                case "WEEK" -> "weekofyear";
+                default -> null;
+            };
+            if (sparkFunc != null) {
+                return new FunctionCall(sparkFunc, List.of(source), IntegerType.get());
+            }
             return new RawSQLExpression(
                 "EXTRACT(" + field + " FROM " + source.toSQL() + ")");
         }
