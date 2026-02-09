@@ -78,34 +78,22 @@ public class Literal extends Expression {
             return "NULL";
         }
 
-        if (dataType instanceof StringType) {
-            // Escape single quotes in strings
-            String str = value.toString().replace("'", "''");
-            return "'" + str + "'";
-        }
+        return switch (dataType) {
+            case StringType s -> "'" + value.toString().replace("'", "''") + "'";
+            case BooleanType b -> value.toString().toUpperCase();
+            case DateType d -> "DATE '" + value + "'";
+            case TimestampType t -> formatTimestamp(value);
+            default -> value.toString();
+        };
+    }
 
-        if (dataType instanceof BooleanType) {
-            return value.toString().toUpperCase();
+    private String formatTimestamp(Object val) {
+        if (val instanceof java.time.Instant instant) {
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(
+                instant, java.time.ZoneOffset.UTC);
+            return "TIMESTAMP '" + ldt.toString().replace("T", " ") + "'";
         }
-
-        if (dataType instanceof DateType) {
-            // LocalDate.toString() returns ISO format like "2025-01-15"
-            return "DATE '" + value + "'";
-        }
-
-        if (dataType instanceof TimestampType) {
-            // Handle Instant objects by converting to LocalDateTime for proper formatting
-            if (value instanceof java.time.Instant) {
-                java.time.Instant instant = (java.time.Instant) value;
-                java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(
-                    instant, java.time.ZoneOffset.UTC);
-                return "TIMESTAMP '" + ldt.toString().replace("T", " ") + "'";
-            }
-            return "TIMESTAMP '" + value + "'";
-        }
-
-        // Numeric and other types
-        return value.toString();
+        return "TIMESTAMP '" + val + "'";
     }
 
     @Override

@@ -1,8 +1,5 @@
 package com.thunderduck.types;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Maps Spark DataTypes to DuckDB SQL type strings.
  *
@@ -20,29 +17,6 @@ import java.util.Map;
  * @see DataType
  */
 public class TypeMapper {
-
-    private static final Map<Class<? extends DataType>, String> PRIMITIVE_TYPE_MAPPINGS = new HashMap<>();
-
-    static {
-        // Numeric types
-        PRIMITIVE_TYPE_MAPPINGS.put(ByteType.class, "TINYINT");
-        PRIMITIVE_TYPE_MAPPINGS.put(ShortType.class, "SMALLINT");
-        PRIMITIVE_TYPE_MAPPINGS.put(IntegerType.class, "INTEGER");
-        PRIMITIVE_TYPE_MAPPINGS.put(LongType.class, "BIGINT");
-        PRIMITIVE_TYPE_MAPPINGS.put(FloatType.class, "FLOAT");
-        PRIMITIVE_TYPE_MAPPINGS.put(DoubleType.class, "DOUBLE");
-
-        // String and boolean
-        PRIMITIVE_TYPE_MAPPINGS.put(StringType.class, "VARCHAR");
-        PRIMITIVE_TYPE_MAPPINGS.put(BooleanType.class, "BOOLEAN");
-
-        // Temporal types (both use microsecond precision)
-        PRIMITIVE_TYPE_MAPPINGS.put(DateType.class, "DATE");
-        PRIMITIVE_TYPE_MAPPINGS.put(TimestampType.class, "TIMESTAMP");
-
-        // Binary
-        PRIMITIVE_TYPE_MAPPINGS.put(BinaryType.class, "BLOB");
-    }
 
     /**
      * Converts a thunderduck DataType to a DuckDB SQL type string.
@@ -65,37 +39,24 @@ public class TypeMapper {
             throw new IllegalArgumentException("sparkType must not be null");
         }
 
-        // Handle primitive types
-        String primitiveMapping = PRIMITIVE_TYPE_MAPPINGS.get(sparkType.getClass());
-        if (primitiveMapping != null) {
-            return primitiveMapping;
-        }
-
-        // Handle decimal type
-        if (sparkType instanceof DecimalType) {
-            DecimalType decimal = (DecimalType) sparkType;
-            return String.format("DECIMAL(%d,%d)", decimal.precision(), decimal.scale());
-        }
-
-        // Handle array type
-        if (sparkType instanceof ArrayType) {
-            ArrayType array = (ArrayType) sparkType;
-            String elementType = toDuckDBType(array.elementType());
-            return elementType + "[]";
-        }
-
-        // Handle map type
-        if (sparkType instanceof MapType) {
-            MapType map = (MapType) sparkType;
-            String keyType = toDuckDBType(map.keyType());
-            String valueType = toDuckDBType(map.valueType());
-            return String.format("MAP(%s, %s)", keyType, valueType);
-        }
-
-        // Note: StructType is not a DataType itself, it's a schema representation
-        // Structs as data types are not currently handled here
-
-        throw new UnsupportedOperationException("Unsupported type: " + sparkType.getClass().getName());
+        return switch (sparkType) {
+            case BooleanType b   -> "BOOLEAN";
+            case ByteType b      -> "TINYINT";
+            case ShortType s     -> "SMALLINT";
+            case IntegerType i   -> "INTEGER";
+            case LongType l      -> "BIGINT";
+            case FloatType f     -> "FLOAT";
+            case DoubleType db   -> "DOUBLE";
+            case StringType s    -> "VARCHAR";
+            case DateType d      -> "DATE";
+            case TimestampType t -> "TIMESTAMP";
+            case BinaryType b    -> "BLOB";
+            case DecimalType d   -> String.format("DECIMAL(%d,%d)", d.precision(), d.scale());
+            case ArrayType a     -> toDuckDBType(a.elementType()) + "[]";
+            case MapType m       -> String.format("MAP(%s, %s)", toDuckDBType(m.keyType()), toDuckDBType(m.valueType()));
+            case StructType st   -> throw new UnsupportedOperationException("StructType as column type not supported");
+            case UnresolvedType u -> "VARCHAR";
+        };
     }
 
     /**
