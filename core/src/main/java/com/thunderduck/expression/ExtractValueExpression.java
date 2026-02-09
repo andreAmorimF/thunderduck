@@ -24,7 +24,7 @@ import java.util.Objects;
  * <p>Note: PySpark uses 0-based indexing for arrays, DuckDB uses 1-based.
  * The converter handles this translation before creating this expression.
  */
-public class ExtractValueExpression extends Expression {
+public final class ExtractValueExpression implements Expression {
 
     /**
      * The type of extraction being performed.
@@ -147,6 +147,11 @@ public class ExtractValueExpression extends Expression {
             default:
                 throw new IllegalStateException("Unknown extraction type: " + extractionType);
         }
+    }
+
+    @Override
+    public String toString() {
+        return toSQL();
     }
 
     @Override

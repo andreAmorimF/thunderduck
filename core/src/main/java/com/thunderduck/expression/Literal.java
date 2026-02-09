@@ -24,7 +24,7 @@ import java.util.Objects;
  *   SELECT NULL            -- null literal
  * </pre>
  */
-public class Literal extends Expression {
+public final class Literal implements Expression {
 
     private final Object value;
     private final DataType dataType;

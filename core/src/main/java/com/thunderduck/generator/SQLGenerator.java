@@ -2,9 +2,7 @@ package com.thunderduck.generator;
 
 import com.thunderduck.exception.SQLGenerationException;
 import com.thunderduck.logical.*;
-import com.thunderduck.expression.Expression;
-import com.thunderduck.expression.BinaryExpression;
-import com.thunderduck.expression.UnresolvedColumn;
+import com.thunderduck.expression.*;
 import com.thunderduck.runtime.SparkCompatMode;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
@@ -1150,44 +1148,40 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * @param expr the expression to transform
      * @return the transformed expression (or original if no changes needed)
      */
-    public static com.thunderduck.expression.Expression transformAggregateExpression(com.thunderduck.expression.Expression expr) {
-        if (expr instanceof com.thunderduck.expression.FunctionCall) {
-            com.thunderduck.expression.FunctionCall func = (com.thunderduck.expression.FunctionCall) expr;
+    public static Expression transformAggregateExpression(Expression expr) {
+        if (expr instanceof FunctionCall func) {
             String name = func.functionName().toLowerCase();
             if (name.equals("sum") || name.equals("sum_distinct")) {
-                return new com.thunderduck.expression.FunctionCall("spark_sum", func.arguments(), func.dataType(), func.nullable());
+                return new FunctionCall("spark_sum", func.arguments(), func.dataType(), func.nullable());
             }
             if (name.equals("avg") || name.equals("avg_distinct")) {
-                return new com.thunderduck.expression.FunctionCall("spark_avg", func.arguments(), func.dataType(), func.nullable());
+                return new FunctionCall("spark_avg", func.arguments(), func.dataType(), func.nullable());
             }
             return expr;
         }
-        if (expr instanceof com.thunderduck.expression.BinaryExpression) {
-            com.thunderduck.expression.BinaryExpression bin = (com.thunderduck.expression.BinaryExpression) expr;
-            com.thunderduck.expression.Expression newLeft = transformAggregateExpression(bin.left());
-            com.thunderduck.expression.Expression newRight = transformAggregateExpression(bin.right());
+        if (expr instanceof BinaryExpression bin) {
+            Expression newLeft = transformAggregateExpression(bin.left());
+            Expression newRight = transformAggregateExpression(bin.right());
             if (newLeft != bin.left() || newRight != bin.right()) {
-                return new com.thunderduck.expression.BinaryExpression(newLeft, bin.operator(), newRight);
+                return new BinaryExpression(newLeft, bin.operator(), newRight);
             }
             return expr;
         }
-        if (expr instanceof com.thunderduck.expression.CastExpression) {
-            com.thunderduck.expression.CastExpression cast = (com.thunderduck.expression.CastExpression) expr;
-            com.thunderduck.expression.Expression newInner = transformAggregateExpression(cast.expression());
+        if (expr instanceof CastExpression cast) {
+            Expression newInner = transformAggregateExpression(cast.expression());
             if (newInner != cast.expression()) {
-                return new com.thunderduck.expression.CastExpression(newInner, cast.targetType());
+                return new CastExpression(newInner, cast.targetType());
             }
             return expr;
         }
-        if (expr instanceof com.thunderduck.expression.UnaryExpression) {
-            com.thunderduck.expression.UnaryExpression unary = (com.thunderduck.expression.UnaryExpression) expr;
-            com.thunderduck.expression.Expression newOperand = transformAggregateExpression(unary.operand());
+        if (expr instanceof UnaryExpression unary) {
+            Expression newOperand = transformAggregateExpression(unary.operand());
             if (newOperand != unary.operand()) {
-                return new com.thunderduck.expression.UnaryExpression(unary.operator(), newOperand);
+                return new UnaryExpression(unary.operator(), newOperand);
             }
             return expr;
         }
-        // Literals, columns, etc. — no transformation needed
+        // Literals, columns, etc. -- no transformation needed
         return expr;
     }
 
@@ -1684,14 +1678,11 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * @return the SQL string with qualified column references
      */
     public String qualifyCondition(Expression expr, Map<Long, String> planIdToAlias) {
-        if (expr instanceof UnresolvedColumn) {
-            UnresolvedColumn col = (UnresolvedColumn) expr;
-
+        if (expr instanceof UnresolvedColumn col) {
             // Already qualified - return as-is
             if (col.isQualified()) {
                 return col.toSQL();
             }
-
             // Use plan_id to determine alias
             if (col.hasPlanId()) {
                 String alias = planIdToAlias.get(col.planId().getAsLong());
@@ -1699,13 +1690,11 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                     return alias + "." + SQLQuoting.quoteIdentifier(col.columnName());
                 }
             }
-
             // No plan_id or no mapping - return unqualified (may cause ambiguity)
             return col.toSQL();
         }
 
-        if (expr instanceof BinaryExpression) {
-            BinaryExpression binExpr = (BinaryExpression) expr;
+        if (expr instanceof BinaryExpression binExpr) {
             String leftSQL = qualifyCondition(binExpr.left(), planIdToAlias);
             String rightSQL = qualifyCondition(binExpr.right(), planIdToAlias);
             if (binExpr.operator() == BinaryExpression.Operator.DIVIDE
@@ -1715,62 +1704,43 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             return "(" + leftSQL + " " + binExpr.operator().symbol() + " " + rightSQL + ")";
         }
 
-        // UnaryExpression: NOT, IS NULL, IS NOT NULL, NEGATE
-        if (expr instanceof com.thunderduck.expression.UnaryExpression) {
-            com.thunderduck.expression.UnaryExpression unaryExpr =
-                (com.thunderduck.expression.UnaryExpression) expr;
+        if (expr instanceof UnaryExpression unaryExpr) {
             String operandSQL = qualifyCondition(unaryExpr.operand(), planIdToAlias);
             if (unaryExpr.operator().isPrefix()) {
-                // NEGATE has no space, NOT has space
-                if (unaryExpr.operator() == com.thunderduck.expression.UnaryExpression.Operator.NEGATE) {
+                if (unaryExpr.operator() == UnaryExpression.Operator.NEGATE) {
                     return "(" + unaryExpr.operator().symbol() + operandSQL + ")";
                 }
                 return "(" + unaryExpr.operator().symbol() + " " + operandSQL + ")";
             } else {
-                // IS NULL, IS NOT NULL are postfix
                 return "(" + operandSQL + " " + unaryExpr.operator().symbol() + ")";
             }
         }
 
-        // AliasExpression: expr AS alias
-        if (expr instanceof com.thunderduck.expression.AliasExpression) {
-            com.thunderduck.expression.AliasExpression aliasExpr =
-                (com.thunderduck.expression.AliasExpression) expr;
+        if (expr instanceof AliasExpression aliasExpr) {
             String innerSQL = qualifyCondition(aliasExpr.expression(), planIdToAlias);
             return innerSQL + " AS " + aliasExpr.alias();
         }
 
-        // CastExpression: CAST(expr AS type)
-        if (expr instanceof com.thunderduck.expression.CastExpression) {
-            com.thunderduck.expression.CastExpression castExpr =
-                (com.thunderduck.expression.CastExpression) expr;
+        if (expr instanceof CastExpression castExpr) {
             String innerSQL = qualifyCondition(castExpr.expression(), planIdToAlias);
             return "CAST(" + innerSQL + " AS " + castExpr.targetType().typeName() + ")";
         }
 
-        // FunctionCall: func(arg1, arg2, ...)
-        if (expr instanceof com.thunderduck.expression.FunctionCall) {
-            com.thunderduck.expression.FunctionCall funcExpr =
-                (com.thunderduck.expression.FunctionCall) expr;
+        if (expr instanceof FunctionCall funcExpr) {
             List<String> qualifiedArgs = new ArrayList<>();
             for (Expression arg : funcExpr.arguments()) {
                 qualifiedArgs.add(qualifyCondition(arg, planIdToAlias));
             }
-            // Use function registry for translation
             String[] argArray = qualifiedArgs.toArray(new String[0]);
             try {
                 return com.thunderduck.functions.FunctionRegistry.translate(
                     funcExpr.functionName(), argArray);
             } catch (UnsupportedOperationException e) {
-                // Fallback to direct function call
                 return funcExpr.functionName() + "(" + String.join(", ", qualifiedArgs) + ")";
             }
         }
 
-        // InExpression: expr IN (val1, val2, ...) or expr NOT IN (...)
-        if (expr instanceof com.thunderduck.expression.InExpression) {
-            com.thunderduck.expression.InExpression inExpr =
-                (com.thunderduck.expression.InExpression) expr;
+        if (expr instanceof InExpression inExpr) {
             String testSQL = qualifyCondition(inExpr.testExpr(), planIdToAlias);
             List<String> valuesSQLs = new ArrayList<>();
             for (Expression val : inExpr.values()) {
