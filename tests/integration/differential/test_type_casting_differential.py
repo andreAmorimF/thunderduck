@@ -128,7 +128,6 @@ class TestNumericCasts:
 class TestDecimalCasts:
     """Tests for decimal precision/scale handling."""
 
-    @pytest.mark.skip(reason="spark.sql() not yet supported - requires SQL parser integration")
     @pytest.mark.timeout(30)
     def test_decimal_scale_change(self, spark_reference, spark_thunderduck):
         """CAST decimal with scale change (rounding)"""
@@ -222,7 +221,6 @@ class TestDateTimeCasts:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "string_to_timestamp")
 
-    @pytest.mark.skip(reason="spark.sql() not yet supported - requires SQL parser integration")
     @pytest.mark.timeout(30)
     def test_date_to_string(self, spark_reference, spark_thunderduck):
         """CAST date to string"""
@@ -238,7 +236,6 @@ class TestDateTimeCasts:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "date_to_string")
 
-    @pytest.mark.skip(reason="spark.sql() not yet supported - requires SQL parser integration")
     @pytest.mark.timeout(30)
     def test_timestamp_to_date(self, spark_reference, spark_thunderduck):
         """CAST timestamp to date (time truncation)"""
@@ -301,7 +298,6 @@ class TestNullCasts:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "cast_null_to_string")
 
-    @pytest.mark.skip(reason="spark.sql() not yet supported - requires SQL parser integration")
     @pytest.mark.timeout(30)
     def test_cast_null_literal(self, spark_reference, spark_thunderduck):
         """CAST NULL literal to various types"""

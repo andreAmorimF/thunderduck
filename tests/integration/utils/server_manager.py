@@ -22,7 +22,12 @@ class ServerManager:
         self.compat_mode = compat_mode  # "strict", "relaxed", or None (auto)
         self.process: Optional[subprocess.Popen] = None
         self.workspace_dir = Path(__file__).parent.parent.parent.parent
-        self.server_jar = self.workspace_dir / "connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar"
+        # Allow overriding the JAR directory via environment variable
+        jar_dir = os.environ.get("THUNDERDUCK_JAR_DIR")
+        if jar_dir:
+            self.server_jar = Path(jar_dir) / "thunderduck-connect-server-0.1.0-SNAPSHOT.jar"
+        else:
+            self.server_jar = self.workspace_dir / "connect-server/target/thunderduck-connect-server-0.1.0-SNAPSHOT.jar"
 
     def is_port_available(self) -> bool:
         """Check if the port is available"""

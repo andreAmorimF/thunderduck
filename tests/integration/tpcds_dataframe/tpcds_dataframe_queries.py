@@ -565,7 +565,7 @@ class TpcdsDataFrameQueries:
         item = spark.table("item")
 
         # First compute the average discount
-        avg_discount = (
+        avg_discount_val = (
             catalog_sales
             .join(date_dim, catalog_sales.cs_sold_date_sk == date_dim.d_date_sk)
             .filter(
@@ -577,11 +577,12 @@ class TpcdsDataFrameQueries:
             .agg(spark_avg("cs_ext_discount_amt").alias("avg_disc"))
             .collect()[0]["avg_disc"]
         )
+        avg_discount = float(avg_discount_val) if avg_discount_val is not None else 0.0
 
         # Now compute excess discount
         result = (
             catalog_sales
-            .filter(catalog_sales.cs_ext_discount_amt > lit(1.3 * float(avg_discount)))
+            .filter(catalog_sales.cs_ext_discount_amt > lit(1.3 * avg_discount))
             .join(item, catalog_sales.cs_item_sk == item.i_item_sk)
             .filter(item.i_manufact_id == 977)
             .join(date_dim, catalog_sales.cs_sold_date_sk == date_dim.d_date_sk)
@@ -1230,7 +1231,7 @@ class TpcdsDataFrameQueries:
         date_dim = spark.table("date_dim")
 
         # First compute the average discount
-        avg_discount = (
+        avg_discount_val = (
             web_sales
             .join(date_dim, web_sales.ws_sold_date_sk == date_dim.d_date_sk)
             .filter(
@@ -1241,11 +1242,12 @@ class TpcdsDataFrameQueries:
             .agg(spark_avg("ws_ext_discount_amt").alias("avg_disc"))
             .collect()[0]["avg_disc"]
         )
+        avg_discount = float(avg_discount_val) if avg_discount_val is not None else 0.0
 
         # Now compute excess discount
         result = (
             web_sales
-            .filter(web_sales.ws_ext_discount_amt > lit(1.3 * float(avg_discount)))
+            .filter(web_sales.ws_ext_discount_amt > lit(1.3 * avg_discount))
             .join(item, web_sales.ws_item_sk == item.i_item_sk)
             .filter(item.i_manufact_id == 350)
             .join(date_dim, web_sales.ws_sold_date_sk == date_dim.d_date_sk)
