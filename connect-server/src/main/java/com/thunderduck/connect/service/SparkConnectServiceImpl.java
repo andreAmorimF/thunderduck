@@ -299,22 +299,6 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     timing.stopSqlGenerate();
                     logger.info("Generated SQL from plan: {}", generatedSQL);
 
-                    // In strict mode, fix decimal precision for complex aggregate expressions
-                    // The logical schema from Java type inference may have DuckDB's intermediate
-                    // precision (e.g., DECIMAL(28,4)) instead of Spark's expected precision (DECIMAL(38,4)).
-                    // This correction ensures SchemaCorrectedBatchIterator promotes Arrow output correctly.
-                    if (SparkCompatMode.isStrictMode() && logicalSchema != null) {
-                        logicalSchema = fixCountNullable(generatedSQL, logicalSchema);
-                        logicalSchema = fixDecimalPrecisionForComplexAggregates(generatedSQL, logicalSchema);
-
-                        // Fix DECIMAL->DOUBLE mismatch at the SQL level:
-                        // When PySpark uses F.lit(100.00) or / 7.0, the logical schema says DOUBLE,
-                        // but DuckDB treats 100.0 as DECIMAL and returns DECIMAL.
-                        // Instead of converting Arrow vectors row-by-row, we add CAST(... AS DOUBLE)
-                        // in the SQL so DuckDB does the conversion natively.
-                        generatedSQL = fixDecimalToDoubleCasts(generatedSQL, logicalSchema, session.getSessionId());
-                    }
-
                     // Check if this is a Tail plan - use TailBatchIterator wrapper
                     if (logicalPlan instanceof Tail) {
                         Tail tailPlan = (Tail) logicalPlan;
@@ -727,25 +711,19 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         schema = inferSchemaFromDuckDB(sql, sessionId);
 
                     } else {
-                        // Regular plan - convert to SQL and infer schema from DuckDB
-                        // This ensures correct types for aggregate functions (collect_list, countDistinct, etc.)
-                        // whose return types depend on DuckDB execution, not static type inference.
+                        // Regular plan - use logical plan's inferred schema directly.
+                        // The logical plan's inferSchema() computes Spark-compatible types
+                        // via TypeInferenceEngine, including correct nullable flags, DOUBLE
+                        // return types for AVG, and DECIMAL precision for aggregates.
                         LogicalPlan logicalPlan = createPlanConverter(session).convert(plan);
-                        sql = sqlGenerator.generate(logicalPlan);
                         com.thunderduck.types.StructType logicalSchema = logicalPlan.schema();
 
-                        // NOTE: preprocessSQL() is NOT called on the DataFrame path (schema analysis).
-                        // All transformations are handled at the AST layer by SQLGenerator.
-                        com.thunderduck.types.StructType duckDBSchema = inferSchemaFromDuckDB(sql, sessionId);
-
-                        if (SparkCompatMode.isRelaxedMode()) {
-                            // Relaxed mode: use DuckDB's actual types as-is
-                            schema = duckDBSchema;
+                        if (logicalSchema != null && logicalSchema.size() > 0) {
+                            schema = logicalSchema;
                         } else {
-                            // Strict mode: merge nullable from logical plan, fix decimal precision
-                            schema = mergeNullableOnly(duckDBSchema, logicalSchema);
-                            schema = fixCountNullable(sql, schema);
-                            schema = fixDecimalPrecisionForComplexAggregates(sql, schema);
+                            // Fallback: infer from DuckDB if logical schema is unavailable
+                            sql = sqlGenerator.generate(logicalPlan);
+                            schema = inferSchemaFromDuckDB(sql, sessionId);
                         }
                     }
 
@@ -889,7 +867,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         // spark_sum returns DECIMAL(min(p+10,38), s) for decimal input, BIGINT for integer input
         // spark_avg returns DECIMAL(min(p+4,38), min(s+4,18)) for decimal input
         // This matches Spark's type semantics exactly
-        // Column naming (spark_sum -> sum) is handled by normalizeAggregateColumnName in schema layer
+        // Column naming (spark_sum -> sum) is handled by normalizeAggregateColumnName in inferSchemaFromDuckDB
         if (SparkCompatMode.isStrictMode()) {
             sql = sql.replaceAll("(?i)\\bSUM\\s*\\(", "spark_sum(");
             sql = sql.replaceAll("(?i)\\bAVG\\s*\\(", "spark_avg(");
@@ -2192,7 +2170,8 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             java.util.List<com.thunderduck.types.StructField> fields = new java.util.ArrayList<>();
             for (org.apache.arrow.vector.types.pojo.Field arrowField : arrowSchema.getFields()) {
                 com.thunderduck.types.DataType fieldType = convertArrowFieldToDataType(arrowField);
-                // In strict mode, normalize column names: spark_sum -> sum, spark_avg -> avg
+                // Normalize column names for raw SQL path: spark_sum -> sum, spark_avg -> avg
+                // (DataFrame path uses AS aliases instead, but raw SQL still needs this)
                 String colName = normalizeAggregateColumnName(arrowField.getName());
                 fields.add(new com.thunderduck.types.StructField(
                     colName,

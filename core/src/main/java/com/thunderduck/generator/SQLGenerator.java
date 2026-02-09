@@ -1067,6 +1067,14 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             throw new IllegalArgumentException("Cannot generate SQL for aggregation with no aggregate expressions");
         }
 
+        // Resolve child schema once for type-aware SQL generation
+        com.thunderduck.types.StructType childSchema = null;
+        try {
+            childSchema = plan.child().schema();
+        } catch (Exception e) {
+            // Child schema resolution failed — proceed without type-aware corrections
+        }
+
         // SELECT clause with grouping expressions and aggregates
         sql.append("SELECT ");
 
@@ -1080,8 +1088,11 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // Add aggregate expressions
         for (Aggregate.AggregateExpression aggExpr : plan.aggregateExpressions()) {
             String aggSQL;
+            String originalSQL = null; // Captures pre-transformation SQL for auto-aliasing
 
             if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
+                // Capture original SQL before strict mode transformation
+                originalSQL = aggExpr.rawExpression().toSQL();
                 // Transform aggregate function names in the AST, then render
                 com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression());
                 aggSQL = transformed.toSQL();
@@ -1093,21 +1104,35 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                     baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
                 }
 
-                if (baseFuncName.equals("SUM")) {
-                    aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
-                } else if (baseFuncName.equals("AVG")) {
-                    aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
+                if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
+                    // Capture original SQL before replacing function name
+                    originalSQL = aggSQL;
+                    if (baseFuncName.equals("SUM")) {
+                        aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
+                    } else {
+                        aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
+                    }
                 }
             } else {
                 aggSQL = aggExpr.toSQL();
             }
 
+            // Wrap with CAST(... AS DOUBLE) if Spark expects DOUBLE but DuckDB would return DECIMAL.
+            // This happens with composite aggregates like SUM(x) / 7.0 where Spark's type coercion
+            // promotes to DOUBLE, but DuckDB treats 7.0 as DECIMAL and returns DECIMAL.
+            aggSQL = wrapWithTypeCastIfNeeded(aggSQL, aggExpr, childSchema);
+
             // Add alias if provided, or auto-alias unaliased count(*) as "count(1)"
-            // to match Spark's column naming convention
+            // to match Spark's column naming convention.
+            // In strict mode, also alias transformed functions (spark_sum -> SUM) so
+            // DuckDB returns the original Spark-expected column name.
             if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
                 aggSQL += " AS " + SQLQuoting.quoteIdentifier(aggExpr.alias());
             } else if (aggExpr.isUnaliasedCountStar()) {
                 aggSQL += " AS \"count(1)\"";
+            } else if (originalSQL != null) {
+                // Strict mode transformed the function name — alias back to original
+                aggSQL += " AS " + SQLQuoting.quoteIdentifier(originalSQL);
             }
             selectExprs.add(aggSQL);
         }
@@ -1205,6 +1230,46 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         }
         // Literals, columns, etc. -- no transformation needed
         return expr;
+    }
+
+    /**
+     * Wraps an aggregate expression SQL with a CAST if DuckDB's return type would differ from
+     * Spark's expected type. Handles two cases:
+     * <ul>
+     *   <li>DOUBLE: composite aggregates like {@code SUM(x) / 7.0} where Spark promotes to DOUBLE
+     *       but DuckDB treats 7.0 as DECIMAL</li>
+     *   <li>DECIMAL precision: composite aggregates like {@code SUM(a * b)} where DuckDB's
+     *       intermediate precision differs from Spark's DECIMAL(38,s)</li>
+     * </ul>
+     *
+     * @param aggSQL the aggregate expression SQL
+     * @param aggExpr the aggregate expression
+     * @param childSchema the child schema for resolving argument types (may be null)
+     * @return the SQL, possibly wrapped with CAST
+     */
+    public static String wrapWithTypeCastIfNeeded(String aggSQL, Aggregate.AggregateExpression aggExpr,
+                                                      com.thunderduck.types.StructType childSchema) {
+        // Only composite aggregates need type correction CASTs.
+        // Simple aggregates (SUM, AVG, COUNT, etc.) return the correct type natively
+        // in DuckDB, or are handled by extension functions (spark_sum, spark_avg).
+        // Composite aggregates (e.g., SUM(a) / 7.0, SUM(a * b)) can have type
+        // mismatches because DuckDB's type promotion differs from Spark's.
+        if (!aggExpr.isComposite() || childSchema == null) return aggSQL;
+
+        com.thunderduck.types.DataType sparkType =
+            com.thunderduck.types.TypeInferenceEngine.resolveType(aggExpr.rawExpression(), childSchema);
+
+        if (sparkType instanceof com.thunderduck.types.DoubleType) {
+            return "CAST(" + aggSQL + " AS DOUBLE)";
+        }
+
+        // For composite aggregates with DECIMAL type, ensure correct precision.
+        // DuckDB's intermediate precision may differ from Spark's (e.g., DECIMAL(28,4) vs DECIMAL(38,4)).
+        if (sparkType instanceof com.thunderduck.types.DecimalType decType) {
+            return "CAST(" + aggSQL + " AS DECIMAL(" + decType.precision() + ", " + decType.scale() + "))";
+        }
+
+        return aggSQL;
     }
 
     /**

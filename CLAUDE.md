@@ -36,6 +36,21 @@ When given a bug report: just fix it. Point at logs, errors, failing tests, then
 **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 
+## SQL Generation Architecture Principles
+
+These are non-negotiable constraints governing all SQL generation and type handling:
+
+1. **All SQL and expression snippets MUST be parsed into a typed AST.** No string manipulation on SQL text.
+2. **Zero pre/post-processing of SQL strings.** All transformations happen on the AST.
+3. **SparkSQL data flow**: Spark SQL string -> ANTLR parse tree -> Thunderduck expression tree -> `SQLGenerator.generate()` -> SQL string for DuckDB.
+4. **DataFrame data flow**: Spark Connect protobuf -> Thunderduck expression tree -> `SQLGenerator.generate()` -> SQL string for DuckDB.
+5. **Relaxed mode**: Best performance mapping to vanilla DuckDB constructs producing value-equivalent results (type equivalence not required).
+6. **Strict mode**: Match Apache Spark exactly via (a) CASTs at top-level SELECT projection, or (b) DuckDB extension functions. No casts on intermediate values.
+7. **Minimal result-set adjustments**: No or minimal type/nullability adjustments when retrieving streaming results in strict mode.
+8. **Zero result copying**: Strict mode achieves 100% type matching at SQL generation time using extension functions + AS aliases. No Arrow vector copying or rewriting.
+
+**Implementation status (Phase 2 complete)**: DataFrame path no longer calls `preprocessSQL()`. Extension functions emit `AS` aliases for correct column naming. `SchemaCorrectedBatchIterator` is zero-copy (nullable flags only). Schema analysis uses `plan.inferSchema()` directly. Remaining work: SparkSQL parser completion (Phase 3) and dead code deletion (Phase 4).
+
 ## Architecture Quick-Reference
 
 ### Key Classes and Their Responsibilities

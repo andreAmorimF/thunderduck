@@ -2,14 +2,12 @@ package com.thunderduck.runtime;
 
 import com.thunderduck.types.ArrayType;
 import com.thunderduck.types.DataType;
-import com.thunderduck.types.DoubleType;
 import com.thunderduck.types.MapType;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -21,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Wrapping iterator that corrects nullable flags in Arrow schema.
+ * Wrapping iterator that corrects nullable flags in Arrow schema metadata.
  *
  * <p>DuckDB returns all columns as nullable=true in Arrow output, but Spark has
  * specific nullable semantics:
@@ -31,20 +29,8 @@ import java.util.List;
  *   <li>Column references inherit nullable from source schema</li>
  * </ul>
  *
- * <p>This wrapper corrects the Arrow schema nullable flags to match the logical
- * plan's schema, ensuring Spark-compatible type information.
- *
- * <p>Example:
- * <pre>{@code
- * StructType logicalSchema = logicalPlan.schema();  // Has correct nullable
- * try (ArrowBatchIterator source = executor.executeStreaming(sql);
- *      ArrowBatchIterator corrected = new SchemaCorrectedBatchIterator(source, logicalSchema)) {
- *     while (corrected.hasNext()) {
- *         VectorSchemaRoot batch = corrected.next();
- *         // batch.getSchema() now has correct nullable flags
- *     }
- * }
- * }</pre>
+ * <p>This wrapper uses zero-copy: it reuses the source batch's Arrow vectors directly,
+ * only correcting the schema metadata (nullable flags). No data is copied.
  */
 public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
 
@@ -64,7 +50,7 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
      *
      * @param source the source Arrow batch iterator (typically from DuckDB)
      * @param logicalSchema the logical plan schema with correct nullable flags
-     * @param allocator the Arrow allocator to use (should share root with source's allocator)
+     * @param allocator the Arrow allocator (retained for API compatibility but not used for copying)
      */
     public SchemaCorrectedBatchIterator(ArrowBatchIterator source, StructType logicalSchema,
                                         BufferAllocator allocator) {
@@ -103,8 +89,8 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
             logger.debug("Built corrected schema with {} fields", correctedSchema.getFields().size());
         }
 
-        // Copy data to new root with corrected schema
-        VectorSchemaRoot corrected = copyWithCorrectedSchema(duckdbRoot);
+        // Zero-copy: wrap existing vectors with corrected schema metadata
+        VectorSchemaRoot corrected = wrapWithCorrectedSchema(duckdbRoot);
         totalRowCount += corrected.getRowCount();
         batchCount++;
 
@@ -132,27 +118,12 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
                 logicalType = field.dataType();
             }
 
-            // Normalize column names: spark_sum -> sum, spark_avg -> avg
-            // This ensures columns named by extension functions match Spark's naming conventions
-            String normalizedName = normalizeAggregateColumnName(duckField.getName());
-            Field nameFixedField = normalizedName.equals(duckField.getName())
-                ? duckField
-                : new Field(normalizedName, duckField.getFieldType(), duckField.getChildren());
-
             // Correct the field including children for complex types
-            Field correctedField = correctField(nameFixedField, nullable, logicalType);
+            Field correctedField = correctField(duckField, nullable, logicalType);
             correctedFields.add(correctedField);
         }
 
         return new Schema(correctedFields, duckdbSchema.getCustomMetadata());
-    }
-
-    /**
-     * Normalizes column names that contain extension function names back to standard SQL names.
-     */
-    private String normalizeAggregateColumnName(String name) {
-        if (name == null) return name;
-        return name.replace("spark_sum(", "sum(").replace("spark_avg(", "avg(");
     }
 
     /**
@@ -226,32 +197,9 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
             correctedChildren = originalChildren;
         }
 
-        // Correct nullable flag and potentially type conversions
-        ArrowType correctedType = arrowField.getType();
-
-        // When logical schema specifies a different Decimal precision, use it
-        // This handles cases where DuckDB's intermediate expression precision differs from Spark's
-        // (e.g., spark_sum of multiplication: DuckDB DECIMAL(28,4) vs Spark DECIMAL(38,4))
-        // Both use Decimal128 (16 bytes), so changing precision is metadata-only
-        if (logicalType instanceof com.thunderduck.types.DecimalType
-            && arrowField.getType() instanceof ArrowType.Decimal) {
-            com.thunderduck.types.DecimalType logicalDecimal = (com.thunderduck.types.DecimalType) logicalType;
-            ArrowType.Decimal arrowDecimal = (ArrowType.Decimal) arrowField.getType();
-
-            // Only promote precision upward (never narrow) and only when scale matches
-            if (logicalDecimal.precision() > arrowDecimal.getPrecision()
-                && logicalDecimal.scale() == arrowDecimal.getScale()) {
-                correctedType = new ArrowType.Decimal(
-                    logicalDecimal.precision(),
-                    logicalDecimal.scale(),
-                    arrowDecimal.getBitWidth()
-                );
-            }
-        }
-
         FieldType fieldType = new FieldType(
             nullable,
-            correctedType,
+            arrowField.getType(),
             arrowField.getDictionary(),
             arrowField.getMetadata()
         );
@@ -259,37 +207,15 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
     }
 
     /**
-     * Copies batch data to a new VectorSchemaRoot with the corrected schema.
-     *
-     * <p>The corrected schema only differs in nullable flags (not types), so
-     * splitAndTransfer always works. If DuckDB's vector type doesn't match the
-     * corrected schema's type (shouldn't happen), logs a warning and transfers as-is.
+     * Zero-copy wrapping: creates a new VectorSchemaRoot that references the same
+     * underlying Arrow buffers but with the corrected schema metadata.
      *
      * @param source the source batch from DuckDB
-     * @return a new batch with the corrected schema
+     * @return a new VectorSchemaRoot with corrected schema, sharing the same data buffers
      */
-    private VectorSchemaRoot copyWithCorrectedSchema(VectorSchemaRoot source) {
-        VectorSchemaRoot corrected = VectorSchemaRoot.create(correctedSchema, allocator);
-        int rowCount = source.getRowCount();
-
-        for (int col = 0; col < source.getFieldVectors().size(); col++) {
-            FieldVector srcVector = source.getVector(col);
-            FieldVector dstVector = corrected.getVector(col);
-
-            if (!srcVector.getClass().equals(dstVector.getClass())) {
-                // Type mismatch — should not happen (we only correct nullable flags now).
-                // Log and keep DuckDB's data rather than crashing.
-                logger.warn("Type mismatch at column {}: DuckDB={} vs schema={}. Keeping DuckDB's type.",
-                    col, srcVector.getClass().getSimpleName(), dstVector.getClass().getSimpleName());
-                // Close the mismatched dst vector and just transfer src as-is
-                // by rebuilding the corrected root after the loop
-            }
-
-            srcVector.makeTransferPair(dstVector).splitAndTransfer(0, rowCount);
-        }
-
-        corrected.setRowCount(rowCount);
-        return corrected;
+    private VectorSchemaRoot wrapWithCorrectedSchema(VectorSchemaRoot source) {
+        List<FieldVector> vectors = source.getFieldVectors();
+        return new VectorSchemaRoot(correctedSchema.getFields(), vectors, source.getRowCount());
     }
 
     @Override
@@ -324,8 +250,6 @@ public class SchemaCorrectedBatchIterator implements ArrowBatchIterator {
         } catch (Exception e) {
             logger.warn("Error closing source iterator", e);
         }
-
-        // Note: allocator is not closed here as it's owned externally
 
         logger.debug("SchemaCorrectedBatchIterator closed: {} batches, {} rows",
             batchCount, totalRowCount);

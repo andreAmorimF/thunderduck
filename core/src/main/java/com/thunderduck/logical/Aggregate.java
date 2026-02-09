@@ -144,6 +144,14 @@ public final class Aggregate extends LogicalPlan {
 
         StringBuilder sql = new StringBuilder();
 
+        // Resolve child schema once for type-aware SQL generation
+        StructType childSchema = null;
+        try {
+            childSchema = child().schema();
+        } catch (Exception e) {
+            // Child schema resolution failed — proceed without type-aware corrections
+        }
+
         // SELECT clause with grouping expressions and aggregates
         sql.append("SELECT ");
 
@@ -157,8 +165,11 @@ public final class Aggregate extends LogicalPlan {
         // Add aggregate expressions
         for (AggregateExpression aggExpr : aggregateExpressions) {
             String aggSQL;
+            String originalSQL = null; // Captures pre-transformation SQL for auto-aliasing
 
             if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
+                // Capture original SQL before strict mode transformation
+                originalSQL = aggExpr.rawExpression().toSQL();
                 // Transform aggregate function names in the AST, then render
                 Expression transformed = com.thunderduck.generator.SQLGenerator.transformAggregateExpression(aggExpr.rawExpression());
                 aggSQL = transformed.toSQL();
@@ -170,21 +181,33 @@ public final class Aggregate extends LogicalPlan {
                     baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
                 }
 
-                if (baseFuncName.equals("SUM")) {
-                    aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
-                } else if (baseFuncName.equals("AVG")) {
-                    aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
+                if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
+                    // Capture original SQL before replacing function name
+                    originalSQL = aggSQL;
+                    if (baseFuncName.equals("SUM")) {
+                        aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
+                    } else {
+                        aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
+                    }
                 }
             } else {
                 aggSQL = aggExpr.toSQL();
             }
 
+            // Wrap with CAST(... AS DOUBLE) if Spark expects DOUBLE but DuckDB returns DECIMAL
+            aggSQL = wrapWithTypeCastIfNeeded(aggSQL, aggExpr, childSchema);
+
             // Add alias if provided, or auto-alias unaliased count(*) as "count(1)"
-            // to match Spark's column naming convention
+            // to match Spark's column naming convention.
+            // In strict mode, also alias transformed functions (spark_sum -> SUM) so
+            // DuckDB returns the original Spark-expected column name.
             if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
                 aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(aggExpr.alias());
             } else if (aggExpr.isUnaliasedCountStar()) {
                 aggSQL += " AS \"count(1)\"";
+            } else if (originalSQL != null) {
+                // Strict mode transformed the function name — alias back to original
+                aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(originalSQL);
             }
             selectExprs.add(aggSQL);
         }
@@ -278,6 +301,15 @@ public final class Aggregate extends LogicalPlan {
         }
 
         return new StructType(fields);
+    }
+
+    /**
+     * Wraps an aggregate expression SQL with a CAST if DuckDB's return type would differ from
+     * Spark's expected type. Delegates to SQLGenerator's shared implementation.
+     */
+    private static String wrapWithTypeCastIfNeeded(String aggSQL, AggregateExpression aggExpr,
+                                                      StructType childSchema) {
+        return com.thunderduck.generator.SQLGenerator.wrapWithTypeCastIfNeeded(aggSQL, aggExpr, childSchema);
     }
 
     /**
