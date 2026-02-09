@@ -917,30 +917,39 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         // Handle COUNT(*)
         if (funcName.equalsIgnoreCase("count") && args.isEmpty() &&
             ctx.argument.isEmpty() && ctx.getText().contains("*")) {
-            // count(*) - no arguments means it was count(*)
-            return new RawSQLExpression("count(*)");
+            // count(*) - use Literal("*") as the argument for proper AST representation
+            args = List.of(new RawSQLExpression("*"));
         }
 
-        // Build function call SQL
-        StringBuilder sql = new StringBuilder();
-        sql.append(funcName).append("(");
-        if (isDistinct) {
-            sql.append("DISTINCT ");
+        boolean hasFilter = ctx.where != null;
+        boolean hasWithinGroup = ctx.sortItem() != null && !ctx.sortItem().isEmpty();
+        boolean hasWindow = ctx.windowSpec() != null;
+        boolean hasNullsOption = ctx.nullsOption != null;
+        boolean hasModifiers = hasFilter || hasWithinGroup || hasWindow || hasNullsOption;
+
+        // Simple case: no modifiers — return a proper FunctionCall AST node.
+        // This enables proper name translation via FunctionRegistry.translate() and
+        // preserves type information for downstream consumers.
+        if (!hasModifiers) {
+            return new FunctionCall(funcName, args,
+                UnresolvedType.expressionString(), true, isDistinct);
         }
-        for (int i = 0; i < args.size(); i++) {
-            if (i > 0) sql.append(", ");
-            sql.append(args.get(i).toSQL());
-        }
-        sql.append(")");
+
+        // Complex case: function has SQL modifiers (FILTER, OVER, WITHIN GROUP, NULLS).
+        // Build the base function call via FunctionCall.toSQL() for proper name translation,
+        // then append modifiers and wrap in RawSQLExpression.
+        FunctionCall baseCall = new FunctionCall(funcName, args,
+            UnresolvedType.expressionString(), true, isDistinct);
+        StringBuilder sql = new StringBuilder(baseCall.toSQL());
 
         // Handle FILTER clause
-        if (ctx.where != null) {
+        if (hasFilter) {
             Expression filterExpr = visitBooleanExpr(ctx.where);
             sql.append(" FILTER (WHERE ").append(filterExpr.toSQL()).append(")");
         }
 
         // Handle WITHIN GROUP
-        if (ctx.sortItem() != null && !ctx.sortItem().isEmpty()) {
+        if (hasWithinGroup) {
             sql.append(" WITHIN GROUP (ORDER BY ");
             for (int i = 0; i < ctx.sortItem().size(); i++) {
                 if (i > 0) sql.append(", ");
@@ -956,13 +965,13 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         }
 
         // Handle OVER (window function)
-        if (ctx.windowSpec() != null) {
+        if (hasWindow) {
             sql.append(" OVER ");
             sql.append(buildWindowSpec(ctx.windowSpec()));
         }
 
         // Handle IGNORE NULLS / RESPECT NULLS
-        if (ctx.nullsOption != null) {
+        if (hasNullsOption) {
             sql.append(" ");
             sql.append(ctx.nullsOption.getText().toUpperCase());
             sql.append(" NULLS");

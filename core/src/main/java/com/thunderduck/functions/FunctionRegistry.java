@@ -72,6 +72,22 @@ public class FunctionRegistry {
     }
 
     /**
+     * Resolves a Spark function name to its DuckDB equivalent.
+     *
+     * <p>Checks DIRECT_MAPPINGS only. Returns the original name if no mapping exists.
+     * This is useful when callers need the DuckDB function name without building the
+     * full function call (e.g., for DISTINCT handling).
+     *
+     * @param functionName the Spark function name
+     * @return the DuckDB function name, or the original name if not mapped
+     */
+    public static String resolveName(String functionName) {
+        String normalizedName = functionName.toLowerCase();
+        String duckdbName = DIRECT_MAPPINGS.get(normalizedName);
+        return duckdbName != null ? duckdbName : functionName;
+    }
+
+    /**
      * Rewrites SQL expression strings by replacing Spark function names with DuckDB equivalents.
      *
      * <p>This method performs regex-based function name translation for SQL expression strings.

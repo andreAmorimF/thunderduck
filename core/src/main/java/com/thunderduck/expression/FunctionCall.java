@@ -30,6 +30,7 @@ public final class FunctionCall implements Expression {
     private final List<Expression> arguments;
     private final DataType dataType;
     private final boolean nullable;
+    private final boolean distinct;
 
     /**
      * Creates a function call expression.
@@ -38,9 +39,10 @@ public final class FunctionCall implements Expression {
      * @param arguments the function arguments
      * @param dataType the return data type
      * @param nullable whether the result can be null
+     * @param distinct whether DISTINCT is applied to arguments
      */
     public FunctionCall(String functionName, List<Expression> arguments,
-                       DataType dataType, boolean nullable) {
+                       DataType dataType, boolean nullable, boolean distinct) {
         this.functionName = Objects.requireNonNull(functionName, "functionName must not be null");
         if (this.functionName.trim().isEmpty()) {
             throw new IllegalArgumentException("functionName must not be empty");
@@ -48,6 +50,20 @@ public final class FunctionCall implements Expression {
         this.arguments = new ArrayList<>(Objects.requireNonNull(arguments, "arguments must not be null"));
         this.dataType = Objects.requireNonNull(dataType, "dataType must not be null");
         this.nullable = nullable;
+        this.distinct = distinct;
+    }
+
+    /**
+     * Creates a function call expression (non-distinct).
+     *
+     * @param functionName the function name (Spark SQL)
+     * @param arguments the function arguments
+     * @param dataType the return data type
+     * @param nullable whether the result can be null
+     */
+    public FunctionCall(String functionName, List<Expression> arguments,
+                       DataType dataType, boolean nullable) {
+        this(functionName, arguments, dataType, nullable, false);
     }
 
     /**
@@ -86,6 +102,15 @@ public final class FunctionCall implements Expression {
      */
     public int argumentCount() {
         return arguments.size();
+    }
+
+    /**
+     * Returns whether DISTINCT is applied to arguments.
+     *
+     * @return true if DISTINCT is applied
+     */
+    public boolean distinct() {
+        return distinct;
     }
 
     @Override
@@ -130,6 +155,15 @@ public final class FunctionCall implements Expression {
             effectiveName = "list_reverse";
         }
 
+        // DISTINCT is handled by building the SQL directly rather than going through
+        // FunctionRegistry.translate(), since DISTINCT only applies to standard aggregates
+        // where we control the output format (e.g., COUNT(DISTINCT x), SUM(DISTINCT x)).
+        if (distinct) {
+            String duckdbName = FunctionRegistry.resolveName(effectiveName);
+            String argsSQL = String.join(", ", argStrings);
+            return duckdbName + "(DISTINCT " + argsSQL + ")";
+        }
+
         // Translate using function registry
         try {
             return FunctionRegistry.translate(effectiveName, argStrings);
@@ -151,6 +185,7 @@ public final class FunctionCall implements Expression {
         if (!(obj instanceof FunctionCall)) return false;
         FunctionCall that = (FunctionCall) obj;
         return nullable == that.nullable &&
+               distinct == that.distinct &&
                Objects.equals(functionName, that.functionName) &&
                Objects.equals(arguments, that.arguments) &&
                Objects.equals(dataType, that.dataType);
@@ -158,7 +193,7 @@ public final class FunctionCall implements Expression {
 
     @Override
     public int hashCode() {
-        return Objects.hash(functionName, arguments, dataType, nullable);
+        return Objects.hash(functionName, arguments, dataType, nullable, distinct);
     }
 
     // ==================== Factory Methods ====================

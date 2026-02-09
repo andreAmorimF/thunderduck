@@ -822,12 +822,8 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
             logger.info("SparkSQL parser transformed: {} -> {}", sparkSQL, duckdbSQL);
 
             // Parser-generated SQL is already valid DuckDB SQL.
-            // Only apply strict-mode aggregate function replacements (spark_sum, spark_avg)
-            // Skip the destructive regex preprocessing (TRUNC, backtick, count renaming, etc.)
-            if (SparkCompatMode.isStrictMode()) {
-                duckdbSQL = duckdbSQL.replaceAll("(?i)\\bSUM\\s*\\(", "spark_sum(");
-                duckdbSQL = duckdbSQL.replaceAll("(?i)\\bAVG\\s*\\(", "spark_avg(");
-            }
+            // Strict-mode aggregate replacements (spark_sum, spark_avg) are handled by
+            // SQLGenerator.visitAggregate(), so no post-processing needed here.
             return duckdbSQL;
         } catch (Exception e) {
             // Parser failed - fall back to direct preprocessing (legacy path)
