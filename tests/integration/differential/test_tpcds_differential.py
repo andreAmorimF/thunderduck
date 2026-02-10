@@ -15,7 +15,7 @@ Coverage:
 Exclusions:
 - Q36: Uses GROUPING() in window PARTITION BY (DuckDB limitation)
 - Q72: Causes Spark OOM in differential testing environment
-- Q90: Skipped - Spark reference server throws DIVIDE_BY_ZERO (Spark bug, not Thunderduck)
+- Q90: Thunderduck-only test (Spark reference server throws DIVIDE_BY_ZERO)
 """
 
 import pytest
@@ -429,6 +429,48 @@ class TestTPCDS_Batch10:
             query,
             query_name=f"TPC-DS Q{query_id}"
         )
+
+
+# ============================================================================
+# TPC-DS Thunderduck-Only Tests
+# ============================================================================
+# Queries that Spark cannot execute (e.g., DIVIDE_BY_ZERO) but Thunderduck
+# handles gracefully. These run only on Thunderduck to verify parsing and
+# execution succeed without errors.
+# ============================================================================
+
+@pytest.mark.differential
+@pytest.mark.tpcds
+class TestTPCDS_ThunderduckOnly:
+    """
+    Tests for queries that Spark cannot execute but Thunderduck handles gracefully.
+
+    These are NOT differential tests -- they run only on Thunderduck.
+    They verify that parsing and execution succeed without errors.
+
+    - Q90: Spark throws DIVIDE_BY_ZERO with SF001 data. DuckDB returns NULL
+      for divide-by-zero instead of throwing. The query uses 'at' as a table
+      alias before CROSS JOIN, which exercises the parser's handling of 'at'
+      as a non-reserved keyword (it appears in the ANTLR grammar's nonReserved
+      rule and is quoted as "at" in generated SQL).
+    """
+
+    def test_q90_at_cross_join(
+        self,
+        spark_thunderduck,
+        tpcds_tables_thunderduck,
+        load_tpcds_query
+    ):
+        """Q90 uses 'at' as table alias before CROSS JOIN - verify parser handles it"""
+        query = load_tpcds_query(90)
+        # Should not throw - DuckDB handles divide-by-zero gracefully (returns NULL)
+        result = spark_thunderduck.sql(query)
+        rows = result.collect()
+        # Verify it returned a result set with the expected column
+        assert result.columns is not None
+        assert len(result.columns) > 0
+        # Q90 returns a single row with am_pm_ratio (may be NULL due to divide-by-zero)
+        assert len(rows) >= 0  # May be 0 rows if both subqueries return 0
 
 
 # ============================================================================

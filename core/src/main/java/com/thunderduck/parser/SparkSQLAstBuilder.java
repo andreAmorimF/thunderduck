@@ -219,8 +219,17 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         String quotedName = quoteIdentifierIfNeeded(tableName);
         LogicalPlan plan = new SQLRelation("SELECT * FROM " + quotedName);
 
-        // Apply table alias
+        // Apply table alias (explicit alias from SQL)
         plan = applyTableAlias(plan, ctx.tableAlias());
+
+        // If no explicit alias was applied, use the table name as an implicit alias.
+        // This preserves table name visibility in cross-join WHERE clauses, e.g.:
+        //   FROM web_sales, time_dim WHERE ws_sold_time_sk = time_dim.t_time_sk
+        // Without this, the SQLGenerator would assign "subquery_N" aliases and
+        // "time_dim.t_time_sk" would fail to resolve.
+        if (!(plan instanceof AliasedRelation)) {
+            plan = new AliasedRelation(plan, tableName, java.util.Collections.emptyList());
+        }
 
         return plan;
     }
@@ -290,7 +299,7 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
                 condition = Literal.of(true);
             }
         } else if (joinType == Join.JoinType.CROSS) {
-            condition = Literal.of(true);
+            condition = null;
         } else {
             condition = Literal.of(true);
         }
