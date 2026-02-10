@@ -110,7 +110,7 @@ Raw SQL (`spark.sql("SELECT ...")`) goes directly to DuckDB -- no logical plan, 
 
 5. **Maven -q flag hides errors**: When using `mvn -q`, build failures may show exit code 1 but no error details. Remove `-q` when debugging build failures.
 
-6. **Session-scoped test servers**: Test servers (port 15002/15003) are session-scoped -- started once, reused across all test classes. No automatic health checks or restarts between classes. If a server becomes unresponsive, subsequent test classes fail.
+6. **Session-scoped test servers**: Test servers are session-scoped -- started once on auto-allocated ports, reused across all test classes. Health checks run before each class-scoped session; unhealthy servers are auto-restarted. Cleanup is port-scoped (only kills our ports, safe for parallel runs).
 
 7. **Always clean build before testing**: Never test with a stale build. Always run `mvn clean package -DskipTests` before integration tests.
 
@@ -151,7 +151,7 @@ Key rules: Extension build is NOT part of default Maven lifecycle. Extension Duc
 
 **Error if missing**: `java.lang.RuntimeException: Failed to initialize MemoryUtil.`
 
-**Server cleanup**: Always kill server processes after tests: `pkill -9 -f java 2>/dev/null`
+**Server cleanup**: Pytest fixtures auto-cleanup on exit (port-scoped). Manual fallback: `pkill -9 -f java 2>/dev/null`
 
 > Full details: [docs/architect/PROTOBUF_AND_ARROW_CONFIGURATION.md](docs/architect/PROTOBUF_AND_ARROW_CONFIGURATION.md)
 
@@ -253,31 +253,36 @@ mvn -f /workspace/pom.xml test -pl tests -Dtest=TypeInferenceEngineTest  # singl
 
 ### Server Management
 
-Ports: Thunderduck = `15002`, Spark Reference = `15003` (configurable via `THUNDERDUCK_PORT` / `SPARK_PORT` env vars). Pytest fixtures auto-manage servers.
+Ports are **auto-allocated** from the OS by default. Override with `THUNDERDUCK_PORT` / `SPARK_PORT` env vars if needed. Pytest fixtures auto-manage server lifecycle. Cleanup is port-scoped (only kills processes on allocated ports, not all Java processes).
 
 ```bash
-pkill -9 -f java 2>/dev/null          # kill all servers
+pkill -9 -f java 2>/dev/null          # kill all servers (manual, use sparingly)
 pkill -9 -f thunderduck-connect-server # kill Thunderduck only
 ```
 
 ### Parallel Test Runs
 
-Server ports are configurable via `THUNDERDUCK_PORT` and `SPARK_PORT` env vars (defaults: 15002/15003). This allows running multiple differential test suites in parallel on separate port pairs — useful for worktree-based development or testing different branches simultaneously.
+Parallel runs work **automatically** — no manual port configuration needed. Each `pytest` invocation auto-allocates free ports from the OS, and cleanup only kills its own servers (not other sessions').
 
 ```bash
-# Terminal 1 — default ports (15002/15003)
+# Terminal 1 — auto-allocated ports
 cd /workspace/tests/integration && \
   THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true COLLECT_TIMEOUT=30 \
   python3 -m pytest differential/ -v --tb=short
 
-# Terminal 2 — custom ports (15012/15013), different worktree
+# Terminal 2 — auto-allocated ports (different worktree, same command)
 cd /workspace2/tests/integration && \
+  THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true COLLECT_TIMEOUT=30 \
+  python3 -m pytest differential/ -v --tb=short
+
+# Explicit ports still work if needed
+cd /workspace/tests/integration && \
   THUNDERDUCK_PORT=15012 SPARK_PORT=15013 \
   THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true COLLECT_TIMEOUT=30 \
   python3 -m pytest differential/ -v --tb=short
 ```
 
-**Rules**: Each parallel run needs a unique port pair. Both env vars must be set together to avoid port conflicts. Each worktree needs its own build (`mvn clean package`).
+**Rules**: Each worktree needs its own build (`mvn clean package`). When env vars are not set, ports are auto-allocated. When set, they override auto-allocation.
 
 ### Change-and-Test Workflow
 
@@ -298,4 +303,4 @@ pkill -9 -f java 2>/dev/null
 | Test conftest | `tests/integration/conftest.py` |
 | DataFrame diff util | `tests/integration/utils/dataframe_diff.py` |
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-02-10

@@ -158,13 +158,16 @@ class DualServerManager:
 
         if script_path.exists():
             try:
+                env = os.environ.copy()
+                env['SPARK_PORT'] = str(self.spark_reference_port)
                 subprocess.run(
                     [str(script_path)],
                     cwd=str(self.workspace_dir),
                     capture_output=True,
-                    timeout=30
+                    timeout=30,
+                    env=env
                 )
-                print("✓ Spark Connect reference server stopped")
+                print(f"✓ Spark Connect reference server stopped (port {self.spark_reference_port})")
             except Exception as e:
                 print(f"Warning: Error stopping Spark Connect server: {e}")
 

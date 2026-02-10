@@ -19,27 +19,48 @@ sys.path.insert(0, str(Path(__file__).parent / "utils"))
 
 
 # ------------------------------------------------------------------------------
-# Global cleanup functions for handling interrupts
+# Port allocation and port-scoped cleanup
 # ------------------------------------------------------------------------------
 
-def kill_all_servers():
-    """Kill any running Spark/Thunderduck server processes"""
-    # Kill Spark Connect server
-    subprocess.run(
-        ["pkill", "-9", "-f", "org.apache.spark.sql.connect.service.SparkConnectServer"],
-        capture_output=True
-    )
-    # Kill Thunderduck server
-    subprocess.run(
-        ["pkill", "-9", "-f", "thunderduck-connect-server"],
-        capture_output=True
-    )
+# Track allocated ports for cleanup on exit/signal (set by dual_server_manager fixture)
+_allocated_ports = set()
+
+
+def _allocate_free_port():
+    """Get a free port from the OS."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('localhost', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def _kill_process_on_port(port):
+    """Kill the process listening on a specific port (our process only)."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True
+        )
+        for pid in result.stdout.strip().split('\n'):
+            if pid:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, ValueError):
+                    pass
+    except Exception:
+        pass
+
+
+def _cleanup_allocated_ports():
+    """Kill processes on all ports allocated by this test session."""
+    for port in _allocated_ports:
+        _kill_process_on_port(port)
 
 
 def signal_handler(signum, frame):
     """Handle interrupt signals"""
-    print(f"\n\nReceived signal {signum}, cleaning up servers...")
-    kill_all_servers()
+    print(f"\n\nReceived signal {signum}, cleaning up servers on ports {_allocated_ports}...")
+    _cleanup_allocated_ports()
     sys.exit(1)
 
 
@@ -48,7 +69,45 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 # Register atexit handler as fallback
-atexit.register(kill_all_servers)
+atexit.register(_cleanup_allocated_ports)
+
+
+def _release_session_without_shutdown(session):
+    """
+    Release a SparkSession without shutting down the global thread pool.
+
+    PySpark's session.stop() calls ExecutePlanResponseReattachableIterator.shutdown()
+    which destroys the process-global ThreadPoolExecutor shared by ALL sessions.
+    shutdown(wait=True) blocks until all pending ReleaseExecute RPCs complete —
+    if any target an unresponsive server, it blocks forever while holding a
+    class-level RLock. This deadlocks all subsequent sessions in the process.
+
+    This function does the essential cleanup (release server session + close
+    gRPC channel) WITHOUT touching the shared thread pool. It also neutralizes
+    the session's __del__ so the GC can't trigger shutdown() later.
+    """
+    try:
+        if hasattr(session, 'client') and not session.client.is_closed:
+            # Tell the server to release this session's resources
+            try:
+                session.client.release_session()
+            except Exception:
+                pass
+            # Close the gRPC channel directly, bypassing shutdown()
+            try:
+                session.client._channel.close()
+                session.client._closed = True
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Neutralize __del__ so GC can't trigger the shutdown() deadlock.
+    # Replace the close() method on this specific client instance with a no-op.
+    try:
+        session.client.close = lambda: None
+    except Exception:
+        pass
 
 
 def stop_spark_with_timeout(spark, timeout=10):
@@ -499,17 +558,29 @@ def dual_server_manager():
     Session-scoped fixture that starts both servers for differential testing.
 
     Starts:
-    - Apache Spark Connect 4.0.1 (reference) on port 15003 (native installation)
-    - Thunderduck Connect (test) on port 15002
+    - Apache Spark Connect 4.0.1 (reference) on SPARK_PORT or auto-allocated port
+    - Thunderduck Connect (test) on THUNDERDUCK_PORT or auto-allocated port
+
+    When env vars are not set, ports are auto-allocated from the OS, enabling
+    parallel test runs without manual port configuration.
 
     Both servers are started fresh and killed on teardown (even on interrupt).
     """
-    # Kill any existing servers first to ensure clean slate
-    kill_all_servers()
+    global _allocated_ports
 
     compat_mode = os.environ.get('THUNDERDUCK_COMPAT_MODE', None)
-    td_port = int(os.environ.get('THUNDERDUCK_PORT', 15002))
-    spark_port = int(os.environ.get('SPARK_PORT', 15003))
+    td_port = int(os.environ.get('THUNDERDUCK_PORT', 0)) or _allocate_free_port()
+    spark_port = int(os.environ.get('SPARK_PORT', 0)) or _allocate_free_port()
+
+    # Register ports for signal/atexit cleanup
+    _allocated_ports.add(td_port)
+    _allocated_ports.add(spark_port)
+
+    # Kill only processes on our specific ports (not all Java processes)
+    _kill_process_on_port(td_port)
+    _kill_process_on_port(spark_port)
+    time.sleep(1)
+
     manager = DualServerManager(
         thunderduck_port=td_port,
         spark_reference_port=spark_port,
@@ -518,6 +589,8 @@ def dual_server_manager():
 
     print("\n" + "="*80)
     print("Starting DUAL servers for differential testing...")
+    print(f"  Thunderduck port: {td_port}")
+    print(f"  Spark Reference port: {spark_port}")
     print("="*80)
 
     spark_ok, thunderduck_ok = manager.start_both(timeout=120)
@@ -545,8 +618,13 @@ def orchestrator(dual_server_manager):
     - Diagnostic collection on hard errors
 
     Depends on dual_server_manager to ensure servers are running.
+    Uses actual allocated ports from the server manager (which may differ
+    from env vars when auto-allocation is used).
     """
     config = _get_orchestrator_config()
+    # Override with actual allocated ports from the server manager
+    config['thunderduck_port'] = dual_server_manager.thunderduck_port
+    config['spark_port'] = dual_server_manager.spark_reference_port
     orch = TestOrchestrator(config)
 
     yield orch
@@ -576,11 +654,8 @@ def spark_reference(orchestrator, dual_server_manager):
 
     session = orchestrator.create_spark_session()
     yield session
-    stop_spark_with_timeout(session, timeout=5)
-    try:
-        orchestrator._active_sessions.remove(session)
-    except ValueError:
-        pass
+    _release_session_without_shutdown(session)
+    orchestrator._active_sessions.discard(session)
 
 
 @pytest.fixture(scope="class")
@@ -603,11 +678,8 @@ def spark_thunderduck(orchestrator, dual_server_manager):
 
     session = orchestrator.create_thunderduck_session()
     yield session
-    stop_spark_with_timeout(session, timeout=5)
-    try:
-        orchestrator._active_sessions.remove(session)
-    except ValueError:
-        pass
+    _release_session_without_shutdown(session)
+    orchestrator._active_sessions.discard(session)
 
 
 # Function-scoped sessions (for tests that need per-test isolation)
@@ -621,11 +693,8 @@ def spark_reference_isolated(orchestrator):
     """
     session = orchestrator.create_spark_session()
     yield session
-    stop_spark_with_timeout(session, timeout=5)
-    try:
-        orchestrator._active_sessions.remove(session)
-    except ValueError:
-        pass
+    _release_session_without_shutdown(session)
+    orchestrator._active_sessions.discard(session)
 
 
 @pytest.fixture
@@ -638,11 +707,8 @@ def thunderduck_isolated(orchestrator):
     """
     session = orchestrator.create_thunderduck_session()
     yield session
-    stop_spark_with_timeout(session, timeout=5)
-    try:
-        orchestrator._active_sessions.remove(session)
-    except ValueError:
-        pass
+    _release_session_without_shutdown(session)
+    orchestrator._active_sessions.discard(session)
 
 
 # Fresh server fixtures (kills and restarts server)
@@ -657,7 +723,7 @@ def fresh_spark_server(orchestrator):
     orchestrator.restart_spark_server()
     session = orchestrator.create_spark_session()
     yield session
-    stop_spark_with_timeout(session, timeout=5)
+    _release_session_without_shutdown(session)
 
 
 @pytest.fixture
@@ -671,7 +737,7 @@ def fresh_thunderduck_server(orchestrator):
     orchestrator.restart_thunderduck_server()
     session = orchestrator.create_thunderduck_session()
     yield session
-    stop_spark_with_timeout(session, timeout=5)
+    _release_session_without_shutdown(session)
 
 
 # ============================================================================

@@ -2,9 +2,10 @@
 # Stop Apache Spark 4.0.1 Connect reference server
 #
 # Compatible with both bash and zsh
+# Reads SPARK_PORT from env (default: 15003) and only kills the process on that port.
 
 SPARK_HOME="${SPARK_HOME:-/home/vscode/spark/current}"
-SPARK_PORT=15003
+SPARK_PORT="${SPARK_PORT:-15003}"
 
 # Colors
 RED='\033[0;31m'
@@ -14,26 +15,26 @@ NC='\033[0m'
 
 echo -e "${BLUE}Stopping Apache Spark Connect Reference Server (port ${SPARK_PORT})...${NC}"
 
-# Find and kill the Spark Connect server process
-PIDS=$(pgrep -f "org.apache.spark.sql.connect.service.SparkConnectServer")
+# Find processes listening on our specific port
+PIDS=$(lsof -ti :${SPARK_PORT} 2>/dev/null)
 
 if [ -z "$PIDS" ]; then
-    echo -e "${GREEN}No Spark Connect server running${NC}"
+    echo -e "${GREEN}No process listening on port ${SPARK_PORT}${NC}"
     exit 0
 fi
 
-# Try graceful shutdown first
+# Try graceful shutdown first via Spark's stop script
 if [ -f "$SPARK_HOME/sbin/stop-connect-server.sh" ]; then
-    "$SPARK_HOME/sbin/stop-connect-server.sh"
+    "$SPARK_HOME/sbin/stop-connect-server.sh" 2>/dev/null
     sleep 2
 fi
 
-# Check if still running
-PIDS=$(pgrep -f "org.apache.spark.sql.connect.service.SparkConnectServer")
+# Check if still running on our port
+PIDS=$(lsof -ti :${SPARK_PORT} 2>/dev/null)
 if [ -n "$PIDS" ]; then
-    echo "Forcefully killing processes: $PIDS"
+    echo "Forcefully killing processes on port ${SPARK_PORT}: $PIDS"
     kill -9 $PIDS 2>/dev/null || true
     sleep 1
 fi
 
-echo -e "${GREEN}✓ Spark Connect reference server stopped${NC}"
+echo -e "${GREEN}✓ Spark Connect reference server stopped (port ${SPARK_PORT})${NC}"

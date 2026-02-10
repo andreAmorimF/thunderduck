@@ -18,7 +18,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from pyspark.sql import DataFrame, Row, SparkSession
 
@@ -410,8 +410,8 @@ class TestOrchestrator:
         # Timing collector
         self.timings = TimingCollector()
 
-        # Track active sessions for cleanup
-        self._active_sessions: List[SparkSession] = []
+        # Track active sessions for cleanup (set avoids duplicates, discard() is no-raise)
+        self._active_sessions: Set[SparkSession] = set()
 
         # Diagnostic log directory
         self.log_dir = Path(self.workspace_dir) / 'tests' / 'integration' / 'logs'
@@ -501,7 +501,7 @@ class TestOrchestrator:
                 "SparkReference"
             )
             self.timings.record_connect_time("spark", time.perf_counter() - start)
-            self._active_sessions.append(session)
+            self._active_sessions.add(session)
             return session
         except Exception as e:
             raise ServerConnectionError(f"Failed to connect to Spark Reference: {e}")
@@ -528,7 +528,7 @@ class TestOrchestrator:
                 "Thunderduck"
             )
             self.timings.record_connect_time("thunderduck", time.perf_counter() - start)
-            self._active_sessions.append(session)
+            self._active_sessions.add(session)
             return session
         except Exception as e:
             raise ServerConnectionError(f"Failed to connect to Thunderduck: {e}")
