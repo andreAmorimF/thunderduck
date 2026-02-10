@@ -1,6 +1,6 @@
 # Eliminating SQL String Manipulation — Architecture Plan
 
-**Status**: Phases 1-4 complete (core elimination done; deferred items remain)
+**Status**: Phases 1-4 complete. preprocessSQL deleted, no fallback. ~400 lines of schema-fixup code remain (active, not dead).
 **Created**: 2026-02-09
 **Last Updated**: 2026-02-10
 
@@ -193,11 +193,11 @@ The DataFrame path no longer calls `preprocessSQL()`. All transformations happen
 - [x] T4: Use expression tree schema for `analyzePlan` instead of DuckDB execution + patching
 - [x] R1: Reduce `SchemaCorrectedBatchIterator` to zero-copy (nullable flags only)
 
-### Phase 3: Complete the SparkSQL parser ✅
+### Phase 3: Complete the SparkSQL parser + remove fallback ✅
 
-**Completed**: 2026-02-10 (commit 589e314)
+**Completed**: 2026-02-10 (commits 589e314, 1eb6998)
 
-SingleRowRelation SQL generation added (the #1 parser fallback trigger). Parser now handles queries like `SELECT ARRAY(1,2,3)` without falling back to `preprocessSQL()`. CTE support added via `WithCTE`. Raw SQL path now uses parser-to-plan schema inference via `transformSparkSQLWithPlan()`.
+Two rounds of work. First (589e314): SingleRowRelation SQL generation, CTE support via `WithCTE`, `transformSparkSQLWithPlan()` for schema inference. Second (1eb6998): removed `preprocessSQL()` fallback entirely, added case-insensitive ANTLR lexing via `UpperCaseCharStream`, fixed 14 parser/generator bugs to reach 51/51 TPC-H (747/815 full suite, no regressions).
 
 - [x] P3: String concatenation `+` → `||` — `BinaryExpression.toSQL()` detects string context
 - [x] P6: `NAMED_STRUCT` → `struct_pack` — FunctionRegistry CUSTOM_TRANSLATOR
@@ -207,34 +207,45 @@ SingleRowRelation SQL generation added (the #1 parser fallback trigger). Parser 
 - [x] SingleRowRelation: SQLGenerator no-op + skip FROM clause in visitProject
 - [x] CTE support: WithCTE logical plan node + visitWithCTE in SQLGenerator
 - [x] Raw SQL schema: `transformSparkSQLWithPlan()` returns LogicalPlan for schema inference
+- [x] Case-insensitive ANTLR lexing: `UpperCaseCharStream` wrapper
+- [x] CROSS JOIN null condition handling in parser
+- [x] Remove `preprocessSQL()` fallback — `transformSparkSQL()` now delegates directly to parser
+- [x] Fix double AS alias in join optimization paths (Q5, Q7, Q8, Q9, Q11, Q17)
+- [x] Fix DATE literal misidentified as string concatenation (Q4, Q15, Q20)
+- [x] Add SelectEntry/selectOrder to preserve interleaved column ordering (Q3, Q10)
+- [x] Fix table alias scoping in EXISTS subqueries (Q21)
+- [x] Fix aggregate function name casing for Spark compatibility (Q18)
+- [x] Fix Project.inferSchema column name extraction (Q2, Q15, Q20)
 
-**Deferred** (out of scope — edge cases or large scope):
+**Deferred** (out of scope — edge cases):
 - P2: `returns` keyword (affects 1 query, needs grammar change)
 - P4: `at cross join` (affects 1 query, needs grammar change)
 - G4: Division decimal casting (complex strict-mode arithmetic analysis)
-- Remove `transformSparkSQL()` fallback (requires DDL/DML parser support)
 
 ### Phase 4: Delete dead code ✅
 
-**Completed**: 2026-02-10 (commit 589e314)
+**Completed**: 2026-02-10 (commits 589e314, 1eb6998)
 
-Deleted 3 confirmed dead methods (~137 lines). Updated stale comment about groupingSets.
+Two rounds. First (589e314): deleted 3 confirmed dead methods (~137 lines), updated stale comment. Second (1eb6998): deleted `preprocessSQL()`, `translateSparkFunctions()` + 4 sub-methods, `fixDivisionDecimalCasts()` + helpers (~600 additional lines).
 
 - [x] Delete `mergeNullableOnly()` (zero callers, replaced by SchemaCorrectedBatchIterator)
 - [x] Delete `fixDecimalToDoubleCasts()` (zero callers, moved to SQL generation in Phase 2)
 - [x] Delete `applyDoubleCastsToSelectItems()` (only called by dead `fixDecimalToDoubleCasts`)
 - [x] Update stale comment: groupingSets now populated on Aggregate nodes
+- [x] Delete `preprocessSQL()` entirely
+- [x] Delete `translateSparkFunctions()` and its 4 sub-methods (`translateNamedStruct`, `translateMapFunction`, `translateStructFunction`, `translateArrayFunction`)
+- [x] Delete `fixDivisionDecimalCasts()` and `findMatchingParen()`
 
-**Remaining dead code** (deletable when deferred items are resolved):
-- [ ] Delete `preprocessSQL()` entirely (blocked by deferred P2, P4, DDL/DML support)
-- [ ] Delete `translateSparkFunctions()` and its 4 sub-methods
-- [ ] Delete `fixCountNullable()`, `detectCountColumns()`, `collectCountAliases()`
-- [ ] Delete `fixDecimalPrecisionForComplexAggregates()`, `detectComplexAggregateColumns()`
-- [ ] Delete `fixDivisionDecimalCasts()` and its helpers
-- [ ] Delete or gut `SchemaCorrectedBatchIterator`
-- [ ] Delete ~20 helper methods (`findOutermostKeyword`, `splitSelectList`, `findMatchingParen`, etc.)
+**Remaining schema-fixup code** (still actively called, not dead code):
 
-Estimated remaining deletion: **~1000 lines** (blocked by deferred items above).
+These methods are called in the DuckDB schema-inference fallback path (when `plan.inferSchema()` fails or returns null). They apply regex-based schema corrections to DuckDB output. They violate principles 1-2 but cannot be deleted until `inferSchema()` covers all plan shapes.
+
+- [ ] `fixCountNullable()`, `detectCountColumns()`, `collectCountAliases()` — fix nullable flags for COUNT columns
+- [ ] `fixDecimalPrecisionForComplexAggregates()`, `detectComplexAggregateColumns()` — promote DECIMAL precision for SUM/AVG
+- [ ] `findOutermostKeyword()`, `splitSelectList()` — SQL string parsing helpers used by above
+- [ ] `SchemaCorrectedBatchIterator` — zero-copy nullable flag correction (Phase 2 reduced from full copy)
+
+Estimated remaining deletion: **~400 lines** (blocked on `inferSchema()` completeness).
 
 ## Extension Function Coverage Gaps
 
