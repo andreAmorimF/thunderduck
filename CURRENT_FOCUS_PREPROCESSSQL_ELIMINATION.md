@@ -123,7 +123,7 @@ These are needed only for the `spark.sql("...")` path. The parser should produce
 | ID | Current hack | Resolution |
 |----|-------------|------------|
 | P1 | Backtick → double-quote (line 838) | Parser uses ANTLR lexer; SQLQuoting handles identifier emission |
-| P2 | `returns` keyword alias (line 856) | Parser should emit `AS` before all aliases |
+| P2 | `returns` keyword alias (line 856) | **Resolved** — `RETURNS` is already in ANTLR grammar's `nonReserved` rule (line 2192) and `ansiNonReserved` (line 1809); no code change needed |
 | P3 | String concat `+` → `\|\|` (lines 859-860) | Parser should detect string context and emit `\|\|` operator in BinaryExpression |
 | P4 | `at cross join` removal (line 863) | Fix parser's join handling for this edge case |
 | P5 | `year()` → `CAST(year() AS INTEGER)` (line 871) | Already done — EXTRACT maps to FunctionCall via parser (commit 28c8618) |
@@ -217,9 +217,11 @@ Two rounds of work. First (589e314): SingleRowRelation SQL generation, CTE suppo
 - [x] Fix aggregate function name casing for Spark compatibility (Q18)
 - [x] Fix Project.inferSchema column name extraction (Q2, Q15, Q20)
 
+**Resolved** (confirmed no code change needed):
+- [x] P2: `returns` keyword — already handled by ANTLR grammar's `nonReserved` rule (line 2192 of SqlBaseParser.g4) and `ansiNonReserved` (line 1809). TPC-DS Q5 and Q80 (which use `returns` as a column alias) pass differential tests. Q77 fails due to P4 (CROSS JOIN bug), not P2.
+
 **Deferred** (out of scope — edge cases):
-- P2: `returns` keyword (affects 1 query, needs grammar change)
-- P4: `at cross join` (affects 1 query, needs grammar change)
+- P4: `at cross join` (affects 1 query, needs grammar change). Note: TPC-DS Q77 failure is caused by this CROSS JOIN issue, not by the `returns` keyword (P2).
 - G4: Division decimal casting (complex strict-mode arithmetic analysis)
 
 ### Phase 4: Delete dead code ✅
