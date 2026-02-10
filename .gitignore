@@ -58,7 +58,10 @@ __pycache__/
 .coverage
 htmlcov/
 .venv/
+venv/
+env/
 .env
+pyvenv.cfg
 
 # Java artifcats
 .java-version
@@ -70,6 +73,11 @@ htmlcov/
 .devcontainer/.claude-auth-token
 .devcontainer/.claude-base-url
 .devcontainer/.claude-custom-headers
+
+# Leftover venv artifacts in tests/integration/
+tests/integration/bin/
+tests/integration/lib/
+tests/integration/include/
 
 # Generated TPC-DS test data
 tests/integration/tpcds_sf001/
