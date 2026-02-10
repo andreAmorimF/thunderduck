@@ -82,13 +82,25 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
     }
 
     private LogicalPlan buildCTEQuery(SqlBaseParser.QueryContext ctx) {
-        // Reconstruct the full SQL including WITH clause and pass through as SQLRelation.
-        // This is correct because DuckDB supports CTE syntax directly.
-        // In the future, we could decompose CTEs into separate LogicalPlan nodes.
-        String fullSql = ctx.start.getInputStream().getText(
-            new org.antlr.v4.runtime.misc.Interval(
-                ctx.start.getStartIndex(), ctx.stop.getStopIndex()));
-        return new SQLRelation(fullSql);
+        // Parse each CTE definition into a WithCTE.CTEDefinition
+        List<WithCTE.CTEDefinition> definitions = new ArrayList<>();
+        for (SqlBaseParser.NamedQueryContext nq : ctx.ctes().namedQuery()) {
+            String name = getErrorCapturingIdentifierText(nq.name);
+            LogicalPlan ctePlan = visitQuery(nq.query());
+
+            List<String> columnAliases = Collections.emptyList();
+            if (nq.columnAliases != null) {
+                columnAliases = resolveIdentifierSeq(nq.columnAliases.identifierSeq());
+            }
+
+            definitions.add(new WithCTE.CTEDefinition(name, ctePlan, columnAliases));
+        }
+
+        // Parse the main query body (without the WITH prefix)
+        LogicalPlan body = (LogicalPlan) visit(ctx.queryTerm());
+        body = applyQueryOrganization(body, ctx.queryOrganization());
+
+        return new WithCTE(definitions, body);
     }
 
     // ==================== Query Term (SET operations) ====================
@@ -134,15 +146,6 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
     public LogicalPlan visitRegularQuerySpecification(
             SqlBaseParser.RegularQuerySpecificationContext ctx) {
 
-        // For GROUP BY queries, pass the entire SELECT...FROM...GROUP BY as raw SQL.
-        // This preserves all subquery aliases, column aliases, and complex aggregation
-        // patterns that DuckDB handles natively. The GROUP BY clause references columns
-        // by name, so regenerating the FROM clause would break column alias references.
-        if (ctx.aggregationClause() != null) {
-            String fullSql = getOriginalText(ctx);
-            return new SQLRelation(fullSql);
-        }
-
         // 1. Build FROM clause (source relation)
         LogicalPlan source;
         if (ctx.fromClause() != null) {
@@ -158,10 +161,16 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
             source = new Filter(source, condition);
         }
 
-        // 3. Build SELECT projections
+        // 3. GROUP BY: decompose into proper Aggregate node
+        if (ctx.aggregationClause() != null) {
+            return buildAggregateQuery(source, ctx.selectClause(),
+                ctx.aggregationClause(), ctx.havingClause());
+        }
+
+        // 4. Build SELECT projections (non-aggregate path)
         source = buildProjection(source, ctx.selectClause());
 
-        // 4. Apply HAVING (only valid with GROUP BY, but handle gracefully)
+        // 5. Apply HAVING (only valid with GROUP BY, but handle gracefully)
         if (ctx.havingClause() != null) {
             Expression havingCond = visitBooleanExpr(ctx.havingClause().booleanExpression());
             source = new Filter(source, havingCond);
@@ -378,38 +387,273 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
 
     // ==================== Aggregation (GROUP BY) ====================
 
-    private LogicalPlan buildAggregation(LogicalPlan source,
-                                          SqlBaseParser.AggregationClauseContext aggCtx,
-                                          SqlBaseParser.SelectClauseContext selectCtx,
-                                          SqlBaseParser.HavingClauseContext havingCtx) {
-        // For complex aggregation with GROUP BY, we build the entire query
-        // as a SQLRelation using the original SQL text, because the Aggregate
-        // LogicalPlan node has a specific structure that doesn't map 1:1 to
-        // arbitrary SQL GROUP BY clauses.
-        //
-        // This is a pragmatic choice: the GROUP BY SQL passes through to DuckDB
-        // which handles it natively. As we mature the parser, we can decompose
-        // this into proper Aggregate nodes.
+    /**
+     * Builds an Aggregate logical plan node from parsed SQL components.
+     *
+     * <p>Decomposes GROUP BY queries into proper AST:
+     * <ol>
+     *   <li>Parse GROUP BY expressions</li>
+     *   <li>Detect ROLLUP/CUBE/GROUPING SETS</li>
+     *   <li>Parse SELECT items and classify as grouping vs. aggregate</li>
+     *   <li>Parse HAVING condition</li>
+     *   <li>Build Aggregate node</li>
+     * </ol>
+     */
+    private LogicalPlan buildAggregateQuery(LogicalPlan source,
+                                             SqlBaseParser.SelectClauseContext selectCtx,
+                                             SqlBaseParser.AggregationClauseContext aggCtx,
+                                             SqlBaseParser.HavingClauseContext havingCtx) {
 
-        // Reconstruct from SELECT through GROUP BY/HAVING using raw SQL
+        // 1. Parse GROUP BY expressions and detect grouping sets
+        List<Expression> groupByExprs = new ArrayList<>();
+        GroupingSets groupingSets = parseAggregationClause(aggCtx, groupByExprs);
+
+        // 2. Parse SELECT items
+        boolean isDistinct = selectCtx.setQuantifier() != null &&
+            selectCtx.setQuantifier().DISTINCT() != null;
+
+        List<Expression> selectExprs = new ArrayList<>();
+        List<String> selectAliases = new ArrayList<>();
+        for (SqlBaseParser.NamedExpressionContext named :
+                selectCtx.namedExpressionSeq().namedExpression()) {
+            Expression expr = visitExpr(named.expression());
+
+            String alias = null;
+            if (named.name != null) {
+                alias = getErrorCapturingIdentifierText(named.name);
+            } else if (named.identifierList() != null) {
+                alias = getErrorCapturingIdentifierText(
+                    named.identifierList().identifierSeq().ident.get(0));
+            }
+
+            if (alias != null) {
+                expr = new AliasExpression(expr, alias);
+            }
+            selectExprs.add(expr);
+            selectAliases.add(alias);
+        }
+
+        // 3. Classify SELECT items into grouping expressions and aggregate expressions
+        List<Expression> groupingExprs = new ArrayList<>();
+        List<Aggregate.AggregateExpression> aggregateExprs = new ArrayList<>();
+
+        for (Expression expr : selectExprs) {
+            Expression inner = (expr instanceof AliasExpression ae) ? ae.expression() : expr;
+            String alias = (expr instanceof AliasExpression ae) ? ae.alias() : null;
+
+            if (inner instanceof StarExpression) {
+                // SELECT * with GROUP BY — pass through as grouping
+                groupingExprs.add(expr);
+            } else if (com.thunderduck.expression.ExpressionUtils.containsAggregateFunction(inner)) {
+                // Contains aggregate function → AggregateExpression
+                aggregateExprs.add(buildAggregateExpression(inner, alias));
+            } else {
+                // No aggregate function → grouping expression
+                groupingExprs.add(expr);
+            }
+        }
+
+        // If no aggregate functions found (e.g., SELECT a, b FROM t GROUP BY a, b),
+        // we still need at least one aggregate expression for the Aggregate node.
+        // This can happen with GROUP BY without aggregates (deduplication pattern).
+        // In this case, use a special marker — emit as a Project over Aggregate with
+        // a dummy count to preserve GROUP BY semantics.
+        if (aggregateExprs.isEmpty()) {
+            // All items are grouping; add a hidden COUNT(*) that won't be in output
+            // Actually, Aggregate node requires aggregate expressions. But this pattern
+            // is valid SQL. Use SQLRelation fallback for this edge case.
+            return buildAggregationFallback(source, selectCtx, aggCtx, havingCtx);
+        }
+
+        // 4. Parse HAVING
+        Expression havingCondition = null;
+        if (havingCtx != null) {
+            havingCondition = visitBooleanExpr(havingCtx.booleanExpression());
+        }
+
+        // 5. Build Aggregate node
+        Aggregate aggregate = new Aggregate(source, groupingExprs,
+            aggregateExprs, havingCondition, groupingSets);
+
+        // 6. Apply DISTINCT if specified
+        if (isDistinct) {
+            return new Distinct(aggregate);
+        }
+
+        return aggregate;
+    }
+
+    /**
+     * Fallback for edge cases that resist proper decomposition (e.g., GROUP BY without aggregates).
+     */
+    private LogicalPlan buildAggregationFallback(LogicalPlan source,
+                                                   SqlBaseParser.SelectClauseContext selectCtx,
+                                                   SqlBaseParser.AggregationClauseContext aggCtx,
+                                                   SqlBaseParser.HavingClauseContext havingCtx) {
         StringBuilder sql = new StringBuilder();
-
-        // SELECT clause
         sql.append(getOriginalText(selectCtx));
-
-        // FROM clause is embedded in the source plan
         String sourceSql = generateNodeSql(source);
         sql.append(" FROM (").append(sourceSql).append(") AS _agg_source");
-
-        // GROUP BY clause
         sql.append(" ").append(getOriginalText(aggCtx));
-
-        // HAVING clause
         if (havingCtx != null) {
             sql.append(" ").append(getOriginalText(havingCtx));
         }
-
         return new SQLRelation(sql.toString());
+    }
+
+    /**
+     * Parses the aggregation clause into GROUP BY expressions and optional GroupingSets.
+     *
+     * <p>ANTLR grammar has two alternatives:
+     * <ul>
+     *   <li>Alt 1: GROUP BY groupByClause, groupByClause (inline ROLLUP/CUBE/GROUPING SETS)</li>
+     *   <li>Alt 2: GROUP BY namedExpression, ... [WITH ROLLUP | WITH CUBE | GROUPING SETS(...)]</li>
+     * </ul>
+     *
+     * @param aggCtx the aggregation clause context
+     * @param groupByExprs output list for GROUP BY expressions
+     * @return GroupingSets if ROLLUP/CUBE/GROUPING SETS detected, null otherwise
+     */
+    private GroupingSets parseAggregationClause(SqlBaseParser.AggregationClauseContext aggCtx,
+                                                 List<Expression> groupByExprs) {
+        // Alternative 1: GROUP BY with groupByClause (may contain groupingAnalytics)
+        if (!aggCtx.groupingExpressionsWithGroupingAnalytics.isEmpty()) {
+            return parseGroupByClauses(aggCtx.groupingExpressionsWithGroupingAnalytics, groupByExprs);
+        }
+
+        // Alternative 2: GROUP BY namedExpression, ... [WITH ROLLUP | WITH CUBE | GROUPING SETS]
+        for (SqlBaseParser.NamedExpressionContext named : aggCtx.groupingExpressions) {
+            groupByExprs.add(visitExpr(named.expression()));
+        }
+
+        // Check for WITH ROLLUP / WITH CUBE / GROUPING SETS suffix
+        if (aggCtx.kind != null) {
+            int kindType = aggCtx.kind.getType();
+            if (kindType == org.apache.spark.sql.catalyst.parser.SqlBaseLexer.ROLLUP) {
+                return GroupingSets.rollup(new ArrayList<>(groupByExprs));
+            } else if (kindType == org.apache.spark.sql.catalyst.parser.SqlBaseLexer.CUBE) {
+                return GroupingSets.cube(new ArrayList<>(groupByExprs));
+            } else if (kindType == org.apache.spark.sql.catalyst.parser.SqlBaseLexer.GROUPING) {
+                // GROUPING SETS(...)
+                List<List<Expression>> sets = new ArrayList<>();
+                for (SqlBaseParser.GroupingSetContext gs : aggCtx.groupingSet()) {
+                    sets.add(parseGroupingSet(gs));
+                }
+                return GroupingSets.groupingSets(sets);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Parses Alt 1 groupByClause list, which may include inline ROLLUP/CUBE/GROUPING SETS.
+     */
+    private GroupingSets parseGroupByClauses(List<SqlBaseParser.GroupByClauseContext> clauses,
+                                              List<Expression> groupByExprs) {
+        GroupingSets result = null;
+
+        for (SqlBaseParser.GroupByClauseContext clause : clauses) {
+            if (clause.groupingAnalytics() != null) {
+                // This clause is ROLLUP(...), CUBE(...), or GROUPING SETS(...)
+                result = parseGroupingAnalytics(clause.groupingAnalytics(), groupByExprs);
+            } else {
+                // Plain expression
+                groupByExprs.add(visitExpr(clause.expression()));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Parses a groupingAnalytics node: ROLLUP(...) | CUBE(...) | GROUPING SETS(...)
+     */
+    private GroupingSets parseGroupingAnalytics(SqlBaseParser.GroupingAnalyticsContext ctx,
+                                                 List<Expression> groupByExprs) {
+        if (ctx.ROLLUP() != null) {
+            List<Expression> columns = new ArrayList<>();
+            for (SqlBaseParser.GroupingSetContext gs : ctx.groupingSet()) {
+                columns.addAll(parseGroupingSet(gs));
+            }
+            groupByExprs.addAll(columns);
+            return GroupingSets.rollup(columns);
+        }
+
+        if (ctx.CUBE() != null) {
+            List<Expression> columns = new ArrayList<>();
+            for (SqlBaseParser.GroupingSetContext gs : ctx.groupingSet()) {
+                columns.addAll(parseGroupingSet(gs));
+            }
+            groupByExprs.addAll(columns);
+            return GroupingSets.cube(columns);
+        }
+
+        // GROUPING SETS
+        List<List<Expression>> sets = new ArrayList<>();
+        for (SqlBaseParser.GroupingElementContext elem : ctx.groupingElement()) {
+            if (elem.groupingAnalytics() != null) {
+                // Nested groupingAnalytics — expand
+                List<Expression> nested = new ArrayList<>();
+                parseGroupingAnalytics(elem.groupingAnalytics(), nested);
+                sets.add(nested);
+            } else if (elem.groupingSet() != null) {
+                sets.add(parseGroupingSet(elem.groupingSet()));
+            }
+        }
+        // Add all columns from all sets to groupByExprs
+        for (List<Expression> set : sets) {
+            for (Expression e : set) {
+                if (!groupByExprs.contains(e)) {
+                    groupByExprs.add(e);
+                }
+            }
+        }
+        return GroupingSets.groupingSets(sets);
+    }
+
+    /**
+     * Parses a single grouping set: either a parenthesized list of expressions or a single expression.
+     */
+    private List<Expression> parseGroupingSet(SqlBaseParser.GroupingSetContext ctx) {
+        List<Expression> exprs = new ArrayList<>();
+        for (SqlBaseParser.ExpressionContext exprCtx : ctx.expression()) {
+            exprs.add(visitExpr(exprCtx));
+        }
+        return exprs;
+    }
+
+    /**
+     * Builds an AggregateExpression from a parsed expression.
+     * Handles simple function calls (SUM, COUNT, etc.) and composite expressions
+     * (SUM(a) / SUM(b), CASE WHEN ... THEN SUM(...), etc.)
+     */
+    private Aggregate.AggregateExpression buildAggregateExpression(Expression expr, String alias) {
+        // Simple case: direct aggregate function call
+        if (expr instanceof FunctionCall func) {
+            String funcName = func.functionName();
+            List<Expression> args = func.arguments();
+
+            // Handle DISTINCT
+            boolean isDistinct = func.distinct();
+
+            // Extract single argument (or null for COUNT(*))
+            Expression argument = null;
+            if (!args.isEmpty()) {
+                if (args.size() == 1) {
+                    argument = args.get(0);
+                } else {
+                    // Multi-arg aggregate (e.g., covar_samp(x, y)) — use composite
+                    return new Aggregate.AggregateExpression(expr, alias);
+                }
+            }
+
+            return new Aggregate.AggregateExpression(funcName, argument, alias, isDistinct);
+        }
+
+        // Composite expression containing aggregate functions
+        // (e.g., SUM(a) / SUM(b), CAST(COUNT(*) AS DOUBLE), etc.)
+        return new Aggregate.AggregateExpression(expr, alias);
     }
 
     // ==================== ORDER BY / LIMIT / OFFSET ====================

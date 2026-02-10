@@ -24,7 +24,7 @@ public abstract sealed class LogicalPlan
             InMemoryRelation, Intersect, Join, Limit, LocalDataRelation,
             LocalRelation, Project, RangeRelation, SQLRelation, Sample,
             SingleRowRelation, Sort, TableScan, Tail, ToDF,
-            Union, WithColumns {
+            Union, WithColumns, WithCTE {
 
     /** Child nodes in the plan tree */
     protected final List<LogicalPlan> children;

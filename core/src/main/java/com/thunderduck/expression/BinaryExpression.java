@@ -154,7 +154,35 @@ public final class BinaryExpression implements Expression {
         if (operator == Operator.DIVIDE && SparkCompatMode.isStrictMode()) {
             return String.format("spark_decimal_div(%s, %s)", left.toSQL(), right.toSQL());
         }
+        // Spark uses + for string concatenation; DuckDB requires ||
+        if (operator == Operator.ADD && isStringConcatenation()) {
+            return String.format("(%s || %s)", left.toSQL(), right.toSQL());
+        }
         return String.format("(%s %s %s)", left.toSQL(), operator.symbol(), right.toSQL());
+    }
+
+    /**
+     * Detects if this ADD expression is actually string concatenation.
+     * Returns true if either operand is a string literal or a string function
+     * (coalesce/concat wrapping string args).
+     */
+    private boolean isStringConcatenation() {
+        return isStringExpression(left) || isStringExpression(right);
+    }
+
+    private static boolean isStringExpression(Expression expr) {
+        if (expr instanceof Literal lit) {
+            return lit.value() instanceof String;
+        }
+        if (expr instanceof FunctionCall func) {
+            String name = func.functionName().toLowerCase();
+            return name.equals("coalesce") || name.equals("concat");
+        }
+        // Recurse into nested ADD (e.g., 'a' + col + 'b')
+        if (expr instanceof BinaryExpression bin && bin.operator == Operator.ADD) {
+            return isStringExpression(bin.left) || isStringExpression(bin.right);
+        }
+        return false;
     }
 
     @Override

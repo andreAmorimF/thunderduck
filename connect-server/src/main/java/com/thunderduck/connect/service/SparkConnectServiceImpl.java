@@ -671,37 +671,61 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     // Check if this is a SQL query (special handling needed)
                     if (plan.hasRoot() && plan.getRoot().hasSql()) {
                         // Direct SQL query - parse and transform via SparkSQL parser
-                        sql = plan.getRoot().getSql().getQuery();
-                        // Transform SparkSQL to DuckDB SQL (parser + preprocessing)
-                        sql = transformSparkSQL(sql);
+                        String sparkSQL = plan.getRoot().getSql().getQuery();
+                        TransformResult result = transformSparkSQLWithPlan(sparkSQL);
+                        sql = result.sql();
                         logger.debug("Analyzing SQL query schema: {}", sql.substring(0, Math.min(100, sql.length())));
-                        schema = inferSchemaFromDuckDB(sql, sessionId);
-                        // In strict mode, fix nullable flags and decimal precision for SQL queries
-                        if (SparkCompatMode.isStrictMode() && schema != null) {
-                            schema = fixCountNullable(sql, schema);
-                            schema = fixDecimalPrecisionForComplexAggregates(sql, schema);
+
+                        // Use LogicalPlan schema when available (parser succeeded)
+                        if (result.plan() != null) {
+                            try {
+                                schema = result.plan().inferSchema();
+                            } catch (Exception e) {
+                                logger.debug("LogicalPlan schema inference failed, falling back to DuckDB: {}", e.getMessage());
+                            }
+                        }
+                        // Fallback: infer from DuckDB if plan schema unavailable
+                        if (schema == null) {
+                            schema = inferSchemaFromDuckDB(sql, sessionId);
+                            if (SparkCompatMode.isStrictMode() && schema != null) {
+                                schema = fixCountNullable(sql, schema);
+                                schema = fixDecimalPrecisionForComplexAggregates(sql, schema);
+                            }
                         }
 
                     } else if (plan.hasCommand() && plan.getCommand().hasSqlCommand()) {
                         // SQL command - infer schema
                         SqlCommand sqlCommand = plan.getCommand().getSqlCommand();
 
+                        String sparkSQL = null;
                         // In Spark 4.0.1, the 'sql' field is deprecated and replaced with 'input' relation
                         if (sqlCommand.hasInput() && sqlCommand.getInput().hasSql()) {
-                            sql = sqlCommand.getInput().getSql().getQuery();
+                            sparkSQL = sqlCommand.getInput().getSql().getQuery();
                         } else if (!sqlCommand.getSql().isEmpty()) {
                             // Fallback for older clients or backward compatibility
-                            sql = sqlCommand.getSql();
+                            sparkSQL = sqlCommand.getSql();
                         }
 
                         // Transform SparkSQL to DuckDB SQL (parser + preprocessing)
-                        sql = transformSparkSQL(sql);
+                        TransformResult result = transformSparkSQLWithPlan(sparkSQL);
+                        sql = result.sql();
                         logger.debug("Analyzing SQL command schema: {}", sql.substring(0, Math.min(100, sql.length())));
-                        schema = inferSchemaFromDuckDB(sql, sessionId);
-                        // In strict mode, fix nullable flags and decimal precision for SQL queries
-                        if (SparkCompatMode.isStrictMode() && schema != null) {
-                            schema = fixCountNullable(sql, schema);
-                            schema = fixDecimalPrecisionForComplexAggregates(sql, schema);
+
+                        // Use LogicalPlan schema when available (parser succeeded)
+                        if (result.plan() != null) {
+                            try {
+                                schema = result.plan().inferSchema();
+                            } catch (Exception e) {
+                                logger.debug("LogicalPlan schema inference failed, falling back to DuckDB: {}", e.getMessage());
+                            }
+                        }
+                        // Fallback: infer from DuckDB if plan schema unavailable
+                        if (schema == null) {
+                            schema = inferSchemaFromDuckDB(sql, sessionId);
+                            if (SparkCompatMode.isStrictMode() && schema != null) {
+                                schema = fixCountNullable(sql, schema);
+                                schema = fixDecimalPrecisionForComplexAggregates(sql, schema);
+                            }
                         }
 
                     } else if (plan.hasRoot() && isStatisticsRelation(plan.getRoot())) {
@@ -795,24 +819,30 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
      * @param sql Original SQL query
      * @return Preprocessed SQL query
      */
-    private String transformSparkSQL(String sparkSQL) {
+    /**
+     * Result of transforming SparkSQL: the DuckDB SQL string and optionally the LogicalPlan
+     * (available when the parser succeeds, null when falling back to preprocessSQL).
+     */
+    private record TransformResult(String sql, LogicalPlan plan) {}
+
+    private TransformResult transformSparkSQLWithPlan(String sparkSQL) {
         // Attempt to parse SparkSQL -> LogicalPlan -> DuckDB SQL
         try {
             SparkSQLParser parser = SparkSQLParser.getInstance();
             LogicalPlan plan = parser.parse(sparkSQL);
             String duckdbSQL = sqlGenerator.generate(plan);
             logger.info("SparkSQL parser transformed: {} -> {}", sparkSQL, duckdbSQL);
-
-            // Parser-generated SQL is already valid DuckDB SQL.
-            // Strict-mode aggregate replacements (spark_sum, spark_avg) are handled by
-            // SQLGenerator.visitAggregate(), so no post-processing needed here.
-            return duckdbSQL;
+            return new TransformResult(duckdbSQL, plan);
         } catch (Exception e) {
             // Parser failed - fall back to direct preprocessing (legacy path)
             logger.info("SparkSQL parser fell back to preprocessSQL for: {} ({})",
                 sparkSQL, e.getMessage());
-            return preprocessSQL(sparkSQL);
+            return new TransformResult(preprocessSQL(sparkSQL), null);
         }
+    }
+
+    private String transformSparkSQL(String sparkSQL) {
+        return transformSparkSQLWithPlan(sparkSQL).sql();
     }
 
     private String preprocessSQL(String sql) {
@@ -887,9 +917,10 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         // Additional NULL ordering for ROLLUP queries
         // While DuckDB is configured with default_null_order='NULLS FIRST',
         // ROLLUP queries need explicit NULLS FIRST in ORDER BY for all columns
-        // NOTE: AST-level support exists in SQLGenerator.visitSort() and Sort.toSQL()
-        // but RelationConverter does not yet populate groupingSets on Aggregate nodes.
-        // This string-based logic remains until that wiring is complete.
+        // NOTE: AST-level support exists in SQLGenerator.visitSort() and Sort.toSQL(),
+        // and RelationConverter now populates groupingSets on Aggregate nodes (Phase 3).
+        // This string-based logic handles the raw SQL path (spark.sql("...")) where
+        // queries bypass the logical plan and go directly to DuckDB.
         if (sql.toLowerCase().contains("group by rollup") && sql.toLowerCase().contains("order by")) {
             String sqlLowerCase = sql.toLowerCase();
             int orderByIndex = sqlLowerCase.lastIndexOf("order by");
@@ -2185,51 +2216,6 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         }
     }
 
-    /**
-     * Merges nullable flags from logical schema onto DuckDB's schema.
-     *
-     * <p>DuckDB returns all columns as nullable=true. The logical plan has correct nullable
-     * info from input schemas (e.g., COUNT is non-nullable, column references inherit from source).
-     * This method keeps DuckDB's data types unchanged and only corrects nullable flags.
-     *
-     * @param duckDBSchema Schema from DuckDB execution (correct types, all nullable)
-     * @param logicalSchema Schema from logical plan (correct nullable flags)
-     * @return Schema with DuckDB types and logical plan's nullable flags
-     */
-    private com.thunderduck.types.StructType mergeNullableOnly(
-            com.thunderduck.types.StructType duckDBSchema,
-            com.thunderduck.types.StructType logicalSchema) {
-
-        if (logicalSchema == null || logicalSchema.size() != duckDBSchema.size()) {
-            return duckDBSchema;
-        }
-
-        java.util.List<com.thunderduck.types.StructField> fields = new java.util.ArrayList<>();
-        for (int i = 0; i < duckDBSchema.size(); i++) {
-            com.thunderduck.types.StructField duckField = duckDBSchema.fields().get(i);
-            com.thunderduck.types.StructField logicalField = logicalSchema.fields().get(i);
-
-            com.thunderduck.types.DataType effectiveType = duckField.dataType();
-
-            // When Spark's logical plan says DoubleType but DuckDB returns DecimalType,
-            // use Spark's DoubleType. This happens when PySpark uses F.lit(100.00) or / 7.0
-            // which creates DoubleType in Spark, but DuckDB treats 100.0 as DECIMAL.
-            // Spark's type coercion: DOUBLE op DECIMAL -> DOUBLE.
-            if (logicalField.dataType() instanceof com.thunderduck.types.DoubleType
-                && duckField.dataType() instanceof com.thunderduck.types.DecimalType) {
-                effectiveType = com.thunderduck.types.DoubleType.get();
-                logger.debug("Column '{}': logical DoubleType overrides DuckDB {}", duckField.name(), duckField.dataType());
-            }
-
-            fields.add(new com.thunderduck.types.StructField(
-                duckField.name(),
-                effectiveType,
-                logicalField.nullable()
-            ));
-        }
-
-        return new com.thunderduck.types.StructType(fields);
-    }
 
     /**
      * Normalizes column names that contain extension function names back to standard SQL names.
@@ -2770,132 +2756,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         return lastAsPos;
     }
 
-    /**
-     * Fixes DECIMAL-to-DOUBLE type mismatches at the SQL level.
-     *
-     * <p>When PySpark uses F.lit(100.00) or divides by 7.0, the logical schema expects
-     * DOUBLE because Spark's type coercion says DOUBLE op DECIMAL -> DOUBLE. But DuckDB
-     * treats numeric literals like 100.0 as DECIMAL, so the SQL result is DECIMAL.
-     *
-     * <p>This method detects such mismatches by comparing the logical schema against what
-     * DuckDB would return, and wraps the affected SELECT expressions with CAST(... AS DOUBLE).
-     * This moves the conversion into DuckDB's SQL engine where it's efficient, instead of
-     * doing row-by-row Arrow vector conversion in Java.
-     *
-     * @param sql the SQL query (after preprocessing)
-     * @param logicalSchema the logical plan schema with expected types
-     * @param sessionId the session ID for DuckDB schema inference
-     * @return modified SQL with DOUBLE casts where needed, or original SQL if no changes needed
-     */
-    private String fixDecimalToDoubleCasts(String sql, StructType logicalSchema, String sessionId) {
-        try {
-            // Infer what DuckDB would actually return
-            StructType duckDBSchema = inferSchemaFromDuckDB(sql, sessionId);
-            if (duckDBSchema == null || duckDBSchema.size() == 0) return sql;
-            if (logicalSchema.size() != duckDBSchema.size()) return sql;
 
-            // Find columns where logical schema says DOUBLE but DuckDB returns DECIMAL
-            java.util.List<Integer> doubleCastColumns = new java.util.ArrayList<>();
-            for (int i = 0; i < logicalSchema.size(); i++) {
-                StructField logicalField = logicalSchema.fields().get(i);
-                StructField duckField = duckDBSchema.fields().get(i);
-                if (logicalField.dataType() instanceof com.thunderduck.types.DoubleType
-                    && duckField.dataType() instanceof com.thunderduck.types.DecimalType) {
-                    doubleCastColumns.add(i);
-                    logger.debug("Column {} '{}' needs DECIMAL->DOUBLE SQL cast (logical=DoubleType, DuckDB={})",
-                        i, logicalField.name(), duckField.dataType());
-                }
-            }
-
-            if (doubleCastColumns.isEmpty()) return sql;
-
-            // Apply CAST(... AS DOUBLE) to the affected columns
-            return applyDoubleCastsToSelectItems(sql, doubleCastColumns);
-        } catch (Exception e) {
-            logger.debug("Could not apply DECIMAL->DOUBLE SQL casts: {}", e.getMessage());
-            return sql;
-        }
-    }
-
-    /**
-     * Wraps specific SELECT items with CAST(... AS DOUBLE) based on column indices.
-     * Handles wrapped SELECT * FROM (...) patterns by operating on the inner query.
-     */
-    private String applyDoubleCastsToSelectItems(String sql, java.util.List<Integer> columnIndices) {
-        // Handle SELECT * FROM (...) wrappers
-        String wrapperPrefix = findSelectStarWrapperPrefix(sql);
-        if (wrapperPrefix != null) {
-            String trimmed = sql.trim();
-            int openParen = wrapperPrefix.length() - 1;
-            int closeParen = findMatchingCloseParen(trimmed, openParen);
-            if (closeParen < 0) return sql;
-
-            String inner = trimmed.substring(openParen + 1, closeParen);
-            String suffix = trimmed.substring(closeParen);
-
-            String fixedInner = applyDoubleCastsToSelectItems(inner, columnIndices);
-            if (fixedInner.equals(inner)) return sql;
-            return wrapperPrefix.substring(0, wrapperPrefix.length() - 1) + "(" + fixedInner + suffix;
-        }
-
-        // Find the outermost SELECT list
-        String upperSql = sql.toUpperCase().trim();
-        int selectIdx = findOutermostKeyword(upperSql, "SELECT");
-        if (selectIdx < 0) return sql;
-
-        int fromIdx = findOutermostKeyword(upperSql.substring(selectIdx + 6), "FROM");
-        if (fromIdx < 0) return sql;
-        fromIdx += selectIdx + 6;
-
-        String selectList = sql.substring(selectIdx + 6, fromIdx).trim();
-        String beforeSelect = sql.substring(0, selectIdx + 6);
-        String afterFrom = sql.substring(fromIdx);
-
-        String distinctPrefix = "";
-        if (selectList.toUpperCase().startsWith("DISTINCT")) {
-            distinctPrefix = selectList.substring(0, 8) + " ";
-            selectList = selectList.substring(8).trim();
-        }
-
-        java.util.List<String> selectItems = splitSelectList(selectList);
-
-        boolean modified = false;
-        java.util.List<String> newItems = new java.util.ArrayList<>();
-
-        for (int i = 0; i < selectItems.size(); i++) {
-            if (columnIndices.contains(i)) {
-                String item = selectItems.get(i).trim();
-
-                // Separate expression from alias
-                String expr = item;
-                String aliasSuffix = "";
-                int asPos = findLastTopLevelAs(item);
-                if (asPos >= 0) {
-                    expr = item.substring(0, asPos).trim();
-                    aliasSuffix = " " + item.substring(asPos);
-                }
-
-                String castExpr = "CAST(" + expr + " AS DOUBLE)" + aliasSuffix;
-                newItems.add(castExpr);
-                modified = true;
-                logger.debug("Added DOUBLE cast for column {}: {}", i, item);
-            } else {
-                newItems.add(selectItems.get(i));
-            }
-        }
-
-        if (!modified) return sql;
-
-        StringBuilder sb = new StringBuilder();
-        sb.append(beforeSelect).append(" ").append(distinctPrefix);
-        for (int i = 0; i < newItems.size(); i++) {
-            if (i > 0) sb.append(",");
-            sb.append(newItems.get(i));
-        }
-        sb.append(" ").append(afterFrom);
-
-        return sb.toString();
-    }
 
     /**
      * Infers a schema with corrected nullable flags for raw SQL queries.

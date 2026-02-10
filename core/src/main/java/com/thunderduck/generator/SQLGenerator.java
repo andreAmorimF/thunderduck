@@ -162,8 +162,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             case Sample sa          -> visitSample(sa);
             case WithColumns w      -> visitWithColumns(w);
             case ToDF td            -> visitToDF(td);
-            case SingleRowRelation sr -> throw new UnsupportedOperationException(
-                "SQL generation not implemented for: SingleRowRelation");
+            case WithCTE w          -> visitWithCTE(w);
+            case SingleRowRelation sr -> {} // No FROM clause needed
         }
     }
 
@@ -278,22 +278,25 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             }
         }
 
-        // Add FROM clause from child - check for direct source optimization
-        String childSource = getDirectlyAliasableSource(plan.child());
-        if (childSource != null) {
-            sql.append(" FROM ").append(childSource);
-            if (subqueryDepth > 0) {
-                sql.append(" AS ").append(generateSubqueryAlias());
-            }
-        } else {
-            sql.append(" FROM (");
-            subqueryDepth++;
-            visit(plan.child());
-            subqueryDepth--;
-            sql.append(")");
-            // Add subquery alias if needed
-            if (subqueryDepth > 0) {
-                sql.append(" AS ").append(generateSubqueryAlias());
+        // Skip FROM clause for SingleRowRelation (e.g., SELECT ARRAY(1,2,3))
+        if (!(plan.child() instanceof SingleRowRelation)) {
+            // Add FROM clause from child - check for direct source optimization
+            String childSource = getDirectlyAliasableSource(plan.child());
+            if (childSource != null) {
+                sql.append(" FROM ").append(childSource);
+                if (subqueryDepth > 0) {
+                    sql.append(" AS ").append(generateSubqueryAlias());
+                }
+            } else {
+                sql.append(" FROM (");
+                subqueryDepth++;
+                visit(plan.child());
+                subqueryDepth--;
+                sql.append(")");
+                // Add subquery alias if needed
+                if (subqueryDepth > 0) {
+                    sql.append(" AS ").append(generateSubqueryAlias());
+                }
             }
         }
     }
@@ -1178,6 +1181,13 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(" HAVING ");
             sql.append(plan.havingCondition().toSQL());
         }
+    }
+
+    /**
+     * Visits a WithCTE node (WITH ... AS (...) SELECT ...).
+     */
+    private void visitWithCTE(WithCTE plan) {
+        sql.append(plan.toSQL(this));
     }
 
     /**

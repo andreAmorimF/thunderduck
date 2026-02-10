@@ -742,6 +742,11 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("covar_pop", "covar_pop");
         DIRECT_MAPPINGS.put("covar_samp", "covar_samp");
 
+        // Grouping functions (used with ROLLUP/CUBE/GROUPING SETS)
+        // DuckDB supports grouping() with identical semantics to Spark
+        DIRECT_MAPPINGS.put("grouping", "grouping");
+        DIRECT_MAPPINGS.put("grouping_id", "grouping_id");
+
         // DISTINCT aggregate functions - DISTINCT keyword goes inside parentheses
         // These handle Spark's countDistinct(), sumDistinct() etc. which arrive as
         // "count_distinct", "sum_distinct" after ExpressionConverter appends "_DISTINCT"
