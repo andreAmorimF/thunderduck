@@ -22,8 +22,8 @@ import java.util.OptionalLong;
 public abstract sealed class LogicalPlan
     permits Aggregate, AliasedRelation, Distinct, Except, Filter,
             InMemoryRelation, Intersect, Join, Limit, LocalDataRelation,
-            LocalRelation, Project, RangeRelation, SQLRelation, Sample,
-            SingleRowRelation, Sort, TableScan, Tail, ToDF,
+            LocalRelation, Project, RangeRelation, RawDDLStatement, SQLRelation,
+            Sample, SingleRowRelation, Sort, TableScan, Tail, ToDF,
             Union, WithColumns, WithCTE {
 
     /** Child nodes in the plan tree */

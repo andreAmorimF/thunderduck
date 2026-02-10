@@ -163,6 +163,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             case WithColumns w      -> visitWithColumns(w);
             case ToDF td            -> visitToDF(td);
             case WithCTE w          -> visitWithCTE(w);
+            case RawDDLStatement ddl -> sql.append(ddl.sql());
             case SingleRowRelation sr -> {} // No FROM clause needed
         }
     }

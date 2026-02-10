@@ -57,6 +57,239 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         return visitQuery(ctx.query());
     }
 
+    // ==================== DDL/DML Statements ====================
+
+    @Override
+    public LogicalPlan visitCreateTable(SqlBaseParser.CreateTableContext ctx) {
+        StringBuilder sql = new StringBuilder();
+
+        // CREATE TABLE [IF NOT EXISTS] tableName
+        SqlBaseParser.CreateTableHeaderContext header = ctx.createTableHeader();
+        sql.append("CREATE TABLE ");
+        if (header.IF() != null && header.EXISTS() != null) {
+            sql.append("IF NOT EXISTS ");
+        }
+        String tableName = resolveIdentifierReference(header.identifierReference());
+        sql.append(quoteIdentifierIfNeeded(tableName));
+
+        // Column definitions: (col1 type1, col2 type2, ...)
+        if (ctx.colDefinitionList() != null) {
+            sql.append(" (");
+            List<SqlBaseParser.ColDefinitionContext> colDefs = ctx.colDefinitionList().colDefinition();
+            for (int i = 0; i < colDefs.size(); i++) {
+                if (i > 0) sql.append(", ");
+                sql.append(buildColumnDefinition(colDefs.get(i)));
+            }
+            sql.append(")");
+        }
+
+        // Handle CTAS: CREATE TABLE ... AS SELECT ...
+        if (ctx.query() != null) {
+            LogicalPlan queryPlan = visitQuery(ctx.query());
+            String querySql = generateNodeSql(queryPlan);
+            sql.append(" AS ").append(querySql);
+        }
+
+        return new RawDDLStatement(sql.toString());
+    }
+
+    @Override
+    public LogicalPlan visitDropTable(SqlBaseParser.DropTableContext ctx) {
+        StringBuilder sql = new StringBuilder("DROP TABLE ");
+        if (ctx.IF() != null && ctx.EXISTS() != null) {
+            sql.append("IF EXISTS ");
+        }
+        String tableName = resolveIdentifierReference(ctx.identifierReference());
+        sql.append(quoteIdentifierIfNeeded(tableName));
+        return new RawDDLStatement(sql.toString());
+    }
+
+    @Override
+    public LogicalPlan visitTruncateTable(SqlBaseParser.TruncateTableContext ctx) {
+        StringBuilder sql = new StringBuilder("TRUNCATE TABLE ");
+        String tableName = resolveIdentifierReference(ctx.identifierReference());
+        sql.append(quoteIdentifierIfNeeded(tableName));
+        return new RawDDLStatement(sql.toString());
+    }
+
+    @Override
+    public LogicalPlan visitCreateView(SqlBaseParser.CreateViewContext ctx) {
+        StringBuilder sql = new StringBuilder("CREATE ");
+        if (ctx.OR() != null && ctx.REPLACE() != null) {
+            sql.append("OR REPLACE ");
+        }
+        if (ctx.TEMPORARY() != null) {
+            sql.append("TEMPORARY ");
+        }
+        if (ctx.GLOBAL() != null) {
+            sql.append("GLOBAL ");
+        }
+        sql.append("VIEW ");
+        if (ctx.IF() != null && ctx.EXISTS() != null) {
+            sql.append("IF NOT EXISTS ");
+        }
+        String viewName = resolveIdentifierReference(ctx.identifierReference());
+        sql.append(quoteIdentifierIfNeeded(viewName));
+
+        // Column aliases for the view
+        if (ctx.identifierCommentList() != null) {
+            sql.append(" ").append(getOriginalText(ctx.identifierCommentList()));
+        }
+
+        // The inner query -- use full AST parsing
+        if (ctx.query() != null) {
+            LogicalPlan queryPlan = visitQuery(ctx.query());
+            String querySql = generateNodeSql(queryPlan);
+            sql.append(" AS ").append(querySql);
+        }
+
+        return new RawDDLStatement(sql.toString());
+    }
+
+    @Override
+    public LogicalPlan visitDropView(SqlBaseParser.DropViewContext ctx) {
+        StringBuilder sql = new StringBuilder("DROP VIEW ");
+        if (ctx.IF() != null && ctx.EXISTS() != null) {
+            sql.append("IF EXISTS ");
+        }
+        String viewName = resolveIdentifierReference(ctx.identifierReference());
+        sql.append(quoteIdentifierIfNeeded(viewName));
+        return new RawDDLStatement(sql.toString());
+    }
+
+    @Override
+    public LogicalPlan visitDmlStatement(SqlBaseParser.DmlStatementContext ctx) {
+        // DML statement wraps: optional WITH clause + dmlStatementNoWith
+        // dmlStatementNoWith has alternatives: SingleInsertQuery, MultiInsertQuery, etc.
+        SqlBaseParser.DmlStatementNoWithContext noWith = ctx.dmlStatementNoWith();
+
+        if (noWith instanceof SqlBaseParser.SingleInsertQueryContext singleInsert) {
+            return buildSingleInsert(singleInsert, ctx.ctes());
+        }
+
+        // Fallback: use the original SQL text for complex DML patterns
+        return new RawDDLStatement(getOriginalText(ctx));
+    }
+
+    /**
+     * Builds a single INSERT statement from parsed components.
+     *
+     * <p>Handles:
+     * <ul>
+     *   <li>INSERT INTO tableName query (INSERT INTO ... SELECT ...)</li>
+     *   <li>INSERT INTO tableName VALUES (...) (parsed as inline table query)</li>
+     * </ul>
+     */
+    private LogicalPlan buildSingleInsert(SqlBaseParser.SingleInsertQueryContext ctx,
+                                           SqlBaseParser.CtesContext ctes) {
+        StringBuilder sql = new StringBuilder();
+
+        // Optional WITH clause
+        if (ctes != null) {
+            sql.append(getOriginalText(ctes)).append(" ");
+        }
+
+        // INSERT INTO clause
+        SqlBaseParser.InsertIntoContext insertInto = ctx.insertInto();
+        if (insertInto instanceof SqlBaseParser.InsertIntoTableContext insert) {
+            sql.append("INSERT INTO ");
+            String tableName = resolveIdentifierReference(insert.identifierReference());
+            sql.append(quoteIdentifierIfNeeded(tableName));
+
+            // Optional column list
+            if (insert.identifierList() != null) {
+                sql.append(" (");
+                sql.append(getOriginalText(insert.identifierList()));
+                sql.append(")");
+            }
+        } else if (insertInto instanceof SqlBaseParser.InsertOverwriteTableContext overwrite) {
+            sql.append("INSERT OR REPLACE INTO ");
+            String tableName = resolveIdentifierReference(overwrite.identifierReference());
+            sql.append(quoteIdentifierIfNeeded(tableName));
+        } else {
+            // Fallback for other insert types (INSERT OVERWRITE DIR, etc.)
+            sql.append(getOriginalText(insertInto));
+        }
+
+        // Query part (VALUES or SELECT)
+        if (ctx.query() != null) {
+            sql.append(" ");
+            // Try to parse the query through the AST for proper transformation
+            try {
+                LogicalPlan queryPlan = visitQuery(ctx.query());
+                String querySql = generateNodeSql(queryPlan);
+                sql.append(querySql);
+            } catch (Exception e) {
+                // Fallback to original text if AST parsing fails
+                logger.debug("INSERT query AST parsing failed, using original text: {}", e.getMessage());
+                sql.append(getOriginalText(ctx.query()));
+            }
+        }
+
+        return new RawDDLStatement(sql.toString());
+    }
+
+    @Override
+    public LogicalPlan visitAddTableColumns(SqlBaseParser.AddTableColumnsContext ctx) {
+        StringBuilder sql = new StringBuilder("ALTER TABLE ");
+        String tableName = resolveIdentifierReference(ctx.identifierReference());
+        sql.append(quoteIdentifierIfNeeded(tableName));
+        sql.append(" ADD COLUMN ");
+
+        // Use original text for the column definitions since the grammar for
+        // QualifiedColTypeWithPositionList is complex and rarely needs type mapping
+        if (ctx.columns != null) {
+            sql.append(getOriginalText(ctx.columns));
+        }
+
+        return new RawDDLStatement(sql.toString());
+    }
+
+    // ==================== DDL Helper Methods ====================
+
+    /**
+     * Builds a column definition string with Spark-to-DuckDB type mapping.
+     *
+     * <p>Converts: "name STRING" -> "name VARCHAR", "count LONG" -> "count BIGINT", etc.
+     */
+    private String buildColumnDefinition(SqlBaseParser.ColDefinitionContext colDef) {
+        String colName = getErrorCapturingIdentifierText(colDef.colName);
+        String quotedName = quoteIdentifierIfNeeded(colName);
+
+        // Map the Spark data type to DuckDB type
+        SqlBaseParser.DataTypeContext dataTypeCtx = colDef.dataType();
+        String duckdbType = resolveDuckDBTypeString(dataTypeCtx);
+
+        // Handle column options (NOT NULL, DEFAULT, etc.)
+        StringBuilder result = new StringBuilder();
+        result.append(quotedName).append(" ").append(duckdbType);
+
+        if (colDef.colDefinitionOption() != null) {
+            for (SqlBaseParser.ColDefinitionOptionContext opt : colDef.colDefinitionOption()) {
+                result.append(" ").append(getOriginalText(opt));
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Resolves a SparkSQL DataType parse tree node to a DuckDB type string.
+     *
+     * <p>Uses the existing {@link #resolveDataType(SqlBaseParser.DataTypeContext)} to parse
+     * into a Thunderduck DataType, then maps to DuckDB via {@link TypeMapper#toDuckDBType(DataType)}.
+     * Falls back to the original text for complex types that don't need mapping.
+     */
+    private String resolveDuckDBTypeString(SqlBaseParser.DataTypeContext ctx) {
+        try {
+            DataType dataType = resolveDataType(ctx);
+            return com.thunderduck.types.TypeMapper.toDuckDBType(dataType);
+        } catch (Exception e) {
+            // Fallback: use original text (e.g., for complex types like ARRAY<STRING>)
+            return getOriginalText(ctx);
+        }
+    }
+
     // ==================== Query / CTE ====================
 
     @Override
