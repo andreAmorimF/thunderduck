@@ -189,7 +189,7 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         // Handle comma-separated tables (implicit cross join)
         for (int i = 1; i < relations.size(); i++) {
             LogicalPlan right = visitRelation(relations.get(i));
-            plan = new Join(plan, right, Join.JoinType.CROSS, Literal.of(true));
+            plan = new Join(plan, right, Join.JoinType.CROSS, null);
         }
 
         return plan;
@@ -434,8 +434,10 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         }
 
         // 3. Classify SELECT items into grouping expressions and aggregate expressions
+        //    Track original ordering so interleaved grouping/aggregate columns are preserved.
         List<Expression> groupingExprs = new ArrayList<>();
         List<Aggregate.AggregateExpression> aggregateExprs = new ArrayList<>();
+        List<Aggregate.SelectEntry> selectOrder = new ArrayList<>();
 
         for (Expression expr : selectExprs) {
             Expression inner = (expr instanceof AliasExpression ae) ? ae.expression() : expr;
@@ -443,12 +445,15 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
 
             if (inner instanceof StarExpression) {
                 // SELECT * with GROUP BY — pass through as grouping
+                selectOrder.add(new Aggregate.SelectEntry(false, groupingExprs.size()));
                 groupingExprs.add(expr);
             } else if (com.thunderduck.expression.ExpressionUtils.containsAggregateFunction(inner)) {
                 // Contains aggregate function → AggregateExpression
+                selectOrder.add(new Aggregate.SelectEntry(true, aggregateExprs.size()));
                 aggregateExprs.add(buildAggregateExpression(inner, alias));
             } else {
                 // No aggregate function → grouping expression
+                selectOrder.add(new Aggregate.SelectEntry(false, groupingExprs.size()));
                 groupingExprs.add(expr);
             }
         }
@@ -471,9 +476,9 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
             havingCondition = visitBooleanExpr(havingCtx.booleanExpression());
         }
 
-        // 5. Build Aggregate node
+        // 5. Build Aggregate node with original select ordering
         Aggregate aggregate = new Aggregate(source, groupingExprs,
-            aggregateExprs, havingCondition, groupingSets);
+            aggregateExprs, havingCondition, groupingSets, selectOrder);
 
         // 6. Apply DISTINCT if specified
         if (isDistinct) {

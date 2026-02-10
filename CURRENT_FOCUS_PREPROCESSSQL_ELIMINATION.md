@@ -1,8 +1,8 @@
 # Eliminating SQL String Manipulation — Architecture Plan
 
-**Status**: Planning
+**Status**: Phases 1-4 complete (core elimination done; deferred items remain)
 **Created**: 2026-02-09
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-02-10
 
 ## Architectural Principles
 
@@ -167,58 +167,74 @@ These post-hoc schema fixes violate principles 6, 7, 8. In the target architectu
 
 ## Execution Plan
 
-### Phase 1: Stop calling `preprocessSQL` on the DataFrame path
+### Phase 1: Stop calling `preprocessSQL` on the DataFrame path ✅
 
-The DataFrame path already has a typed AST. Audit which `preprocessSQL` transformations are still needed for DataFrame-generated SQL and move each to the SQLGenerator. Target: `preprocessSQL` is only called for the raw SQL (`spark.sql(...)`) path.
+**Completed**: 2026-02-09 (commit d018b0a)
 
-Work items:
-- [ ] G1: `count(*)` aliasing → SQLGenerator
-- [ ] G2: `CAST(TRUNC)` → CastExpression
-- [ ] G3: Verify `spark_sum`/`spark_avg` coverage in SQLGenerator for all plan shapes
-- [ ] G5: ROLLUP NULLS FIRST → SQLGenerator
-- [ ] Remove `preprocessSQL()` call at line 294 (DataFrame path)
-- [ ] Verify full differential test suite passes without it
+The DataFrame path no longer calls `preprocessSQL()`. All transformations happen on the AST.
 
-### Phase 2: Eliminate result-set copying
+- [x] G1: `count(*)` aliasing → SQLGenerator
+- [x] G2: `CAST(TRUNC)` → CastExpression
+- [x] G3: Verify `spark_sum`/`spark_avg` coverage in SQLGenerator for all plan shapes
+- [x] G5: ROLLUP NULLS FIRST → SQLGenerator
+- [x] Remove `preprocessSQL()` call on DataFrame path
+- [x] Verify full differential test suite passes without it
 
-Make DuckDB return Arrow batches with the correct schema so `SchemaCorrectedBatchIterator` is unnecessary.
+### Phase 2: Eliminate result-set copying ✅
 
-Work items:
-- [ ] G6: Emit `AS "sum(...)"` aliases for extension functions in strict mode
-- [ ] T1: Trust expression tree for COUNT nullability; stop regex detection
-- [ ] T2: Ensure extension functions return correct DECIMAL precision; add top-level CAST in SQLGenerator for remaining mismatches
-- [ ] T3: Emit CAST(... AS DOUBLE) in SQLGenerator when expression tree says DOUBLE
-- [ ] T4: Use expression tree schema for `analyzePlan` instead of DuckDB execution + patching
-- [ ] R1: Remove `SchemaCorrectedBatchIterator` (or reduce to a thin passthrough with no copying)
+**Completed**: 2026-02-09 (commit f0a730f)
 
-### Phase 3: Complete the SparkSQL parser
+`SchemaCorrectedBatchIterator` is now zero-copy (nullable flags only). Extension functions emit `AS` aliases for correct column naming. Schema analysis uses `plan.inferSchema()` directly.
 
-Make the SparkSQL parser handle all Spark SQL constructs so the `transformSparkSQL()` fallback to `preprocessSQL()` is never triggered.
+- [x] G6: Emit `AS "sum(...)"` aliases for extension functions in strict mode
+- [x] T1: Trust expression tree for COUNT nullability; stop regex detection
+- [x] T2: Ensure extension functions return correct DECIMAL precision
+- [x] T3: Emit CAST(... AS DOUBLE) in SQLGenerator when expression tree says DOUBLE
+- [x] T4: Use expression tree schema for `analyzePlan` instead of DuckDB execution + patching
+- [x] R1: Reduce `SchemaCorrectedBatchIterator` to zero-copy (nullable flags only)
 
-Work items:
-- [ ] P3: String concatenation operator `+` → `||`
-- [ ] P6: `NAMED_STRUCT` → `StructLiteralExpression`
-- [ ] P7: `MAP()` → `MapLiteralExpression`
-- [ ] P8: `struct()` → `row()` via FunctionRegistry
-- [ ] P9: `array()` → `list_value()` via FunctionRegistry
-- [ ] P2, P4: Minor parser fixes
-- [ ] G4: Division-of-aggregates decimal casting → SQLGenerator top-level projection CAST
-- [ ] Remove `transformSparkSQL()` fallback — parser failure = query failure (with clear error)
+### Phase 3: Complete the SparkSQL parser ✅
 
-### Phase 4: Delete dead code
+**Completed**: 2026-02-10 (commit 589e314)
 
-Once phases 1-3 are complete:
-- [ ] Delete `preprocessSQL()` entirely
+SingleRowRelation SQL generation added (the #1 parser fallback trigger). Parser now handles queries like `SELECT ARRAY(1,2,3)` without falling back to `preprocessSQL()`. CTE support added via `WithCTE`. Raw SQL path now uses parser-to-plan schema inference via `transformSparkSQLWithPlan()`.
+
+- [x] P3: String concatenation `+` → `||` — `BinaryExpression.toSQL()` detects string context
+- [x] P6: `NAMED_STRUCT` → `struct_pack` — FunctionRegistry CUSTOM_TRANSLATOR
+- [x] P7: `MAP()` → DuckDB map — FunctionRegistry CUSTOM_TRANSLATOR
+- [x] P8: `struct()` → `row()` — FunctionRegistry DIRECT_MAPPING
+- [x] P9: `array()` → `list_value()` — FunctionRegistry DIRECT_MAPPING
+- [x] SingleRowRelation: SQLGenerator no-op + skip FROM clause in visitProject
+- [x] CTE support: WithCTE logical plan node + visitWithCTE in SQLGenerator
+- [x] Raw SQL schema: `transformSparkSQLWithPlan()` returns LogicalPlan for schema inference
+
+**Deferred** (out of scope — edge cases or large scope):
+- P2: `returns` keyword (affects 1 query, needs grammar change)
+- P4: `at cross join` (affects 1 query, needs grammar change)
+- G4: Division decimal casting (complex strict-mode arithmetic analysis)
+- Remove `transformSparkSQL()` fallback (requires DDL/DML parser support)
+
+### Phase 4: Delete dead code ✅
+
+**Completed**: 2026-02-10 (commit 589e314)
+
+Deleted 3 confirmed dead methods (~137 lines). Updated stale comment about groupingSets.
+
+- [x] Delete `mergeNullableOnly()` (zero callers, replaced by SchemaCorrectedBatchIterator)
+- [x] Delete `fixDecimalToDoubleCasts()` (zero callers, moved to SQL generation in Phase 2)
+- [x] Delete `applyDoubleCastsToSelectItems()` (only called by dead `fixDecimalToDoubleCasts`)
+- [x] Update stale comment: groupingSets now populated on Aggregate nodes
+
+**Remaining dead code** (deletable when deferred items are resolved):
+- [ ] Delete `preprocessSQL()` entirely (blocked by deferred P2, P4, DDL/DML support)
 - [ ] Delete `translateSparkFunctions()` and its 4 sub-methods
 - [ ] Delete `fixCountNullable()`, `detectCountColumns()`, `collectCountAliases()`
 - [ ] Delete `fixDecimalPrecisionForComplexAggregates()`, `detectComplexAggregateColumns()`
-- [ ] Delete `fixDecimalToDoubleCasts()`, `applyDoubleCastsToSelectItems()`
 - [ ] Delete `fixDivisionDecimalCasts()` and its helpers
-- [ ] Delete `mergeNullableOnly()`, `normalizeAggregateColumnName()`
 - [ ] Delete or gut `SchemaCorrectedBatchIterator`
 - [ ] Delete ~20 helper methods (`findOutermostKeyword`, `splitSelectList`, `findMatchingParen`, etc.)
 
-Estimated deletion: **~1200 lines** across `SparkConnectServiceImpl.java` and `SchemaCorrectedBatchIterator.java`.
+Estimated remaining deletion: **~1000 lines** (blocked by deferred items above).
 
 ## Extension Function Coverage Gaps
 

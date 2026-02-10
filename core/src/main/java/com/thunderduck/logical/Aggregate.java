@@ -39,6 +39,14 @@ public final class Aggregate extends LogicalPlan {
     private final List<AggregateExpression> aggregateExpressions;
     private final Expression havingCondition;
     private final GroupingSets groupingSets;
+    // Each entry: true=aggregate, false=grouping. Indices refer to respective lists.
+    // null means default ordering (grouping first, then aggregates).
+    private final List<SelectEntry> selectOrder;
+
+    /**
+     * Tracks original SELECT column ordering when grouping and aggregate columns are interleaved.
+     */
+    public record SelectEntry(boolean isAggregate, int index) {}
 
     /**
      * Creates an aggregate node with optional HAVING clause and grouping sets.
@@ -54,6 +62,25 @@ public final class Aggregate extends LogicalPlan {
                     List<AggregateExpression> aggregateExpressions,
                     Expression havingCondition,
                     GroupingSets groupingSets) {
+        this(child, groupingExpressions, aggregateExpressions, havingCondition, groupingSets, null);
+    }
+
+    /**
+     * Creates an aggregate node with explicit SELECT column ordering.
+     *
+     * @param child the child node
+     * @param groupingExpressions the grouping expressions
+     * @param aggregateExpressions the aggregate expressions
+     * @param havingCondition the HAVING condition (can be null)
+     * @param groupingSets the grouping sets specification (can be null)
+     * @param selectOrder the original SELECT column ordering (can be null for default)
+     */
+    public Aggregate(LogicalPlan child,
+                    List<Expression> groupingExpressions,
+                    List<AggregateExpression> aggregateExpressions,
+                    Expression havingCondition,
+                    GroupingSets groupingSets,
+                    List<SelectEntry> selectOrder) {
         super(child);
         this.groupingExpressions = new ArrayList<>(
             Objects.requireNonNull(groupingExpressions, "groupingExpressions must not be null"));
@@ -61,6 +88,7 @@ public final class Aggregate extends LogicalPlan {
             Objects.requireNonNull(aggregateExpressions, "aggregateExpressions must not be null"));
         this.havingCondition = havingCondition;  // Can be null
         this.groupingSets = groupingSets;  // Can be null for simple GROUP BY
+        this.selectOrder = selectOrder;  // Can be null for default ordering
     }
 
     /**
@@ -128,6 +156,15 @@ public final class Aggregate extends LogicalPlan {
     }
 
     /**
+     * Returns the original SELECT column ordering, or null for default (grouping first).
+     *
+     * @return the select ordering, or null
+     */
+    public List<SelectEntry> selectOrder() {
+        return selectOrder;
+    }
+
+    /**
      * Returns the child node.
      *
      * @return the child
@@ -155,61 +192,31 @@ public final class Aggregate extends LogicalPlan {
         // SELECT clause with grouping expressions and aggregates
         sql.append("SELECT ");
 
-        List<String> selectExprs = new ArrayList<>();
-
-        // Add grouping columns
+        // Render grouping expressions
+        List<String> groupingRendered = new ArrayList<>();
         for (Expression expr : groupingExpressions) {
-            selectExprs.add(expr.toSQL());
+            groupingRendered.add(expr.toSQL());
         }
 
-        // Add aggregate expressions
+        // Render aggregate expressions
+        List<String> aggregateRendered = new ArrayList<>();
         for (AggregateExpression aggExpr : aggregateExpressions) {
-            String aggSQL;
-            String originalSQL = null; // Captures pre-transformation SQL for auto-aliasing
+            aggregateRendered.add(renderAggregateExpression(aggExpr, childSchema));
+        }
 
-            if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
-                // Capture original SQL before strict mode transformation
-                originalSQL = aggExpr.rawExpression().toSQL();
-                // Transform aggregate function names in the AST, then render
-                Expression transformed = com.thunderduck.generator.SQLGenerator.transformAggregateExpression(aggExpr.rawExpression());
-                aggSQL = transformed.toSQL();
-            } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
-                aggSQL = aggExpr.toSQL();
-                // Normalize function name: strip _DISTINCT suffix for matching
-                String baseFuncName = aggExpr.function().toUpperCase();
-                if (baseFuncName.endsWith("_DISTINCT")) {
-                    baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
+        // Combine in correct order: use selectOrder if present, else grouping-first
+        List<String> selectExprs = new ArrayList<>();
+        if (selectOrder != null) {
+            for (SelectEntry entry : selectOrder) {
+                if (entry.isAggregate()) {
+                    selectExprs.add(aggregateRendered.get(entry.index()));
+                } else {
+                    selectExprs.add(groupingRendered.get(entry.index()));
                 }
-
-                if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
-                    // Capture original SQL before replacing function name
-                    originalSQL = aggSQL;
-                    if (baseFuncName.equals("SUM")) {
-                        aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
-                    } else {
-                        aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
-                    }
-                }
-            } else {
-                aggSQL = aggExpr.toSQL();
             }
-
-            // Wrap with CAST(... AS DOUBLE) if Spark expects DOUBLE but DuckDB returns DECIMAL
-            aggSQL = wrapWithTypeCastIfNeeded(aggSQL, aggExpr, childSchema);
-
-            // Add alias if provided, or auto-alias unaliased count(*) as "count(1)"
-            // to match Spark's column naming convention.
-            // In strict mode, also alias transformed functions (spark_sum -> SUM) so
-            // DuckDB returns the original Spark-expected column name.
-            if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
-                aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(aggExpr.alias());
-            } else if (aggExpr.isUnaliasedCountStar()) {
-                aggSQL += " AS \"count(1)\"";
-            } else if (originalSQL != null) {
-                // Strict mode transformed the function name — alias back to original
-                aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(originalSQL);
-            }
-            selectExprs.add(aggSQL);
+        } else {
+            selectExprs.addAll(groupingRendered);
+            selectExprs.addAll(aggregateRendered);
         }
 
         sql.append(String.join(", ", selectExprs));
@@ -250,6 +257,47 @@ public final class Aggregate extends LogicalPlan {
         return sql.toString();
     }
 
+    /**
+     * Renders a single aggregate expression to SQL with strict mode transformations and aliasing.
+     */
+    private static String renderAggregateExpression(AggregateExpression aggExpr, StructType childSchema) {
+        String aggSQL;
+        String originalSQL = null;
+
+        if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
+            originalSQL = aggExpr.rawExpression().toSQL();
+            Expression transformed = com.thunderduck.generator.SQLGenerator.transformAggregateExpression(aggExpr.rawExpression());
+            aggSQL = transformed.toSQL();
+        } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
+            aggSQL = aggExpr.toSQL();
+            String baseFuncName = aggExpr.function().toUpperCase();
+            if (baseFuncName.endsWith("_DISTINCT")) {
+                baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
+            }
+            if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
+                originalSQL = aggSQL;
+                if (baseFuncName.equals("SUM")) {
+                    aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
+                } else {
+                    aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
+                }
+            }
+        } else {
+            aggSQL = aggExpr.toSQL();
+        }
+
+        aggSQL = wrapWithTypeCastIfNeeded(aggSQL, aggExpr, childSchema);
+
+        if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
+            aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(aggExpr.alias());
+        } else if (aggExpr.isUnaliasedCountStar()) {
+            aggSQL += " AS \"count(1)\"";
+        } else if (originalSQL != null) {
+            aggSQL += " AS " + com.thunderduck.generator.SQLQuoting.quoteIdentifier(originalSQL);
+        }
+        return aggSQL;
+    }
+
     @Override
     public StructType inferSchema() {
         // Get child schema for resolving types (may be null for some plan types)
@@ -265,42 +313,61 @@ public final class Aggregate extends LogicalPlan {
         // using expression names and default/aggregate types.
         // This ensures column names are preserved even when child schema is unavailable.
 
-        List<StructField> fields = new ArrayList<>();
-
-        // Add grouping fields with proper names and types
-        // When CUBE/ROLLUP/GROUPING_SETS is used, grouping columns must be nullable
-        // because subtotal and grand-total rows produce NULL for excluded dimensions.
+        // Build grouping fields
         boolean forceNullable = (groupingSets != null);
+        List<StructField> groupingFields = new ArrayList<>();
         for (Expression expr : groupingExpressions) {
             String name = extractExpressionName(expr);
             DataType type = resolveExpressionType(expr, childSchema);
             boolean nullable = forceNullable || resolveExpressionNullable(expr, childSchema);
-            fields.add(new StructField(name, type, nullable));
+            groupingFields.add(new StructField(name, type, nullable));
         }
 
-        // Add aggregate fields
+        // Build aggregate fields
+        List<StructField> aggregateFields = new ArrayList<>();
         for (AggregateExpression aggExpr : aggregateExpressions) {
             String name;
             if (aggExpr.alias() != null) {
                 name = aggExpr.alias();
             } else if (aggExpr.isUnaliasedCountStar()) {
-                // Match Spark's column naming: unaliased count(*) is named "count(1)"
                 name = "count(1)";
+            } else if (aggExpr.function() != null) {
+                // Match Spark's naming: lowercase function name (e.g., sum(l_quantity))
+                String func = aggExpr.function().toLowerCase();
+                if (aggExpr.argument() != null) {
+                    name = func + "(" + aggExpr.argument().toSQL() + ")";
+                } else {
+                    name = func + "(*)";
+                }
             } else {
                 name = aggExpr.toSQL();
             }
             DataType type;
             boolean nullable;
-
             if (aggExpr.isComposite()) {
                 type = TypeInferenceEngine.resolveType(aggExpr.rawExpression(), childSchema);
-                nullable = true; // composite aggregates can be null
+                nullable = true;
             } else {
                 type = inferAggregateReturnType(aggExpr, childSchema);
                 nullable = TypeInferenceEngine.resolveAggregateNullable(
                     aggExpr.function(), aggExpr.argument(), childSchema);
             }
-            fields.add(new StructField(name, type, nullable));
+            aggregateFields.add(new StructField(name, type, nullable));
+        }
+
+        // Combine in correct order
+        List<StructField> fields = new ArrayList<>();
+        if (selectOrder != null) {
+            for (SelectEntry entry : selectOrder) {
+                if (entry.isAggregate()) {
+                    fields.add(aggregateFields.get(entry.index()));
+                } else {
+                    fields.add(groupingFields.get(entry.index()));
+                }
+            }
+        } else {
+            fields.addAll(groupingFields);
+            fields.addAll(aggregateFields);
         }
 
         return new StructType(fields);

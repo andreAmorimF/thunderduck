@@ -44,7 +44,7 @@ public class SparkSQLParser {
      * Creates a new parser instance. Typically accessed via {@link #getInstance()}.
      */
     public SparkSQLParser() {
-        this.lexer = new SqlBaseLexer(CharStreams.fromString(""));
+        this.lexer = new SqlBaseLexer(new UpperCaseCharStream(CharStreams.fromString("")));
         this.tokens = new CommonTokenStream(lexer);
         this.parser = new SqlBaseParser(tokens);
 
@@ -81,7 +81,7 @@ public class SparkSQLParser {
         logger.debug("Parsing SparkSQL: {}", sql);
 
         // Reset lexer and parser state
-        lexer.setInputStream(CharStreams.fromString(sql));
+        lexer.setInputStream(new UpperCaseCharStream(CharStreams.fromString(sql)));
         tokens.setTokenSource(lexer);
         parser.setTokenStream(tokens);
 

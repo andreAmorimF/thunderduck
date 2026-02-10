@@ -327,9 +327,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(qualifiedExpr);
 
             String alias = aliases.get(i);
-            if (alias != null && !alias.isEmpty()) {
-                // Project.projections() are already unwrapped (AliasExpressions removed),
-                // so always add the alias from the separate aliases list
+            if (alias != null && !alias.isEmpty() && !(expr instanceof AliasExpression)) {
                 sql.append(" AS ");
                 sql.append(SQLQuoting.quoteIdentifier(alias));
             }
@@ -368,9 +366,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(qualifiedExpr);
 
             String alias = aliases.get(i);
-            if (alias != null && !alias.isEmpty()) {
-                // Project.projections() are already unwrapped (AliasExpressions removed),
-                // so always add the alias from the separate aliases list
+            if (alias != null && !alias.isEmpty() && !(expr instanceof AliasExpression)) {
                 sql.append(" AS ");
                 sql.append(SQLQuoting.quoteIdentifier(alias));
             }
@@ -581,6 +577,22 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             if (childSource != null) {
                 // Direct table - no subquery needed
                 sql.append("SELECT * FROM ").append(childSource);
+                sql.append(" WHERE ");
+                sql.append(plan.condition().toSQL());
+            } else if (child instanceof AliasedRelation aliased) {
+                // Preserve user-provided alias (e.g., lineitem l2)
+                // so WHERE can reference l2.column
+                String aliasedChildSource = getDirectlyAliasableSource(aliased.child());
+                if (aliasedChildSource != null) {
+                    sql.append("SELECT * FROM ").append(aliasedChildSource)
+                       .append(" AS ").append(SQLQuoting.quoteIdentifier(aliased.alias()));
+                } else {
+                    sql.append("SELECT * FROM (");
+                    subqueryDepth++;
+                    visit(aliased.child());
+                    subqueryDepth--;
+                    sql.append(") AS ").append(SQLQuoting.quoteIdentifier(aliased.alias()));
+                }
                 sql.append(" WHERE ");
                 sql.append(plan.condition().toSQL());
             } else {
@@ -1081,63 +1093,31 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // SELECT clause with grouping expressions and aggregates
         sql.append("SELECT ");
 
-        java.util.List<String> selectExprs = new java.util.ArrayList<>();
-
-        // Add grouping columns
+        // Render grouping expressions
+        java.util.List<String> groupingRendered = new java.util.ArrayList<>();
         for (com.thunderduck.expression.Expression expr : plan.groupingExpressions()) {
-            selectExprs.add(expr.toSQL());
+            groupingRendered.add(expr.toSQL());
         }
 
-        // Add aggregate expressions
+        // Render aggregate expressions
+        java.util.List<String> aggregateRendered = new java.util.ArrayList<>();
         for (Aggregate.AggregateExpression aggExpr : plan.aggregateExpressions()) {
-            String aggSQL;
-            String originalSQL = null; // Captures pre-transformation SQL for auto-aliasing
+            aggregateRendered.add(renderAggregateExpression(aggExpr, childSchema));
+        }
 
-            if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
-                // Capture original SQL before strict mode transformation
-                originalSQL = aggExpr.rawExpression().toSQL();
-                // Transform aggregate function names in the AST, then render
-                com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression());
-                aggSQL = transformed.toSQL();
-            } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
-                aggSQL = aggExpr.toSQL();
-                // Normalize function name: strip _DISTINCT suffix for matching
-                String baseFuncName = aggExpr.function().toUpperCase();
-                if (baseFuncName.endsWith("_DISTINCT")) {
-                    baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
+        // Combine in correct order: use selectOrder if present, else grouping-first
+        java.util.List<String> selectExprs = new java.util.ArrayList<>();
+        if (plan.selectOrder() != null) {
+            for (Aggregate.SelectEntry entry : plan.selectOrder()) {
+                if (entry.isAggregate()) {
+                    selectExprs.add(aggregateRendered.get(entry.index()));
+                } else {
+                    selectExprs.add(groupingRendered.get(entry.index()));
                 }
-
-                if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
-                    // Capture original SQL before replacing function name
-                    originalSQL = aggSQL;
-                    if (baseFuncName.equals("SUM")) {
-                        aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
-                    } else {
-                        aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
-                    }
-                }
-            } else {
-                aggSQL = aggExpr.toSQL();
             }
-
-            // Wrap with CAST(... AS DOUBLE) if Spark expects DOUBLE but DuckDB would return DECIMAL.
-            // This happens with composite aggregates like SUM(x) / 7.0 where Spark's type coercion
-            // promotes to DOUBLE, but DuckDB treats 7.0 as DECIMAL and returns DECIMAL.
-            aggSQL = wrapWithTypeCastIfNeeded(aggSQL, aggExpr, childSchema);
-
-            // Add alias if provided, or auto-alias unaliased count(*) as "count(1)"
-            // to match Spark's column naming convention.
-            // In strict mode, also alias transformed functions (spark_sum -> SUM) so
-            // DuckDB returns the original Spark-expected column name.
-            if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
-                aggSQL += " AS " + SQLQuoting.quoteIdentifier(aggExpr.alias());
-            } else if (aggExpr.isUnaliasedCountStar()) {
-                aggSQL += " AS \"count(1)\"";
-            } else if (originalSQL != null) {
-                // Strict mode transformed the function name — alias back to original
-                aggSQL += " AS " + SQLQuoting.quoteIdentifier(originalSQL);
-            }
-            selectExprs.add(aggSQL);
+        } else {
+            selectExprs.addAll(groupingRendered);
+            selectExprs.addAll(aggregateRendered);
         }
 
         sql.append(String.join(", ", selectExprs));
@@ -1181,6 +1161,69 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             sql.append(" HAVING ");
             sql.append(plan.havingCondition().toSQL());
         }
+    }
+
+    /**
+     * Renders a single aggregate expression to SQL, handling strict mode transformations,
+     * type casts, and aliasing.
+     */
+    private String renderAggregateExpression(Aggregate.AggregateExpression aggExpr,
+                                              com.thunderduck.types.StructType childSchema) {
+        String aggSQL;
+        String originalSQL = null;
+
+        if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
+            originalSQL = aggExpr.rawExpression().toSQL();
+            com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression());
+            aggSQL = transformed.toSQL();
+        } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
+            aggSQL = aggExpr.toSQL();
+            String baseFuncName = aggExpr.function().toUpperCase();
+            if (baseFuncName.endsWith("_DISTINCT")) {
+                baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
+            }
+            if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
+                originalSQL = aggSQL;
+                if (baseFuncName.equals("SUM")) {
+                    aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
+                } else {
+                    aggSQL = aggSQL.replaceFirst("(?i)\\bAVG\\b", "spark_avg");
+                }
+            }
+        } else {
+            aggSQL = aggExpr.toSQL();
+        }
+
+        aggSQL = wrapWithTypeCastIfNeeded(aggSQL, aggExpr, childSchema);
+
+        if (aggExpr.alias() != null && !aggExpr.alias().isEmpty()) {
+            aggSQL += " AS " + SQLQuoting.quoteIdentifier(aggExpr.alias());
+        } else if (aggExpr.isUnaliasedCountStar()) {
+            aggSQL += " AS \"count(1)\"";
+        } else if (originalSQL != null) {
+            aggSQL += " AS " + SQLQuoting.quoteIdentifier(originalSQL);
+        } else if (aggExpr.function() != null) {
+            // Alias unaliased aggregates to match Spark's column naming convention
+            // (e.g., sum(l_quantity) not SUM(l_quantity))
+            String sparkName = buildSparkAggregateColumnName(aggExpr);
+            if (sparkName != null) {
+                aggSQL += " AS " + SQLQuoting.quoteIdentifier(sparkName);
+            }
+        }
+        return aggSQL;
+    }
+
+    /**
+     * Builds Spark's expected column name for an unaliased aggregate.
+     * Spark uses lowercase function name: sum(col), avg(col), min(col), etc.
+     */
+    private static String buildSparkAggregateColumnName(Aggregate.AggregateExpression aggExpr) {
+        String func = aggExpr.function().toLowerCase();
+        if (aggExpr.argument() != null) {
+            String arg = aggExpr.argument().toSQL();
+            return func + "(" + arg + ")";
+        }
+        return func + "(*)";
     }
 
     /**

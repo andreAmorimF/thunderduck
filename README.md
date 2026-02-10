@@ -128,7 +128,7 @@ Thunderduck uses a three-layer architecture:
 
 ### Prerequisites
 
-- **Java**: 17 or later
+- **Java**: 21 or later
 - **Maven**: 3.9 or later
 - **Python**: 3.8+ (for PySpark client)
 

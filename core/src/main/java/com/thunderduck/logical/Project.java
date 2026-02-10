@@ -138,7 +138,16 @@ public final class Project extends LogicalPlan {
         for (int i = 0; i < projections.size(); i++) {
             Expression expr = projections.get(i);
             String alias = aliases.get(i);
-            String fieldName = (alias != null) ? alias : ("col_" + i);
+            String fieldName;
+            if (alias != null) {
+                fieldName = alias;
+            } else if (expr instanceof com.thunderduck.expression.AliasExpression ae) {
+                fieldName = ae.alias();
+            } else if (expr instanceof com.thunderduck.expression.UnresolvedColumn uc) {
+                fieldName = uc.columnName();
+            } else {
+                fieldName = expr.toSQL();
+            }
 
             // Resolve data type and nullable from child schema
             DataType resolvedType = resolveDataType(expr, childSchema);

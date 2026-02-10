@@ -172,7 +172,7 @@ public final class BinaryExpression implements Expression {
 
     private static boolean isStringExpression(Expression expr) {
         if (expr instanceof Literal lit) {
-            return lit.value() instanceof String;
+            return lit.dataType() instanceof com.thunderduck.types.StringType;
         }
         if (expr instanceof FunctionCall func) {
             String name = func.functionName().toLowerCase();
