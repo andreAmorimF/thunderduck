@@ -638,7 +638,12 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             }
             if (current instanceof Join join && hasAliasedChildren(join) && !containsSemiOrAntiJoin(join)) {
                 Map<Long, String> planIdToAlias = new HashMap<>();
-                sql.append("SELECT * FROM ");
+                String selectPrefix = "SELECT *";
+                if (hasOverlappingColumns(join)) {
+                    String explicitList = buildExplicitSelectForJoinChain(join);
+                    if (explicitList != null) selectPrefix = "SELECT " + explicitList;
+                }
+                sql.append(selectPrefix).append(" FROM ");
                 generateFlatJoinChainWithMapping(join, planIdToAlias);
                 sql.append(" WHERE ");
                 for (int i = 0; i < filters.size(); i++) {
@@ -809,6 +814,59 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             return containsSemiOrAntiJoin(leftJoin);
         }
         return false;
+    }
+
+    /**
+     * Checks if a join chain has overlapping column names across different sources.
+     * When sources share column names, DuckDB's SELECT * auto-deduplicates with :N suffixes,
+     * which differs from the SQL standard (and Spark) behavior. Returns false if any
+     * source schema is unavailable, so the caller can safely fall back to SELECT *.
+     */
+    private boolean hasOverlappingColumns(Join join) {
+        List<JoinPart> joinParts = new java.util.ArrayList<>();
+        LogicalPlan leftmost = collectJoinParts(join, joinParts);
+
+        List<LogicalPlan> sources = new java.util.ArrayList<>();
+        sources.add(leftmost);
+        for (JoinPart part : joinParts) sources.add(part.right);
+
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (LogicalPlan source : sources) {
+            StructType schema = source.schema();
+            if (schema == null || schema.fields().isEmpty()) return false;
+            for (StructField field : schema.fields()) {
+                if (!seen.add(field.name())) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Builds an explicit SELECT column list for a join chain, qualifying each column
+     * with its source alias. This prevents DuckDB from auto-deduplicating column names
+     * with :N suffixes when SELECT * encounters duplicate names across sources.
+     * Returns null if any source is not an AliasedRelation or has no schema, so the
+     * caller can fall back to SELECT *.
+     */
+    private String buildExplicitSelectForJoinChain(Join join) {
+        List<JoinPart> joinParts = new java.util.ArrayList<>();
+        LogicalPlan leftmost = collectJoinParts(join, joinParts);
+
+        List<LogicalPlan> sources = new java.util.ArrayList<>();
+        sources.add(leftmost);
+        for (JoinPart part : joinParts) sources.add(part.right);
+
+        List<String> selectItems = new java.util.ArrayList<>();
+        for (LogicalPlan source : sources) {
+            if (!(source instanceof AliasedRelation ar)) return null;
+            String alias = SQLQuoting.quoteIdentifier(ar.alias());
+            StructType schema = source.schema();
+            if (schema == null || schema.fields().isEmpty()) return null;
+            for (StructField field : schema.fields()) {
+                selectItems.add(alias + "." + SQLQuoting.quoteIdentifier(field.name()));
+            }
+        }
+        return selectItems.isEmpty() ? null : String.join(", ", selectItems);
     }
 
     /**
@@ -2418,6 +2476,14 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     private boolean canAppendClause(LogicalPlan plan) {
         // Aggregate: always safe -- generates SELECT ... FROM ... GROUP BY ...
         if (plan instanceof Aggregate) return true;
+
+        // Sort: safe if its child is appendable. This allows Limit(Sort(Filter(Join)))
+        // to produce "SELECT ... ORDER BY ... LIMIT N" without wrapping in
+        // "SELECT * FROM (...) AS alias LIMIT N", which would trigger DuckDB's
+        // column deduplication for duplicate column names in cross joins.
+        if (plan instanceof Sort s) {
+            return canAppendClause(s.child());
+        }
 
         // Project on Filter/Join or direct Join: generates flat SQL with table aliases
         // that need to stay visible for ORDER BY/LIMIT.
