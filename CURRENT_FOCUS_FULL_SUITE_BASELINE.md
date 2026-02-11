@@ -118,12 +118,40 @@ Relaxed mode casts `AVG()` results to `DOUBLE` for simplicity. In strict mode, t
 
 ### Architecture Goal: Zero-Copy Strict Mode
 
-**`SchemaCorrectedBatchIterator` should not be needed in strict mode.** All expected return types and nullability must be achieved at query planning time — via correct SQL generation, `AS` aliases with explicit types, and DuckDB extension functions (`spark_avg`, `spark_sum`, `spark_decimal_div`). The extension functions exist precisely to produce Spark-correct types at the DuckDB engine level, eliminating post-hoc Arrow vector rewriting. If strict mode still requires `SchemaCorrectedBatchIterator`, it means the SQL generation or extension functions are incomplete.
+**Three invariants that must hold simultaneously:**
+
+```
+Apache Spark 4.1 types (authoritative truth)
+  ← must match → DuckDB output (shaped by SQL generation + extension functions)
+  ← must match → inferSchema() (type inference in logical plan)
+```
+
+1. **Spark is the authority.** The target types, precision, scale, and nullability are defined by what Apache Spark 4.1 returns. We don't approximate — we match exactly.
+
+2. **DuckDB output must match Spark at the engine level.** This is achieved through a combination of SQL generation (CASTs, `AS` aliases, function rewrites) and DuckDB extension functions (`spark_avg`, `spark_sum`, `spark_decimal_div`). The extension functions exist to produce Spark-correct types where vanilla DuckDB diverges. No post-hoc Arrow vector rewriting — types must be correct in the Arrow data DuckDB produces.
+
+3. **`inferSchema()` must match DuckDB output.** The logical plan's type inference must return exactly the same types that the generated SQL will produce when executed by DuckDB. If these disagree, `AnalyzePlan` responses (used by PySpark for `df.schema`) will report different types than the actual Arrow data.
+
+**`SchemaCorrectedBatchIterator` should not be needed in strict mode.** If it's still required, it means either the SQL generation isn't producing Spark-correct types at the DuckDB level, or `inferSchema()` doesn't match what DuckDB returns. Both are bugs to fix, not to paper over with post-hoc correction.
+
+**No performance compromise.** All type correctness is achieved at query planning / SQL generation time. Zero Arrow vector copying. Zero runtime type conversion. The extension functions run inside DuckDB's execution engine at native speed.
+
+### Key Finding: Relaxed Mode Hid Pre-Existing Type Issues
+
+The test framework (`dataframe_diff.py:202-212`) **skips type and nullable comparison entirely in relaxed mode**:
+
+```python
+# In relaxed mode, skip type checking entirely
+if not self.relaxed and ref_type != test_type:
+    mismatches.append(...)
+```
+
+`_is_relaxed_mode()` returns `True` for both `auto` and `relaxed` modes. This means the ~70 "StringType" failures are NOT caused by strict mode introducing wrong types — they are pre-existing `inferSchema()` gaps that relaxed mode never checked. The types have always been wrong for these expressions; strict mode merely reveals it.
 
 ### Priority Fix Order
 
-1. **C2 (StringType)** — ~70 tests, likely a single systemic issue: strict mode SQL generation not producing correctly-typed output, falling back to untyped results
-2. **C1 (Extension overloads)** — 45 tests, needs C++ extension work to add DOUBLE/INTEGER overloads (or guard SQL gen to only emit extension functions for confirmed DECIMAL inputs)
-3. **C3 (DECIMAL→DOUBLE)** — ~28 tests, SQL generator needs strict-mode conditional to use extension functions instead of CAST-to-DOUBLE
-4. **C4 (Precision)** — ~8 tests, TypeInferenceEngine precision calculation
-5. **C5–C8** — smaller batches, incremental fixes
+1. **C2 (StringType)** — ~70 tests. Pre-existing `inferSchema()` gaps: `UnresolvedColumn.dataType()` returns StringType placeholder, complex expressions (lambda, struct, collect_list/set) don't resolve output types. Fix: complete type inference for all expression/plan node types.
+2. **C1 (Extension overloads)** — 45 tests. Extension only has DECIMAL overloads for `spark_avg`/`spark_sum`/`spark_decimal_div`. Fix: add DOUBLE/INTEGER/BIGINT overloads in C++ extension, OR guard SQL gen to only emit extension functions for confirmed DECIMAL inputs.
+3. **C3 (DECIMAL→DOUBLE)** — ~28 tests. SQL generator emits `CAST(AVG(...) AS DOUBLE)` in relaxed mode but doesn't switch to extension functions in strict mode. Fix: mode-conditional SQL generation for AVG/division.
+4. **C4 (Precision)** — ~8 tests. `TypeInferenceEngine` precision calculation off by 1. Fix: match Spark 4.1 precision rules exactly.
+5. **C5–C8** — smaller batches, incremental fixes.
