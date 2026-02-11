@@ -593,6 +593,26 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
+     * Resolves the filter condition's SQL, applying polymorphic function resolution
+     * if a child schema is available. This handles cases like size(map_col) needing
+     * cardinality() instead of len() for MAP columns.
+     */
+    private String resolveFilterConditionSQL(Filter plan) {
+        StructType childSchema = null;
+        try {
+            childSchema = plan.child().schema();
+        } catch (Exception e) {
+            LOG.trace("Schema resolution failed for Filter child; using direct toSQL()", e);
+        }
+
+        if (childSchema != null) {
+            Expression resolvedCondition = resolvePolymorphicFunctions(plan.condition(), childSchema);
+            return resolvedCondition.toSQL();
+        }
+        return plan.condition().toSQL();
+    }
+
+    /**
      * Visits a Filter node (WHERE clause).
      */
     private void visitFilter(Filter plan) {
@@ -631,7 +651,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 // Direct table - no subquery needed
                 sql.append("SELECT * FROM ").append(childSource);
                 sql.append(" WHERE ");
-                sql.append(plan.condition().toSQL());
+                sql.append(resolveFilterConditionSQL(plan));
             } else if (child instanceof AliasedRelation aliased) {
                 // Preserve user-provided alias (e.g., lineitem l2)
                 // so WHERE can reference l2.column
@@ -647,7 +667,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                     sql.append(") AS ").append(SQLQuoting.quoteIdentifier(aliased.alias()));
                 }
                 sql.append(" WHERE ");
-                sql.append(plan.condition().toSQL());
+                sql.append(resolveFilterConditionSQL(plan));
             } else {
                 // Complex child - wrap in subquery
                 sql.append("SELECT * FROM (");
@@ -656,7 +676,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 subqueryDepth--;
                 sql.append(") AS ").append(generateSubqueryAlias());
                 sql.append(" WHERE ");
-                sql.append(plan.condition().toSQL());
+                sql.append(resolveFilterConditionSQL(plan));
             }
         }
     }
@@ -3270,14 +3290,39 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
      * @return the expression with resolved function names, or the original if no resolution needed
      */
     private Expression resolvePolymorphicFunctions(Expression expr, StructType childSchema) {
-        if (childSchema == null || !(expr instanceof FunctionCall fc)) {
-            // Also check AliasExpression wrapping a FunctionCall
-            if (expr instanceof AliasExpression ae) {
-                Expression resolved = resolvePolymorphicFunctions(ae.expression(), childSchema);
-                if (resolved != ae.expression()) {
-                    return new AliasExpression(resolved, ae.alias());
-                }
+        if (childSchema == null) {
+            return expr;
+        }
+
+        // Recursively process wrapper expressions to resolve polymorphic functions
+        // inside complex expression trees (e.g., filter conditions like size(map_col) > 0)
+        if (expr instanceof AliasExpression ae) {
+            Expression resolved = resolvePolymorphicFunctions(ae.expression(), childSchema);
+            if (resolved != ae.expression()) {
+                return new AliasExpression(resolved, ae.alias());
             }
+            return expr;
+        }
+
+        if (expr instanceof com.thunderduck.expression.BinaryExpression be) {
+            Expression resolvedLeft = resolvePolymorphicFunctions(be.left(), childSchema);
+            Expression resolvedRight = resolvePolymorphicFunctions(be.right(), childSchema);
+            if (resolvedLeft != be.left() || resolvedRight != be.right()) {
+                return new com.thunderduck.expression.BinaryExpression(
+                    resolvedLeft, be.operator(), resolvedRight);
+            }
+            return expr;
+        }
+
+        if (expr instanceof com.thunderduck.expression.CastExpression ce) {
+            Expression resolvedExpr = resolvePolymorphicFunctions(ce.expression(), childSchema);
+            if (resolvedExpr != ce.expression()) {
+                return new com.thunderduck.expression.CastExpression(resolvedExpr, ce.targetType());
+            }
+            return expr;
+        }
+
+        if (!(expr instanceof FunctionCall fc)) {
             return expr;
         }
 
@@ -3293,27 +3338,81 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         }
 
         // element_at: keep as element_at for MAP arguments (DuckDB native),
-        // list_extract only works for arrays
-        if (funcName.equals("list_extract") && fc.argumentCount() == 2) {
+        // list_extract only works for arrays.
+        // Note: functionName() returns the original Spark name "element_at",
+        // not the translated name "list_extract" -- translation happens inside toSQL().
+        if (funcName.equals("element_at") && fc.argumentCount() == 2) {
             Expression arg = fc.arguments().get(0);
             DataType argType = TypeInferenceEngine.resolveType(arg, childSchema);
             if (argType instanceof MapType) {
-                return new FunctionCall("element_at", fc.arguments(), fc.dataType(), fc.nullable());
+                // DuckDB's element_at(map, key) returns an array (list of matching values).
+                // Spark's element_at(map, key) returns a scalar value.
+                // Use bracket notation map[key] which returns a scalar in DuckDB.
+                String mapElementSql = arg.toSQL() + "[" + fc.arguments().get(1).toSQL() + "]";
+                return createVerbatimSQLExpression(mapElementSql, fc.dataType(), fc.nullable());
             }
         }
 
-        // size: use cardinality() for MAP arguments (len() is array-only)
+        // explode on MAP: Spark produces two columns (key, value),
+        // DuckDB's unnest on MAP doesn't produce the same structure.
+        // Use unnest(map_keys(...)), unnest(map_values(...)) to match Spark behavior.
+        if (funcName.equals("explode") && fc.argumentCount() == 1) {
+            Expression arg = fc.arguments().get(0);
+            DataType argType = TypeInferenceEngine.resolveType(arg, childSchema);
+            if (argType instanceof MapType) {
+                String argSQL = arg.toSQL();
+                String mapExplodeSql = "unnest(map_keys(" + argSQL + ")) AS \"key\", " +
+                    "unnest(map_values(" + argSQL + ")) AS \"value\"";
+                return createVerbatimSQLExpression(mapExplodeSql, fc.dataType(), fc.nullable());
+            }
+        }
+
+        // size: use cardinality() for MAP arguments (len() is array-only in DuckDB)
         if (funcName.equals("size") && fc.argumentCount() == 1) {
             Expression arg = fc.arguments().get(0);
             DataType argType = TypeInferenceEngine.resolveType(arg, childSchema);
             if (argType instanceof MapType) {
-                // FunctionRegistry.translate("size") uses len() which doesn't work on MAPs.
-                // Return raw SQL with cardinality() instead.
-                return new com.thunderduck.expression.RawSQLExpression(
-                    "CAST(cardinality(" + arg.toSQL() + ") AS INTEGER)");
+                return createVerbatimSQLExpression(
+                    "CAST(cardinality(" + arg.toSQL() + ") AS INTEGER)",
+                    fc.dataType(), fc.nullable());
             }
         }
 
         return expr;
+    }
+
+    /**
+     * Creates an Expression that returns the given SQL verbatim from toSQL().
+     * Unlike RawSQLExpression, this does NOT pass through FunctionRegistry.rewriteSQL(),
+     * so DuckDB-native function names (like element_at for MAPs) are preserved.
+     *
+     * <p>Extends RawSQLExpression behavior (appendAutoAlias skips it) by implementing
+     * the same interface but with direct SQL output.
+     */
+    private static Expression createVerbatimSQLExpression(String sql, DataType dataType, boolean nullable) {
+        // Use an anonymous Expression that returns SQL verbatim.
+        // instanceof RawSQLExpression checks in appendAutoAlias won't match,
+        // but explicit aliases from the Project handle aliasing correctly.
+        return new Expression() {
+            @Override
+            public String toSQL() {
+                return sql;
+            }
+
+            @Override
+            public DataType dataType() {
+                return dataType;
+            }
+
+            @Override
+            public boolean nullable() {
+                return nullable;
+            }
+
+            @Override
+            public String toString() {
+                return "VerbatimSQL(" + sql + ")";
+            }
+        };
     }
 }
