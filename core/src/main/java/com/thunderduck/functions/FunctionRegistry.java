@@ -576,16 +576,24 @@ public class FunctionRegistry {
         CUSTOM_TRANSLATORS.put("add_months", args ->
             "CAST((" + args[0] + " + INTERVAL '" + args[1] + " months') AS DATE)");
 
-        // months_between: Spark months_between(date1, date2, roundOff) returns (date1 - date2) months
-        // DuckDB datediff('day', A, B) returns (B - A) days (second minus first!)
-        // So: datediff('day', date2, date1) / 31.0 = (date1 - date2) / 31.0
+        // months_between: Spark months_between(date1, date2) computes months between two dates.
+        // Algorithm: monthDiff = (year1*12+month1) - (year2*12+month2)
+        // If day1==day2 OR both are last day of month → exact monthDiff as DOUBLE
+        // Otherwise → round(monthDiff + (day1-day2)/31.0, 8)
         CUSTOM_TRANSLATORS.put("months_between", args -> {
-            if (args.length >= 2) {
-                // Compute the fractional months: (date1 - date2) / 31.0
-                // This is an approximation; for exact Spark parity, more complex logic needed
-                return "CAST(datediff('day', " + args[1] + ", " + args[0] + ") AS DOUBLE) / 31.0";
-            }
-            return "0.0";
+            if (args.length < 2) return "0.0";
+            String d1 = args[0];
+            String d2 = args[1];
+            return "CASE " +
+                "WHEN day(" + d1 + ") = day(" + d2 + ") " +
+                    "OR (day(" + d1 + ") = day(last_day(" + d1 + ")) " +
+                        "AND day(" + d2 + ") = day(last_day(" + d2 + "))) " +
+                "THEN CAST((year(" + d1 + ")*12 + month(" + d1 + ")) - " +
+                    "(year(" + d2 + ")*12 + month(" + d2 + ")) AS DOUBLE) " +
+                "ELSE ROUND(CAST((year(" + d1 + ")*12 + month(" + d1 + ")) - " +
+                    "(year(" + d2 + ")*12 + month(" + d2 + ")) AS DOUBLE) " +
+                    "+ CAST(day(" + d1 + ") - day(" + d2 + ") AS DOUBLE) / 31.0, 8) " +
+                "END";
         });
 
         // Date formatting - need format string conversion
@@ -635,10 +643,32 @@ public class FunctionRegistry {
         // last_day: same in both
         DIRECT_MAPPINGS.put("last_day", "last_day");
 
-        // next_day: Spark uses day names, DuckDB same
-        // Spark: next_day(date, 'Monday')
-        // DuckDB: next_day(date, 'monday') - case insensitive
-        DIRECT_MAPPINGS.put("next_day", "next_day");
+        // next_day: Spark next_day(date, dayOfWeek) returns the next date after the input
+        // that falls on the given day of the week. DuckDB has NO native next_day function.
+        // Implement using dayofweek arithmetic.
+        CUSTOM_TRANSLATORS.put("next_day", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("next_day requires 2 arguments");
+            }
+            String dateArg = args[0];
+            String dowArg = args[1];
+            // Map day-of-week string to DuckDB dayofweek integer (0=Sun, 1=Mon, ..., 6=Sat)
+            String targetDow =
+                "CASE UPPER(" + dowArg + ") " +
+                "WHEN 'SU' THEN 0 WHEN 'SUN' THEN 0 WHEN 'SUNDAY' THEN 0 " +
+                "WHEN 'MO' THEN 1 WHEN 'MON' THEN 1 WHEN 'MONDAY' THEN 1 " +
+                "WHEN 'TU' THEN 2 WHEN 'TUE' THEN 2 WHEN 'TUESDAY' THEN 2 " +
+                "WHEN 'WE' THEN 3 WHEN 'WED' THEN 3 WHEN 'WEDNESDAY' THEN 3 " +
+                "WHEN 'TH' THEN 4 WHEN 'THU' THEN 4 WHEN 'THURSDAY' THEN 4 " +
+                "WHEN 'FR' THEN 5 WHEN 'FRI' THEN 5 WHEN 'FRIDAY' THEN 5 " +
+                "WHEN 'SA' THEN 6 WHEN 'SAT' THEN 6 WHEN 'SATURDAY' THEN 6 " +
+                "END";
+            // DuckDB's dayofweek: 0=Sunday, 1=Monday, ..., 6=Saturday
+            String currentDow = "dayofweek(" + dateArg + ")";
+            String rawDays = "((" + targetDow + " - " + currentDow + " + 7) % 7)";
+            String daysToAdd = "CASE WHEN " + rawDays + " = 0 THEN 7 ELSE " + rawDays + " END";
+            return "CAST((" + dateArg + " + CAST(" + daysToAdd + " AS INTEGER)) AS DATE)";
+        });
 
         // unix_timestamp: Spark unix_timestamp() or unix_timestamp(timestamp) or unix_timestamp(string, format)
         // DuckDB: epoch(timestamp) returns DOUBLE, but Spark returns LONG

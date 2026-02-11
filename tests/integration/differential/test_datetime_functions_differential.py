@@ -327,7 +327,6 @@ class TestDateArithmetic:
 
         assert_dataframes_equal(ref_result, td_result, query_name="add_months")
 
-    @pytest.mark.skip(reason="months_between requires complex fractional month calculation - pending implementation")
     @pytest.mark.timeout(30)
     def test_months_between(self, spark_reference, spark_thunderduck, date_pair_data):
         """Test months_between() function - difference between dates in months."""
@@ -473,7 +472,6 @@ class TestDateTruncation:
 
         assert_dataframes_equal(ref_result, td_result, query_name="last_day")
 
-    @pytest.mark.skip(reason="DuckDB does not have next_day function - requires custom implementation")
     @pytest.mark.timeout(30)
     def test_next_day(self, spark_reference, spark_thunderduck, date_test_data):
         """Test next_day() function - get next occurrence of day-of-week."""
