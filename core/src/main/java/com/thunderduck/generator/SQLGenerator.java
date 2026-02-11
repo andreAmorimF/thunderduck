@@ -1526,6 +1526,27 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         }
     }
 
+
+    /**
+     * Checks whether the argument of an aggregate expression resolves to a DECIMAL type.
+     * Extension functions (spark_sum, spark_avg) only have DECIMAL overloads, so they
+     * should only be emitted when the input is confirmed DECIMAL. For all other types
+     * (DOUBLE, INTEGER, BIGINT, etc.), vanilla DuckDB functions are used.
+     *
+     * @param aggExpr the aggregate expression to check
+     * @param childSchema the child schema for resolving column types (may be null)
+     * @return true if the argument is confirmed to be a DECIMAL type
+     */
+    private static boolean isDecimalAggregateArg(Aggregate.AggregateExpression aggExpr,
+                                                   com.thunderduck.types.StructType childSchema) {
+        if (aggExpr.argument() == null || childSchema == null) {
+            return false;
+        }
+        com.thunderduck.types.DataType argType =
+            com.thunderduck.types.TypeInferenceEngine.resolveType(aggExpr.argument(), childSchema);
+        return argType instanceof com.thunderduck.types.DecimalType;
+    }
+
     /**
      * Renders a single aggregate expression to SQL, handling strict mode transformations,
      * type casts, and aliasing.
@@ -1537,7 +1558,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
             originalSQL = aggExpr.rawExpression().toSQL();
-            com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression());
+            com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression(), childSchema);
             aggSQL = transformed.toSQL();
         } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
             aggSQL = aggExpr.toSQL();
@@ -1545,7 +1566,11 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             if (baseFuncName.endsWith("_DISTINCT")) {
                 baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
             }
-            if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
+            // Only emit spark_sum/spark_avg when the argument is DECIMAL.
+            // Extension functions only have DECIMAL overloads; for other types
+            // (DOUBLE, INTEGER, BIGINT), use vanilla DuckDB functions.
+            if ((baseFuncName.equals("SUM") || baseFuncName.equals("AVG"))
+                    && isDecimalAggregateArg(aggExpr, childSchema)) {
                 originalSQL = aggSQL;
                 if (baseFuncName.equals("SUM")) {
                     aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
@@ -1594,7 +1619,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && aggExpr.isComposite()) {
             originalSQL = aggExpr.rawExpression().toSQL();
-            com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression());
+            com.thunderduck.expression.Expression transformed = transformAggregateExpression(aggExpr.rawExpression(), childSchema);
             aggSQL = qualifyCondition(transformed, planIdToAlias);
         } else if (com.thunderduck.runtime.SparkCompatMode.isStrictMode() && !aggExpr.isComposite()) {
             aggSQL = qualifyAggregateExprSQL(aggExpr, planIdToAlias);
@@ -1602,7 +1627,10 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             if (baseFuncName.endsWith("_DISTINCT")) {
                 baseFuncName = baseFuncName.substring(0, baseFuncName.length() - "_DISTINCT".length());
             }
-            if (baseFuncName.equals("SUM") || baseFuncName.equals("AVG")) {
+            // Only emit spark_sum/spark_avg when the argument is DECIMAL.
+            // Extension functions only have DECIMAL overloads.
+            if ((baseFuncName.equals("SUM") || baseFuncName.equals("AVG"))
+                    && isDecimalAggregateArg(aggExpr, childSchema)) {
                 originalSQL = aggExpr.toSQL(); // Use unqualified for the alias name
                 if (baseFuncName.equals("SUM")) {
                     aggSQL = aggSQL.replaceFirst("(?i)\\bSUM\\b", "spark_sum");
@@ -1702,47 +1730,63 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
     /**
      * Transforms aggregate function names in an expression tree for strict mode.
-     * Recursively walks the AST and replaces SUM/AVG with spark_sum/spark_avg.
-     * This is type-safe: only transforms actual FunctionCall nodes, never column names.
+     * Recursively walks the AST and replaces SUM/AVG with spark_sum/spark_avg,
+     * but ONLY when the function's first argument resolves to DECIMAL type.
+     * Extension functions only have DECIMAL overloads; for other types
+     * (DOUBLE, INTEGER, BIGINT), the vanilla DuckDB functions are used.
      *
      * @param expr the expression to transform
+     * @param childSchema the child schema for resolving argument types (may be null)
      * @return the transformed expression (or original if no changes needed)
      */
-    public static Expression transformAggregateExpression(Expression expr) {
+    public static Expression transformAggregateExpression(Expression expr,
+                                                           com.thunderduck.types.StructType childSchema) {
         if (expr instanceof FunctionCall func) {
             String name = func.functionName().toLowerCase();
-            if (name.equals("sum") || name.equals("sum_distinct")) {
-                return new FunctionCall("spark_sum", func.arguments(), func.dataType(), func.nullable());
-            }
-            if (name.equals("avg") || name.equals("avg_distinct")) {
-                return new FunctionCall("spark_avg", func.arguments(), func.dataType(), func.nullable());
+            if (name.equals("sum") || name.equals("sum_distinct") ||
+                name.equals("avg") || name.equals("avg_distinct")) {
+                // Only replace with extension function if first argument is DECIMAL
+                boolean isDecimalArg = false;
+                if (!func.arguments().isEmpty() && childSchema != null) {
+                    com.thunderduck.types.DataType argType =
+                        com.thunderduck.types.TypeInferenceEngine.resolveType(
+                            func.arguments().get(0), childSchema);
+                    isDecimalArg = argType instanceof com.thunderduck.types.DecimalType;
+                }
+                if (isDecimalArg) {
+                    if (name.equals("sum") || name.equals("sum_distinct")) {
+                        return new FunctionCall("spark_sum", func.arguments(), func.dataType(), func.nullable());
+                    } else {
+                        return new FunctionCall("spark_avg", func.arguments(), func.dataType(), func.nullable());
+                    }
+                }
             }
             return expr;
         }
         if (expr instanceof BinaryExpression bin) {
-            Expression newLeft = transformAggregateExpression(bin.left());
-            Expression newRight = transformAggregateExpression(bin.right());
+            Expression newLeft = transformAggregateExpression(bin.left(), childSchema);
+            Expression newRight = transformAggregateExpression(bin.right(), childSchema);
             if (newLeft != bin.left() || newRight != bin.right()) {
                 return new BinaryExpression(newLeft, bin.operator(), newRight);
             }
             return expr;
         }
         if (expr instanceof CastExpression cast) {
-            Expression newInner = transformAggregateExpression(cast.expression());
+            Expression newInner = transformAggregateExpression(cast.expression(), childSchema);
             if (newInner != cast.expression()) {
                 return new CastExpression(newInner, cast.targetType());
             }
             return expr;
         }
         if (expr instanceof UnaryExpression unary) {
-            Expression newOperand = transformAggregateExpression(unary.operand());
+            Expression newOperand = transformAggregateExpression(unary.operand(), childSchema);
             if (newOperand != unary.operand()) {
                 return new UnaryExpression(unary.operator(), newOperand);
             }
             return expr;
         }
         if (expr instanceof AliasExpression alias) {
-            Expression newInner = transformAggregateExpression(alias.expression());
+            Expression newInner = transformAggregateExpression(alias.expression(), childSchema);
             if (newInner != alias.expression()) {
                 return new AliasExpression(newInner, alias.alias());
             }
@@ -2330,7 +2374,17 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             String rightSQL = qualifyCondition(binExpr.right(), planIdToAlias);
             if (binExpr.operator() == BinaryExpression.Operator.DIVIDE
                     && SparkCompatMode.isStrictMode()) {
-                return String.format("spark_decimal_div(%s, %s)", leftSQL, rightSQL);
+                // Only emit spark_decimal_div when at least one operand is DECIMAL.
+                // The extension function only has DECIMAL overloads. For other types
+                // (DOUBLE, INTEGER), use vanilla division.
+                com.thunderduck.types.DataType leftType = binExpr.left().dataType();
+                com.thunderduck.types.DataType rightType = binExpr.right().dataType();
+                boolean leftDecimal = leftType instanceof com.thunderduck.types.DecimalType;
+                boolean rightDecimal = rightType instanceof com.thunderduck.types.DecimalType;
+                if (leftDecimal || rightDecimal) {
+                    return String.format("spark_decimal_div(%s, %s)", leftSQL, rightSQL);
+                }
+                // Non-DECIMAL division: fall through to normal operator rendering
             }
             return "(" + leftSQL + " " + binExpr.operator().symbol() + " " + rightSQL + ")";
         }

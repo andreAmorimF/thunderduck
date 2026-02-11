@@ -411,12 +411,39 @@ public final class WindowFunction implements Expression {
             case "LAST":
                 return "LAST_VALUE";
             case "SUM":
-                return SparkCompatMode.isStrictMode() ? "spark_sum" : "SUM";
+                // Only emit spark_sum when the argument is confirmed DECIMAL.
+                // Extension functions only have DECIMAL overloads.
+                if (SparkCompatMode.isStrictMode() && isFirstArgDecimal()) {
+                    return "spark_sum";
+                }
+                return "SUM";
             case "AVG":
-                return SparkCompatMode.isStrictMode() ? "spark_avg" : "AVG";
+                // Only emit spark_avg when the argument is confirmed DECIMAL.
+                if (SparkCompatMode.isStrictMode() && isFirstArgDecimal()) {
+                    return "spark_avg";
+                }
+                return "AVG";
             default:
                 return funcUpper;
         }
+    }
+
+    /**
+     * Checks whether the first argument's data type is DECIMAL.
+     * Used to guard extension function emission -- spark_sum/spark_avg only
+     * have DECIMAL overloads, so they should only be used for DECIMAL inputs.
+     *
+     * <p>For UnresolvedColumn references (which return StringType as a placeholder),
+     * this returns false, causing a safe fallback to vanilla DuckDB functions.
+     *
+     * @return true if the first argument is confirmed to be a DECIMAL type
+     */
+    private boolean isFirstArgDecimal() {
+        if (arguments.isEmpty()) {
+            return false;
+        }
+        DataType argType = arguments.get(0).dataType();
+        return argType instanceof com.thunderduck.types.DecimalType;
     }
 
     /**
