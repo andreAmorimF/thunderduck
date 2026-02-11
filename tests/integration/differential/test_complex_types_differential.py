@@ -104,23 +104,23 @@ class TestArrayIndexing_Differential:
         test_result = run_test(spark_thunderduck)
         assert_dataframes_equal(ref_result, test_result, "array_middle_element")
 
-    @pytest.mark.skip(reason="Spark throws ArrayIndexOutOfBoundsException for negative indices; DuckDB supports them")
+    @pytest.mark.skip_relaxed(reason="Negative array index divergence: DuckDB returns element, Spark throws. Fix planned for strict mode.")
     @pytest.mark.timeout(30)
     def test_array_negative_index_last(self, spark_reference, spark_thunderduck):
         """Test accessing last element with negative index.
 
-        NOTE: This is a known behavior difference:
+        NOTE: This is a known behavior difference in relaxed mode:
         - DuckDB: arr[-1] returns the last element
         - Spark: arr[-1] throws ArrayIndexOutOfBoundsException
         """
         pass
 
-    @pytest.mark.skip(reason="Spark throws ArrayIndexOutOfBoundsException for negative indices; DuckDB supports them")
+    @pytest.mark.skip_relaxed(reason="Negative array index divergence: DuckDB returns element, Spark throws. Fix planned for strict mode.")
     @pytest.mark.timeout(30)
     def test_array_negative_index_second_last(self, spark_reference, spark_thunderduck):
         """Test accessing second-to-last element.
 
-        NOTE: This is a known behavior difference:
+        NOTE: This is a known behavior difference in relaxed mode:
         - DuckDB: arr[-2] returns the second-to-last element
         - Spark: arr[-2] throws ArrayIndexOutOfBoundsException
         """
