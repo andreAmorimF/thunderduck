@@ -222,6 +222,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // This is needed for ALL joins (not just those with explicit user aliases) because
         // the column references in the Project have plan_ids that map to the join's aliases
         // Walk through stacked Filters to find the Join underneath (e.g., Filter→Filter→Join)
+        // Skip flat generation for SEMI/ANTI joins (they need EXISTS/NOT EXISTS via visitJoin)
         if (child instanceof Filter) {
             List<Filter> filters = new java.util.ArrayList<>();
             LogicalPlan current = child;
@@ -229,7 +230,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 filters.add(f);
                 current = f.child();
             }
-            if (current instanceof Join currentJoin) {
+            if (current instanceof Join currentJoin && !containsSemiOrAntiJoin(currentJoin)) {
                 generateProjectOnFilterJoin(plan, filters, currentJoin);
                 return;
             }
@@ -246,7 +247,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         // Generate flat SQL to preserve alias visibility and properly qualify columns
         // This handles cases like: df1.join(df2, cond, "right").select(df1["col"], df2["col"])
         // Without flat SQL, duplicate column names become ambiguous in the wrapped subquery
-        if (child instanceof Join childJoin) {
+        // Skip flat generation for SEMI/ANTI joins (they need EXISTS/NOT EXISTS via visitJoin)
+        if (child instanceof Join childJoin && !containsSemiOrAntiJoin(childJoin)) {
             generateProjectOnJoin(plan, childJoin);
             return;
         }
@@ -496,17 +498,22 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
     /**
      * Collects join parts from a join chain, returning the leftmost non-join plan.
+     * Stops recursion at SEMI/ANTI joins since they cannot be flattened into
+     * a flat join chain (they require EXISTS/NOT EXISTS subquery syntax).
      */
     private LogicalPlan collectJoinParts(Join join, List<JoinPart> parts) {
         LogicalPlan left = join.left();
-        if (left instanceof Join leftJoin) {
-            // Recursively collect from nested join
+        if (left instanceof Join leftJoin
+                && leftJoin.joinType() != Join.JoinType.LEFT_SEMI
+                && leftJoin.joinType() != Join.JoinType.LEFT_ANTI) {
+            // Recursively collect from nested join (only for flattenable join types)
             LogicalPlan leftmost = collectJoinParts(leftJoin, parts);
             // Add this join's right side
             parts.add(new JoinPart(join.right(), join.joinType(), join.condition()));
             return leftmost;
         } else {
-            // Left is not a join, this is the leftmost table
+            // Left is not a join (or is a SEMI/ANTI join that can't be flattened),
+            // this is the leftmost table/subquery
             // Add this join's right side as the first join
             parts.add(new JoinPart(join.right(), join.joinType(), join.condition()));
             return left;
@@ -600,6 +607,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         // For Joins with user-defined aliases (AliasedRelation), use flat join chain
         // to preserve alias visibility. Walk through stacked filters to find the Join.
+        // Skip flat generation for SEMI/ANTI joins (they need EXISTS/NOT EXISTS via visitJoin)
         {
             List<Filter> filters = new java.util.ArrayList<>();
             filters.add(plan);
@@ -608,7 +616,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 filters.add(f);
                 current = f.child();
             }
-            if (current instanceof Join join && hasAliasedChildren(join)) {
+            if (current instanceof Join join && hasAliasedChildren(join) && !containsSemiOrAntiJoin(join)) {
                 Map<Long, String> planIdToAlias = new HashMap<>();
                 sql.append("SELECT * FROM ");
                 generateFlatJoinChainWithMapping(join, planIdToAlias);
@@ -756,6 +764,29 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
         }
         if (plan instanceof Filter f) {
             return hasAliasedRelation(f.child());
+        }
+        return false;
+    }
+
+    /**
+     * Checks if a join or any join in its left chain is a SEMI or ANTI join.
+     * Semi/anti joins cannot be flattened into a flat join chain because they
+     * require EXISTS/NOT EXISTS subquery syntax (handled by visitJoin).
+     * The flat join chain optimizer must not include these join types.
+     */
+    private boolean containsSemiOrAntiJoin(Join join) {
+        if (join.joinType() == Join.JoinType.LEFT_SEMI ||
+            join.joinType() == Join.JoinType.LEFT_ANTI) {
+            return true;
+        }
+        // Check left side of the chain (join chains are left-deep)
+        LogicalPlan left = join.left();
+        // Walk through filters to find nested joins
+        while (left instanceof Filter f) {
+            left = f.child();
+        }
+        if (left instanceof Join leftJoin) {
+            return containsSemiOrAntiJoin(leftJoin);
         }
         return false;
     }
@@ -1145,6 +1176,7 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
 
         // Special case: Aggregate on Filter(s) on Join
         // Generate flat SQL to preserve table alias visibility in GROUP BY/HAVING
+        // Skip flat generation for SEMI/ANTI joins (they need EXISTS/NOT EXISTS via visitJoin)
         LogicalPlan child = plan.child();
         if (child instanceof Filter) {
             List<Filter> filters = new java.util.ArrayList<>();
@@ -1153,14 +1185,15 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                 filters.add(f);
                 current = f.child();
             }
-            if (current instanceof Join currentJoin) {
+            if (current instanceof Join currentJoin && !containsSemiOrAntiJoin(currentJoin)) {
                 generateAggregateOnJoinBase(plan, filters, currentJoin);
                 return;
             }
         }
 
         // Special case: Aggregate directly on Join
-        if (child instanceof Join childJoin) {
+        // Skip flat generation for SEMI/ANTI joins (they need EXISTS/NOT EXISTS via visitJoin)
+        if (child instanceof Join childJoin && !containsSemiOrAntiJoin(childJoin)) {
             generateAggregateOnJoinBase(plan, Collections.emptyList(), childJoin);
             return;
         }
