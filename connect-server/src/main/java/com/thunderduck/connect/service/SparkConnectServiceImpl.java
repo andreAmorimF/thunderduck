@@ -17,6 +17,7 @@ import com.thunderduck.runtime.SparkCompatMode;
 import com.thunderduck.logical.Tail;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
+import com.thunderduck.types.UnresolvedType;
 import com.thunderduck.schema.SchemaInferrer;
 import io.grpc.Context;
 import io.grpc.Status;
@@ -292,6 +293,11 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     // Get logical schema for correct nullable flags
                     // DuckDB returns all columns as nullable, but Spark has specific rules
                     StructType logicalSchema = logicalPlan.schema();
+
+                    // Resolve any UnresolvedType fields (from selectExpr/raw SQL expressions)
+                    // by querying DuckDB for actual types
+                    logicalSchema = resolveUnresolvedSchemaFields(
+                        logicalSchema, generatedSQL, session.getSessionId());
 
                     // NOTE: preprocessSQL() is NOT called on the DataFrame path.
                     // All transformations are handled at the AST layer:
@@ -733,7 +739,11 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         com.thunderduck.types.StructType logicalSchema = logicalPlan.schema();
 
                         if (logicalSchema != null && logicalSchema.size() > 0) {
-                            schema = logicalSchema;
+                            // Generate SQL for DuckDB fallback (needed for resolving UnresolvedType)
+                            sql = sqlGenerator.generate(logicalPlan);
+                            // Resolve any UnresolvedType fields (from selectExpr/raw SQL expressions)
+                            // by querying DuckDB for actual types
+                            schema = resolveUnresolvedSchemaFields(logicalSchema, sql, sessionId);
                         } else {
                             // Fallback: infer from DuckDB if logical schema is unavailable
                             sql = sqlGenerator.generate(logicalPlan);
@@ -1223,6 +1233,8 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         }
 
         if (logicalSchema != null) {
+            // Resolve any UnresolvedType fields (from raw SQL expressions)
+            logicalSchema = resolveUnresolvedSchemaFields(logicalSchema, sql, session.getSessionId());
             executeSQLStreaming(sql, logicalSchema, session, responseObserver);
         } else {
             // Fallback: no plan schema available — execute without schema correction
@@ -1711,6 +1723,79 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
         }
     }
 
+
+    /**
+     * Resolves any UnresolvedType fields in a logical schema by querying DuckDB.
+     *
+     * <p>When selectExpr() or raw SQL expressions are used, the logical plan cannot
+     * determine the result type at plan time (RawSQLExpression returns UnresolvedType).
+     * This method queries DuckDB with LIMIT 0 to get actual types for those fields,
+     * while preserving the logical schema's types and nullable flags for resolved fields.
+     *
+     * @param logicalSchema the logical schema that may contain UnresolvedType fields
+     * @param sql the generated SQL query to execute against DuckDB
+     * @param sessionId the session ID for accessing the DuckDB runtime
+     * @return a fully resolved schema, or the original if no unresolved fields exist
+     */
+    private StructType resolveUnresolvedSchemaFields(StructType logicalSchema, String sql, String sessionId) {
+        if (logicalSchema == null || sql == null) {
+            return logicalSchema;
+        }
+
+        // Check if any fields have UnresolvedType
+        boolean hasUnresolved = false;
+        for (StructField field : logicalSchema.fields()) {
+            if (UnresolvedType.isUnresolved(field.dataType()) ||
+                UnresolvedType.containsUnresolved(field.dataType())) {
+                hasUnresolved = true;
+                break;
+            }
+        }
+
+        if (!hasUnresolved) {
+            return logicalSchema;
+        }
+
+        logger.debug("Schema has unresolved types, querying DuckDB for actual types");
+
+        try {
+            StructType duckdbSchema = inferSchemaFromDuckDB(sql, sessionId);
+
+            if (duckdbSchema == null || duckdbSchema.size() != logicalSchema.size()) {
+                logger.debug("DuckDB schema size mismatch (logical={}, duckdb={}), using DuckDB schema",
+                    logicalSchema.size(), duckdbSchema != null ? duckdbSchema.size() : 0);
+                return duckdbSchema != null ? duckdbSchema : logicalSchema;
+            }
+
+            // Merge: use logical schema for resolved fields, DuckDB schema for unresolved fields
+            java.util.List<StructField> mergedFields = new java.util.ArrayList<>();
+            for (int i = 0; i < logicalSchema.size(); i++) {
+                StructField logicalField = logicalSchema.fields().get(i);
+                StructField duckdbField = duckdbSchema.fields().get(i);
+
+                if (UnresolvedType.isUnresolved(logicalField.dataType()) ||
+                    UnresolvedType.containsUnresolved(logicalField.dataType())) {
+                    // Use DuckDB's type but keep logical schema's column name and nullable
+                    mergedFields.add(new StructField(
+                        logicalField.name(),
+                        duckdbField.dataType(),
+                        logicalField.nullable()
+                    ));
+                    logger.debug("Resolved field '{}': {} -> {}",
+                        logicalField.name(), logicalField.dataType(), duckdbField.dataType());
+                } else {
+                    // Keep logical schema's field as-is (correct type + nullable)
+                    mergedFields.add(logicalField);
+                }
+            }
+
+            return new StructType(mergedFields);
+
+        } catch (Exception e) {
+            logger.debug("Failed to resolve unresolved schema fields from DuckDB: {}", e.getMessage());
+            return logicalSchema;
+        }
+    }
 
     /**
      * Normalizes column names that contain extension function names back to standard SQL names.
