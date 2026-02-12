@@ -12,8 +12,6 @@ import com.thunderduck.runtime.ArrowBatchIterator;
 import com.thunderduck.runtime.ArrowStreamingExecutor;
 import com.thunderduck.runtime.QueryExecutor;
 import com.thunderduck.runtime.TailBatchIterator;
-import com.thunderduck.runtime.SchemaCorrectedBatchIterator;
-import com.thunderduck.runtime.SparkCompatMode;
 import com.thunderduck.logical.Tail;
 import com.thunderduck.types.StructField;
 import com.thunderduck.types.StructType;
@@ -1352,16 +1350,9 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
 
                 ArrowBatchIterator iterator = baseIterator;
 
-                if (SparkCompatMode.isRelaxedMode() || logicalSchema == null) {
-                    // Relaxed mode: no schema correction — return DuckDB's Arrow batches as-is.
-                    // Also skip correction when there's no logical schema (direct SQL queries).
-                    logger.debug("[{}] Skipping schema correction (relaxed={}, logicalSchema={})",
-                        operationId, SparkCompatMode.isRelaxedMode(), logicalSchema != null);
-                } else {
-                    // Strict mode: correct nullable flags only (DuckDB returns all nullable=true,
-                    // but Spark has correct nullable semantics from the logical plan)
-                    iterator = new SchemaCorrectedBatchIterator(iterator, logicalSchema, executor.getAllocator());
-                }
+                // No schema correction — DuckDB's Arrow batches flow through as-is.
+                // Nullable flags from DuckDB (all nullable=true) are accepted; Spark clients
+                // tolerate this and it avoids per-batch schema wrapping overhead.
 
                 // Wrap with TailBatchIterator if tail operation requested
                 if (tailLimit >= 0) {
