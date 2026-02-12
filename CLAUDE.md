@@ -49,7 +49,7 @@ These are non-negotiable constraints governing all SQL generation and type handl
 7. **Minimal result-set adjustments**: No or minimal type/nullability adjustments when retrieving streaming results in strict mode.
 8. **Zero result copying**: Strict mode achieves 100% type matching at SQL generation time using extension functions + AS aliases. No Arrow vector copying or rewriting.
 
-**Implementation status (Phase 2 complete)**: DataFrame path no longer calls `preprocessSQL()`. Extension functions emit `AS` aliases for correct column naming. `SchemaCorrectedBatchIterator` is zero-copy (nullable flags only). Schema analysis uses `plan.inferSchema()` directly. Remaining work: SparkSQL parser completion (Phase 3) and dead code deletion (Phase 4).
+**Implementation status (Phases 2-4 complete)**: DataFrame path no longer calls `preprocessSQL()`. Extension functions emit `AS` aliases for correct column naming. `SchemaCorrectedBatchIterator` removed — DuckDB Arrow batches flow through with no schema patching. Schema analysis uses `plan.inferSchema()` directly. SparkSQL parser fully implemented (ANTLR4, schema-aware resolution via `SparkSQLParser`). Dead code deletion complete.
 
 ## Architecture Quick-Reference
 
@@ -69,14 +69,14 @@ These are non-negotiable constraints governing all SQL generation and type handl
 
 ### CRITICAL: Dual SQL Generation Paths
 
-Several components have TWO code paths for SQL generation. Changes must be applied to BOTH:
+Aggregate SQL generation is unified: `Aggregate.toSQL()` delegates to `generator.generate(this)`, so there is a single canonical path through `SQLGenerator.visitAggregate()`. Joins still have two paths:
 
-| Component | Path 1 (Plan Node) | Path 2 (SQLGenerator) | When Path 2 is Used |
-|-----------|--------------------|-----------------------|---------------------|
-| **Aggregate** | `Aggregate.toSQL()` | `SQLGenerator.visitAggregate()` | When SQLGenerator visits the plan tree |
-| **Join** | `Join.toSQL()` via `visitJoin()` | `generateFlatJoinChainWithMapping()` | When join chain optimization is triggered by Project/Filter above Join |
+| Component | Path 1 | Path 2 | Status |
+|-----------|--------|--------|--------|
+| **Aggregate** | `Aggregate.toSQL()` → `generator.generate(this)` | `SQLGenerator.visitAggregate()` | **Unified** — single canonical path |
+| **Join** | `visitJoin()` | `generateFlatJoinChainWithMapping()` | Two paths — chain optimizer breaks at SEMI/ANTI joins |
 
-**Rule:** When modifying SQL generation for aggregates or joins, ALWAYS check both paths.
+**Rule:** For joins, when modifying SQL generation, check both `visitJoin()` and `generateFlatJoinChainWithMapping()`.
 
 ### Expression Hierarchy
 
@@ -94,9 +94,13 @@ Expression (abstract)
 
 ### Raw SQL vs DataFrame API Code Paths
 
-Raw SQL (`spark.sql("SELECT ...")`) goes directly to DuckDB -- no logical plan, no type inference. DataFrame API goes through converter -> logical plan -> SQLGenerator -> DuckDB with full type awareness.
+Both paths now go through full logical planning:
+- **Raw SQL**: Spark SQL string → `SparkSQLParser` (ANTLR4) → LogicalPlan → `SQLGenerator.generate()` → DuckDB SQL
+- **DataFrame API**: Spark Connect protobuf → `RelationConverter` → LogicalPlan → `SQLGenerator.generate()` → DuckDB SQL
 
-**Implication:** Fixes to type inference or SQL rewriting in the logical plan layer do NOT affect raw SQL queries.
+Both paths have full type awareness via `plan.inferSchema()` and `TypeInferenceEngine`.
+
+**Implication:** Type inference and SQL rewriting fixes affect BOTH raw SQL and DataFrame queries.
 
 ## Known Gotchas
 
