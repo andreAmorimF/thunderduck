@@ -2374,14 +2374,14 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
             String rightSQL = qualifyCondition(binExpr.right(), planIdToAlias);
             if (binExpr.operator() == BinaryExpression.Operator.DIVIDE
                     && SparkCompatMode.isStrictMode()) {
-                // Only emit spark_decimal_div when at least one operand is DECIMAL.
+                // Only emit spark_decimal_div when BOTH operands are DECIMAL.
                 // The extension function only has DECIMAL overloads. For other types
                 // (DOUBLE, INTEGER), use vanilla division.
                 com.thunderduck.types.DataType leftType = binExpr.left().dataType();
                 com.thunderduck.types.DataType rightType = binExpr.right().dataType();
                 boolean leftDecimal = leftType instanceof com.thunderduck.types.DecimalType;
                 boolean rightDecimal = rightType instanceof com.thunderduck.types.DecimalType;
-                if (leftDecimal || rightDecimal) {
+                if (leftDecimal && rightDecimal) {
                     return String.format("spark_decimal_div(%s, %s)", leftSQL, rightSQL);
                 }
                 // Non-DECIMAL division: fall through to normal operator rendering
