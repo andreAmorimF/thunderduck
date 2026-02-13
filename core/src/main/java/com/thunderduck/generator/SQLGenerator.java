@@ -1174,15 +1174,33 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
-     * Generates expression SQL for a WithColumns expression.
+     * Generates expression SQL for a WithColumns expression with type-cast wrapping.
      *
-     * <p>In strict mode, {@code BinaryExpression.toSQL()} emits
-     * {@code spark_decimal_div()} which returns the correct Spark type natively.
-     * In relaxed mode, DuckDB's native types are acceptable. Either way, no
-     * CAST wrapper is needed.
+     * <p>In strict mode, {@code BinaryExpression.toSQL()} uses expression-level
+     * {@code dataType()} to decide whether to emit {@code spark_decimal_div()}.
+     * For DataFrame-path expressions, operand types are often unresolved
+     * (StringType from UnresolvedColumn), so the division falls back to native
+     * DuckDB {@code /} which always returns DOUBLE — even for DECIMAL operands.
+     *
+     * <p>When TypeInferenceEngine (which uses the schema) says the result should
+     * be DECIMAL but the expression's declared type disagrees, the generated SQL
+     * will produce DOUBLE. Wrapping with CAST corrects this at the top-level
+     * SELECT projection, consistent with the architecture's strict-mode strategy.
      */
     private String generateExpressionWithCast(Expression expr, StructType childSchema) {
-        return expr.toSQL();
+        String exprSQL = expr.toSQL();
+
+        if (SparkCompatMode.isStrictMode() && childSchema != null) {
+            com.thunderduck.types.DataType resolvedType =
+                com.thunderduck.types.TypeInferenceEngine.resolveType(expr, childSchema);
+            if (resolvedType instanceof com.thunderduck.types.DecimalType decType
+                    && !(expr.dataType() instanceof com.thunderduck.types.DecimalType)) {
+                return "CAST(" + exprSQL + " AS DECIMAL("
+                    + decType.precision() + ", " + decType.scale() + "))";
+            }
+        }
+
+        return exprSQL;
     }
 
     /**

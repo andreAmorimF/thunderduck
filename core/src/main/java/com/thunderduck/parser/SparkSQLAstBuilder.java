@@ -68,6 +68,13 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
     private final Stack<Set<String>> lambdaScopes = new Stack<>();
 
     /**
+     * CTE schema registry: maps CTE name (lowercase) to its inferred schema.
+     * Populated during CTE parsing so that table references to CTEs can be resolved
+     * without querying DuckDB (which doesn't know about CTEs at parse time).
+     */
+    private final java.util.Map<String, StructType> cteSchemas = new java.util.HashMap<>();
+
+    /**
      * Creates an AST builder without schema resolution (backward compatible).
      */
     public SparkSQLAstBuilder() {
@@ -361,6 +368,7 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
 
     private LogicalPlan buildCTEQuery(SqlBaseParser.QueryContext ctx) {
         // Parse each CTE definition into a WithCTE.CTEDefinition
+        // Register CTE schemas so body query can resolve CTE table references
         List<WithCTE.CTEDefinition> definitions = new ArrayList<>();
         for (SqlBaseParser.NamedQueryContext nq : ctx.ctes().namedQuery()) {
             String name = getErrorCapturingIdentifierText(nq.name);
@@ -371,12 +379,37 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
                 columnAliases = resolveIdentifierSeq(nq.columnAliases.identifierSeq());
             }
 
+            // Register CTE schema for resolution by body query table references
+            try {
+                StructType cteSchema = ctePlan.inferSchema();
+                if (cteSchema != null && cteSchema.size() > 0) {
+                    // Apply column aliases if specified (WITH cte(a, b) AS (...))
+                    if (!columnAliases.isEmpty() && cteSchema.size() == columnAliases.size()) {
+                        List<StructField> renamedFields = new ArrayList<>();
+                        for (int i = 0; i < columnAliases.size(); i++) {
+                            StructField original = cteSchema.fields().get(i);
+                            renamedFields.add(new StructField(
+                                columnAliases.get(i), original.dataType(), original.nullable()));
+                        }
+                        cteSchema = new StructType(renamedFields);
+                    }
+                    cteSchemas.put(name.toLowerCase(), cteSchema);
+                }
+            } catch (Exception e) {
+                logger.debug("Could not infer schema for CTE '{}': {}", name, e.getMessage());
+            }
+
             definitions.add(new WithCTE.CTEDefinition(name, ctePlan, columnAliases));
         }
 
         // Parse the main query body (without the WITH prefix)
         LogicalPlan body = (LogicalPlan) visit(ctx.queryTerm());
         body = applyQueryOrganization(body, ctx.queryOrganization());
+
+        // Clean up CTE schemas to prevent leaking into subsequent queries
+        for (WithCTE.CTEDefinition def : definitions) {
+            cteSchemas.remove(def.name().toLowerCase());
+        }
 
         return new WithCTE(definitions, body);
     }
@@ -1964,7 +1997,11 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         }
 
         if (ctx instanceof SqlBaseParser.DecimalLiteralContext) {
-            return new RawSQLExpression(text);
+            try {
+                return Literal.of(new java.math.BigDecimal(text));
+            } catch (NumberFormatException e) {
+                return new RawSQLExpression(text);
+            }
         }
 
         if (ctx instanceof SqlBaseParser.DoubleLiteralContext) {
@@ -2188,6 +2225,13 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
      * @return the resolved schema, or null if resolution fails
      */
     private StructType resolveTableSchema(String tableName) {
+        // Check CTE schemas first (CTE names take precedence over base tables)
+        StructType cteSchema = cteSchemas.get(tableName.toLowerCase());
+        if (cteSchema != null) {
+            logger.debug("Resolved schema for CTE '{}': {} columns", tableName, cteSchema.size());
+            return cteSchema;
+        }
+
         try {
             // Use SELECT * FROM table LIMIT 0 to get schema for both tables and views
             // This is more robust than PRAGMA table_info which only works for base tables

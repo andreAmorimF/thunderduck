@@ -83,6 +83,8 @@ public final class Literal implements Expression {
             case BooleanType b -> value.toString().toUpperCase();
             case DateType d -> "DATE '" + value + "'";
             case TimestampType t -> formatTimestamp(value);
+            case DecimalType dt -> value instanceof java.math.BigDecimal bd
+                ? bd.toPlainString() : value.toString();
             default -> value.toString();
         };
     }
@@ -175,6 +177,21 @@ public final class Literal implements Expression {
      */
     public static Literal of(boolean value) {
         return new Literal(value, BooleanType.get());
+    }
+
+    /**
+     * Creates a decimal literal from a BigDecimal value.
+     *
+     * <p>Precision and scale follow Spark's DecimalType.fromBigDecimal rules:
+     * scale = max(bd.scale, 0), precision = max(bd.precision, scale + 1).
+     *
+     * @param value the BigDecimal value
+     * @return the literal expression with appropriate DecimalType
+     */
+    public static Literal of(java.math.BigDecimal value) {
+        int scale = Math.max(value.scale(), 0);
+        int precision = Math.max(value.precision(), scale + 1);
+        return new Literal(value, new DecimalType(precision, scale));
     }
 
     /**
