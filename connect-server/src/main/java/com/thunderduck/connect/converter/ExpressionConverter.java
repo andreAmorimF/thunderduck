@@ -922,7 +922,7 @@ public class ExpressionConverter {
     /**
      * Converts a Spark Connect DataType to a thunderduck DataType.
      */
-    private DataType convertDataType(org.apache.spark.connect.proto.DataType protoType) {
+    DataType convertDataType(org.apache.spark.connect.proto.DataType protoType) {
         switch (protoType.getKindCase()) {
             case NULL:
                 // Untyped NULL literal - return StringType as placeholder

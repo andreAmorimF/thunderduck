@@ -4,6 +4,7 @@ import com.thunderduck.expression.*;
 import com.thunderduck.expression.window.FrameBoundary;
 import com.thunderduck.expression.window.WindowFrame;
 import com.thunderduck.logical.*;
+import com.thunderduck.schema.SchemaInferrer;
 import com.thunderduck.types.*;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -2231,6 +2232,11 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
      */
     private DataType mapDuckDBTypeToThunderduck(String typeName, java.sql.ResultSetMetaData meta, int columnIndex) {
         try {
+            // Handle array types via SchemaInferrer (MAP/STRUCT deferred — nullable defaults cause regressions)
+            if (typeName.endsWith("[]") || typeName.startsWith("LIST(")) {
+                return SchemaInferrer.mapDuckDBType(typeName);
+            }
+
             return switch (typeName) {
                 case "BOOLEAN" -> BooleanType.get();
                 case "TINYINT" -> ByteType.get();

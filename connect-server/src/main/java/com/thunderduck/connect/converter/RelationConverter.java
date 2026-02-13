@@ -12,6 +12,7 @@ import com.thunderduck.generator.SQLQuoting;
 import com.thunderduck.generator.SQLGenerator;
 import com.thunderduck.connect.service.StatisticsOperationHandler;
 import com.thunderduck.schema.SchemaInferrer;
+import com.thunderduck.types.DataType;
 import com.thunderduck.types.StructType;
 import com.thunderduck.types.StructField;
 
@@ -2306,6 +2307,15 @@ public class RelationConverter {
                 quotedCol, duckdbType, quotedCol));
         }
 
+        // Build target StructType for schema inference
+        List<StructField> fields = new ArrayList<>();
+        for (org.apache.spark.connect.proto.DataType.StructField field :
+             targetStruct.getFieldsList()) {
+            DataType fieldType = expressionConverter.convertDataType(field.getDataType());
+            fields.add(new StructField(field.getName(), fieldType, field.getNullable()));
+        }
+        StructType targetSchema = new StructType(fields);
+
         // Generate final SQL
         SQLGenerator generator = new SQLGenerator();
         String inputSQL = generator.generate(input);
@@ -2314,7 +2324,7 @@ public class RelationConverter {
             inputSQL);
 
         logger.debug("Creating ToSchema SQL: {}", sql);
-        return new SQLRelation(sql);
+        return new SQLRelation(sql, targetSchema);
     }
 
     /**

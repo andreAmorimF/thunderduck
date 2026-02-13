@@ -7,6 +7,8 @@ import com.thunderduck.expression.CaseWhenExpression;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.expression.FunctionCall;
 import com.thunderduck.expression.InExpression;
+import com.thunderduck.expression.LambdaExpression;
+import com.thunderduck.expression.LambdaVariableExpression;
 import com.thunderduck.expression.Literal;
 import com.thunderduck.expression.MapLiteralExpression;
 import com.thunderduck.expression.StructLiteralExpression;
@@ -417,6 +419,12 @@ public final class TypeInferenceEngine {
         }
         if (expr instanceof com.thunderduck.expression.UpdateFieldsExpression update) {
             return resolveUpdateFieldsType(update, schema);
+        }
+        if (expr instanceof LambdaVariableExpression lambdaVar) {
+            // Lambda variables can be resolved from schema when the enclosing
+            // function binds the parameter (e.g., transform adds element type).
+            DataType schemaType = lookupColumnType(lambdaVar.variableName(), schema);
+            return schemaType != null ? schemaType : lambdaVar.dataType();
         }
         if (expr instanceof com.thunderduck.expression.RawSQLExpression raw) {
             // For raw SQL with explicit type metadata, use it
@@ -1081,9 +1089,16 @@ public final class TypeInferenceEngine {
             // list_filter/filter: returns same ArrayType as input
             if (funcName.equals("list_transform") || funcName.equals("transform")) {
                 DataType argType = resolveType(func.arguments().get(0), schema);
-                if (argType instanceof ArrayType) {
-                    // Transform may change element type, but without evaluating the lambda
-                    // we return the input array type as best estimate
+                if (argType instanceof ArrayType arrayType) {
+                    // Resolve the lambda body type by binding the lambda parameter
+                    // to the array element type
+                    if (func.arguments().size() > 1 &&
+                        func.arguments().get(1) instanceof LambdaExpression lambda) {
+                        StructType augmented = augmentSchemaWithLambdaParams(
+                            schema, lambda, arrayType.elementType(), arrayType.containsNull());
+                        DataType bodyType = resolveType(lambda.body(), augmented);
+                        return new ArrayType(bodyType, arrayType.containsNull());
+                    }
                     return argType;
                 }
             }
@@ -1430,6 +1445,31 @@ public final class TypeInferenceEngine {
 
         // Default: nullable
         return true;
+    }
+
+    /**
+     * Creates a schema augmented with lambda parameter bindings.
+     *
+     * <p>Used to resolve the body type of lambda expressions like
+     * {@code transform(array, x -> x + 100)} by binding {@code x}
+     * to the array's element type.
+     */
+    private static StructType augmentSchemaWithLambdaParams(
+            StructType schema, LambdaExpression lambda,
+            DataType elementType, boolean elementNullable) {
+        java.util.List<StructField> fields = new java.util.ArrayList<>();
+        if (schema != null) {
+            fields.addAll(schema.fields());
+        }
+        // Bind first lambda parameter to element type
+        if (!lambda.parameters().isEmpty()) {
+            fields.add(new StructField(lambda.parameters().get(0), elementType, elementNullable));
+        }
+        // For 2-parameter lambdas (e.g., aggregate), bind index parameter
+        if (lambda.parameters().size() > 1) {
+            fields.add(new StructField(lambda.parameters().get(1), IntegerType.get(), false));
+        }
+        return new StructType(fields);
     }
 
     // ========================================================================
