@@ -5,6 +5,7 @@ import com.thunderduck.runtime.ArrowStreamingExecutor;
 import com.thunderduck.runtime.DuckDBRuntime;
 import com.thunderduck.runtime.QueryExecutor;
 import com.thunderduck.runtime.StreamingConfig;
+import com.thunderduck.types.StructType;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.slf4j.Logger;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -44,6 +46,7 @@ public class Session implements AutoCloseable {
     private final long createdAt;
     private final Map<String, String> config;
     private final Map<String, LogicalPlan> tempViews;
+    private final Map<String, StructType> viewSchemas = new ConcurrentHashMap<>();
     private volatile boolean closed = false;
 
     // Cached executors - created lazily, shared across all operations in this session
@@ -278,6 +281,17 @@ public class Session implements AutoCloseable {
      */
     public void registerTempView(String name, LogicalPlan plan) {
         tempViews.put(name, plan);
+        // Cache the plan's inferred schema so that later references to this view
+        // use the correct nullable flags instead of DuckDB's DESCRIBE (all nullable).
+        try {
+            StructType schema = plan.schema();
+            if (schema != null) {
+                viewSchemas.put(name, schema);
+                logger.debug("Cached view schema for '{}': {}", name, schema);
+            }
+        } catch (Exception e) {
+            logger.debug("Could not cache schema for view '{}': {}", name, e.getMessage());
+        }
     }
 
     /**
@@ -297,6 +311,7 @@ public class Session implements AutoCloseable {
      * @return true if view existed and was dropped, false otherwise
      */
     public boolean dropTempView(String name) {
+        viewSchemas.remove(name);
         return tempViews.remove(name) != null;
     }
 
@@ -314,6 +329,16 @@ public class Session implements AutoCloseable {
      */
     public void clearTempViews() {
         tempViews.clear();
+        viewSchemas.clear();
+    }
+
+    /**
+     * Get the view schema cache (live reference).
+     *
+     * @return unmodifiable view of the view schema cache
+     */
+    public Map<String, StructType> getViewSchemas() {
+        return Collections.unmodifiableMap(viewSchemas);
     }
 
     /**
@@ -356,8 +381,9 @@ public class Session implements AutoCloseable {
         }
         closed = true;
 
-        // Clear temp views
+        // Clear temp views and cached schemas
         tempViews.clear();
+        viewSchemas.clear();
 
         // Close cached executors (must be closed before allocator and runtime)
         if (cachedStreamingExecutor != null) {

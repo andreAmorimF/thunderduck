@@ -4,13 +4,17 @@ import com.thunderduck.logical.LogicalPlan;
 import com.thunderduck.expression.Expression;
 import com.thunderduck.schema.SchemaInferrer;
 
+import com.thunderduck.types.StructType;
+
 import org.apache.spark.connect.proto.Plan;
 import org.apache.spark.connect.proto.Relation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Converts Spark Connect Protocol Buffers plans to thunderduck LogicalPlans.
@@ -39,9 +43,19 @@ public class PlanConverter {
      * @param connection the DuckDB connection for schema inference (nullable)
      */
     public PlanConverter(Connection connection) {
+        this(connection, Collections.emptyMap());
+    }
+
+    /**
+     * Creates a PlanConverter with schema inference and view schema cache.
+     *
+     * @param connection the DuckDB connection for schema inference (nullable)
+     * @param viewSchemas cached schemas from temp view creation (keyed by view name)
+     */
+    public PlanConverter(Connection connection, Map<String, StructType> viewSchemas) {
         this.expressionConverter = new ExpressionConverter();
         SchemaInferrer schemaInferrer = connection != null ? new SchemaInferrer(connection) : null;
-        this.relationConverter = new RelationConverter(expressionConverter, schemaInferrer);
+        this.relationConverter = new RelationConverter(expressionConverter, schemaInferrer, viewSchemas);
     }
 
     /**

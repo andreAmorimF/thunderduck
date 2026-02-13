@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,12 +40,13 @@ public class RelationConverter {
 
     private final ExpressionConverter expressionConverter;
     private final SchemaInferrer schemaInferrer;
+    private final Map<String, StructType> viewSchemas;
 
     /**
      * Creates a RelationConverter without schema inference capability.
      */
     public RelationConverter(ExpressionConverter expressionConverter) {
-        this(expressionConverter, null);
+        this(expressionConverter, null, Collections.emptyMap());
     }
 
     /**
@@ -54,8 +56,21 @@ public class RelationConverter {
      * @param schemaInferrer the schema inferrer (nullable)
      */
     public RelationConverter(ExpressionConverter expressionConverter, SchemaInferrer schemaInferrer) {
+        this(expressionConverter, schemaInferrer, Collections.emptyMap());
+    }
+
+    /**
+     * Creates a RelationConverter with schema inference and view schema cache.
+     *
+     * @param expressionConverter the expression converter
+     * @param schemaInferrer the schema inferrer (nullable)
+     * @param viewSchemas cached schemas from temp view creation (keyed by view name)
+     */
+    public RelationConverter(ExpressionConverter expressionConverter, SchemaInferrer schemaInferrer,
+                             Map<String, StructType> viewSchemas) {
         this.expressionConverter = expressionConverter;
         this.schemaInferrer = schemaInferrer;
+        this.viewSchemas = viewSchemas != null ? viewSchemas : Collections.emptyMap();
     }
 
     /**
@@ -2309,6 +2324,15 @@ public class RelationConverter {
      * @return the inferred schema, or null if schema inference is unavailable
      */
     private StructType inferTableSchema(String tableName) {
+        // Check the view schema cache first — it has correct nullable flags from
+        // the LogicalPlan at view-creation time, unlike DuckDB DESCRIBE which
+        // always reports all view columns as nullable.
+        StructType cachedSchema = viewSchemas.get(tableName);
+        if (cachedSchema != null) {
+            logger.debug("Using cached view schema for table {}: {}", tableName, cachedSchema);
+            return cachedSchema;
+        }
+
         if (schemaInferrer == null) {
             logger.debug("Schema inferrer not available, returning null schema for table: {}", tableName);
             return null;

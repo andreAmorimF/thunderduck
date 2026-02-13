@@ -93,7 +93,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
      * @return a PlanConverter instance with schema inference capability
      */
     private PlanConverter createPlanConverter(Session session) {
-        return new PlanConverter(session.getRuntime().getConnection());
+        return new PlanConverter(session.getRuntime().getConnection(), session.getViewSchemas());
     }
 
     /**
