@@ -104,8 +104,23 @@ public final class AliasedRelation extends LogicalPlan {
 
     @Override
     public StructType inferSchema() {
-        // Delegate to child
-        return child.schema();
+        StructType childSchema = child.schema();
+
+        // If there are column aliases and the child schema has matching column count,
+        // rename the columns in the schema. This handles e.g. VALUES ... AS t(id, name)
+        // where the child schema has col1, col2 but the aliases rename them.
+        if (childSchema != null && !columnAliases.isEmpty()
+                && childSchema.size() == columnAliases.size()) {
+            java.util.List<com.thunderduck.types.StructField> renamedFields = new java.util.ArrayList<>();
+            for (int i = 0; i < childSchema.size(); i++) {
+                com.thunderduck.types.StructField original = childSchema.fields().get(i);
+                renamedFields.add(new com.thunderduck.types.StructField(
+                    columnAliases.get(i), original.dataType(), original.nullable()));
+            }
+            return new StructType(renamedFields);
+        }
+
+        return childSchema;
     }
 
     @Override

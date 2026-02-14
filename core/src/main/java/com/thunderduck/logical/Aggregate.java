@@ -232,7 +232,7 @@ public final class Aggregate extends LogicalPlan {
             boolean nullable;
             if (aggExpr.isComposite()) {
                 type = TypeInferenceEngine.resolveType(aggExpr.rawExpression(), childSchema);
-                nullable = true;
+                nullable = TypeInferenceEngine.resolveNullable(aggExpr.rawExpression(), childSchema);
             } else {
                 type = inferAggregateReturnType(aggExpr, childSchema);
                 nullable = TypeInferenceEngine.resolveAggregateNullable(

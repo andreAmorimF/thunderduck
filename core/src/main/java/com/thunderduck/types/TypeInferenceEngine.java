@@ -382,7 +382,32 @@ public final class TypeInferenceEngine {
         }
         if (expr instanceof UnresolvedColumn col) {
             DataType schemaType = lookupColumnType(col.columnName(), schema);
-            return schemaType != null ? schemaType : col.dataType();
+            if (schemaType != null) {
+                return schemaType;
+            }
+            // Try qualified name resolution through struct hierarchy
+            if (col.isQualified()) {
+                StructField baseField = findField(col.qualifier(), schema);
+                if (baseField != null && baseField.dataType() instanceof StructType structType) {
+                    StructField nestedField = findField(col.columnName(), structType);
+                    if (nestedField != null) {
+                        return nestedField.dataType();
+                    }
+                }
+            }
+            // Try dot-separated column name resolution
+            String colName = col.columnName();
+            if (colName.contains(".")) {
+                String[] parts = colName.split("\\.", 2);
+                StructField baseField = findField(parts[0], schema);
+                if (baseField != null && baseField.dataType() instanceof StructType structType) {
+                    StructField nestedField = findField(parts[1], structType);
+                    if (nestedField != null) {
+                        return nestedField.dataType();
+                    }
+                }
+            }
+            return col.dataType();
         }
         if (expr instanceof WindowFunction wf) {
             return resolveWindowFunctionType(wf, schema);
@@ -1164,7 +1189,10 @@ public final class TypeInferenceEngine {
                         StructType augmented = augmentSchemaWithLambdaParams(
                             schema, lambda, arrayType.elementType(), arrayType.containsNull());
                         DataType bodyType = resolveType(lambda.body(), augmented);
-                        return new ArrayType(bodyType, arrayType.containsNull());
+                        // RC4: containsNull for transform is determined by the lambda body's
+                        // nullability, since transform creates new elements
+                        boolean bodyNullable = resolveNullable(lambda.body(), augmented);
+                        return new ArrayType(bodyType, bodyNullable);
                     }
                     return argType;
                 }
@@ -1281,7 +1309,12 @@ public final class TypeInferenceEngine {
                 upperFuncName.equals("AVG") || upperFuncName.equals("AVG_DISTINCT") ||
                 upperFuncName.equals("MIN") || upperFuncName.equals("MAX") ||
                 upperFuncName.equals("FIRST") || upperFuncName.equals("LAST") ||
-                upperFuncName.equals("COUNT") || upperFuncName.equals("COUNT_DISTINCT")) {
+                upperFuncName.equals("COUNT") || upperFuncName.equals("COUNT_DISTINCT") ||
+                upperFuncName.equals("STDDEV") || upperFuncName.equals("STDDEV_SAMP") ||
+                upperFuncName.equals("STDDEV_POP") || upperFuncName.equals("VARIANCE") ||
+                upperFuncName.equals("VAR_SAMP") || upperFuncName.equals("VAR_POP") ||
+                upperFuncName.equals("CORR") || upperFuncName.equals("COVAR_SAMP") ||
+                upperFuncName.equals("COVAR_POP")) {
                 DataType argType = resolveType(func.arguments().get(0), schema);
                 DataType aggResult = resolveAggregateReturnType(upperFuncName, argType);
                 if (aggResult != null) {
@@ -1481,6 +1514,25 @@ public final class TypeInferenceEngine {
                 }
                 return new ArrayType(StringType.get(), false);
 
+            // Statistical functions always return DoubleType in Spark,
+            // regardless of input type (integer, float, decimal, etc.)
+            case "STDDEV":
+            case "STDDEV_SAMP":
+            case "STDDEV_POP":
+            case "VARIANCE":
+            case "VAR_SAMP":
+            case "VAR_POP":
+            case "CORR":
+            case "COVAR_SAMP":
+            case "COVAR_POP":
+                return DoubleType.get();
+
+            // Spark: grouping() returns ByteType (TINYINT), grouping_id() returns LongType (BIGINT)
+            case "GROUPING":
+                return ByteType.get();
+            case "GROUPING_ID":
+                return LongType.get();
+
             default:
                 return argType != null ? argType : StringType.get();
         }
@@ -1511,6 +1563,11 @@ public final class TypeInferenceEngine {
 
         // COUNT is always non-nullable (returns 0 for empty groups)
         if (funcUpper.equals("COUNT") || funcUpper.equals("COUNT_DISTINCT")) {
+            return false;
+        }
+
+        // grouping/grouping_id always return a value (never null)
+        if (funcUpper.equals("GROUPING") || funcUpper.equals("GROUPING_ID")) {
             return false;
         }
 
@@ -1594,7 +1651,33 @@ public final class TypeInferenceEngine {
         }
         if (expr instanceof UnresolvedColumn col) {
             StructField field = findField(col.columnName(), schema);
-            return field != null ? field.nullable() : col.nullable();
+            if (field != null) {
+                return field.nullable();
+            }
+            // RC2: Try resolving qualified columns through struct hierarchy.
+            // Case 1: Explicit qualifier (e.g., UnresolvedColumn("name", "person"))
+            if (col.isQualified()) {
+                StructField baseField = findField(col.qualifier(), schema);
+                if (baseField != null && baseField.dataType() instanceof StructType structType) {
+                    StructField nestedField = findField(col.columnName(), structType);
+                    if (nestedField != null) {
+                        return baseField.nullable() || nestedField.nullable();
+                    }
+                }
+            }
+            // Case 2: Dot-separated column name (e.g., "person.name" as single string)
+            String colName = col.columnName();
+            if (colName.contains(".")) {
+                String[] parts = colName.split("\\.", 2);
+                StructField baseField = findField(parts[0], schema);
+                if (baseField != null && baseField.dataType() instanceof StructType structType) {
+                    StructField nestedField = findField(parts[1], structType);
+                    if (nestedField != null) {
+                        return baseField.nullable() || nestedField.nullable();
+                    }
+                }
+            }
+            return col.nullable();
         }
         if (expr instanceof WindowFunction) {
             return expr.nullable();
@@ -1630,9 +1713,29 @@ public final class TypeInferenceEngine {
         if (expr instanceof com.thunderduck.expression.UpdateFieldsExpression update) {
             return resolveNullable(update.structExpr(), schema);
         }
-        if (expr instanceof com.thunderduck.expression.ExtractValueExpression) {
-            // Value extraction from collections is always nullable
-            // (out of bounds, missing key, etc.)
+        if (expr instanceof com.thunderduck.expression.ExtractValueExpression extract) {
+            // For STRUCT_FIELD: nullable = base.nullable || field.nullable (Spark semantics)
+            // For ARRAY_INDEX and MAP_KEY: always nullable (out of bounds, missing key)
+            if (extract.extractionType() == com.thunderduck.expression.ExtractValueExpression.ExtractionType.STRUCT_FIELD) {
+                boolean baseNullable = resolveNullable(extract.child(), schema);
+                DataType childType = resolveType(extract.child(), schema);
+                if (childType instanceof StructType structType) {
+                    com.thunderduck.expression.Expression extractionExpr = extract.extraction();
+                    if (extractionExpr instanceof Literal lit && lit.value() instanceof String fieldName) {
+                        StructField field = findField(fieldName, structType);
+                        if (field != null) {
+                            return baseNullable || field.nullable();
+                        }
+                    }
+                }
+                // If child is a map, extraction is always nullable (key may not exist)
+                if (childType instanceof MapType) {
+                    return true;
+                }
+                // Fallback for unresolvable struct field: nullable
+                return true;
+            }
+            // ARRAY_INDEX and MAP_KEY: always nullable
             return true;
         }
         if (expr instanceof com.thunderduck.expression.FieldAccessExpression fieldAccess) {
@@ -1669,8 +1772,14 @@ public final class TypeInferenceEngine {
             // the nullable semantics come from the HOF using it (transform, filter, etc.)
             return resolveNullable(lambda.body(), schema);
         }
-        if (expr instanceof com.thunderduck.expression.LambdaVariableExpression) {
+        if (expr instanceof com.thunderduck.expression.LambdaVariableExpression lambdaVar) {
             // Lambda variables inherit nullability from the array element's containsNull.
+            // When the schema has been augmented with lambda params (via augmentSchemaWithLambdaParams),
+            // look up the variable's nullable from that augmented schema.
+            StructField lambdaField = findField(lambdaVar.variableName(), schema);
+            if (lambdaField != null) {
+                return lambdaField.nullable();
+            }
             // Without context, default to true (safe fallback).
             return true;
         }

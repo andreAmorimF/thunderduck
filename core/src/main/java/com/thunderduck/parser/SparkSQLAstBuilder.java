@@ -60,6 +60,14 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
     private final Connection connection;
 
     /**
+     * View schema cache: maps view name (case-insensitive) to its inferred schema.
+     * When non-null, view references are resolved from this cache first, avoiding
+     * DuckDB's DESCRIBE/LIMIT 0 which returns all-nullable columns for views.
+     * Populated from the session's cached view schemas.
+     */
+    private final java.util.Map<String, StructType> viewSchemaCache;
+
+    /**
      * Stack of lambda variable scopes for resolving lambda parameter references.
      * Each scope contains the parameter names for a lambda currently being parsed.
      * When resolving identifiers, names found in lambda scope become
@@ -78,7 +86,7 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
      * Creates an AST builder without schema resolution (backward compatible).
      */
     public SparkSQLAstBuilder() {
-        this(null);
+        this(null, null);
     }
 
     /**
@@ -87,7 +95,18 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
      * @param connection DuckDB connection for table schema resolution (can be null)
      */
     public SparkSQLAstBuilder(Connection connection) {
+        this(connection, null);
+    }
+
+    /**
+     * Creates an AST builder with optional schema resolution and view schema cache.
+     *
+     * @param connection DuckDB connection for table schema resolution (can be null)
+     * @param viewSchemaCache cached view schemas for correct nullable flags (can be null)
+     */
+    public SparkSQLAstBuilder(Connection connection, java.util.Map<String, StructType> viewSchemaCache) {
         this.connection = connection;
+        this.viewSchemaCache = viewSchemaCache;
     }
 
     // ==================== Entry Points ====================
@@ -474,22 +493,112 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
     /**
      * Builds a SQLRelation from an InlineTable (VALUES) context.
      * Generates: SELECT * FROM (VALUES (expr1), (expr2), ...) with optional table alias.
+     *
+     * <p>Infers a schema from the literal values so that nullable flags match Spark:
+     * a column is nullable only if at least one row has a NULL in that position.
      */
     private LogicalPlan buildInlineTable(SqlBaseParser.InlineTableContext ctx) {
         // Build VALUES clause from expressions
         StringBuilder valuesSql = new StringBuilder("VALUES ");
         List<SqlBaseParser.ExpressionContext> exprs = ctx.expression();
+
+        // Visit each row expression to infer types and nullability
+        List<List<Expression>> allRows = new ArrayList<>();
         for (int i = 0; i < exprs.size(); i++) {
             if (i > 0) valuesSql.append(", ");
             valuesSql.append(getOriginalText(exprs.get(i)));
+
+            // Try to parse each row expression for schema inference
+            try {
+                Expression rowExpr = visitExpr(exprs.get(i));
+                if (rowExpr instanceof RowConstructorExpression rowCtor) {
+                    allRows.add(rowCtor.elements());
+                } else {
+                    // Single-column VALUES: wrap in a single-element list
+                    allRows.add(List.of(rowExpr));
+                }
+            } catch (Exception e) {
+                logger.debug("Could not parse VALUES row {} for schema inference: {}",
+                    i, e.getMessage());
+                allRows.clear();
+                break;
+            }
         }
 
-        LogicalPlan plan = new SQLRelation("SELECT * FROM (" + valuesSql + ")");
+        // Build schema from the parsed rows
+        StructType valuesSchema = null;
+        if (!allRows.isEmpty()) {
+            valuesSchema = inferValuesSchema(allRows, ctx.tableAlias());
+        }
+
+        LogicalPlan plan;
+        if (valuesSchema != null && valuesSchema.size() > 0) {
+            plan = new SQLRelation("SELECT * FROM (" + valuesSql + ")", valuesSchema);
+        } else {
+            plan = new SQLRelation("SELECT * FROM (" + valuesSql + ")");
+        }
 
         // Apply table alias if present
         plan = applyTableAlias(plan, ctx.tableAlias());
 
         return plan;
+    }
+
+    /**
+     * Infers a StructType schema from VALUES rows.
+     *
+     * <p>For each column position, the type is taken from the first row and
+     * nullable is true only if ANY row has a null literal in that position.
+     *
+     * <p>Column names come from the table alias if present (e.g., AS t(id, name)),
+     * otherwise default to col1, col2, etc.
+     */
+    private StructType inferValuesSchema(List<List<Expression>> allRows,
+                                          SqlBaseParser.TableAliasContext aliasCtx) {
+        if (allRows.isEmpty()) return null;
+
+        int numCols = allRows.get(0).size();
+        if (numCols == 0) return null;
+
+        // Extract column aliases from table alias if available
+        List<String> columnNames = new ArrayList<>();
+        if (aliasCtx != null && aliasCtx.identifierList() != null) {
+            List<String> aliases = resolveIdentifierSeq(
+                aliasCtx.identifierList().identifierSeq());
+            if (aliases.size() == numCols) {
+                columnNames.addAll(aliases);
+            }
+        }
+        // Fill in default names for any missing aliases
+        while (columnNames.size() < numCols) {
+            columnNames.add("col" + (columnNames.size() + 1));
+        }
+
+        // Determine type and nullability for each column across all rows
+        List<StructField> fields = new ArrayList<>();
+        for (int col = 0; col < numCols; col++) {
+            DataType colType = null;
+            boolean colNullable = false;
+
+            for (List<Expression> row : allRows) {
+                if (col < row.size()) {
+                    Expression elem = row.get(col);
+                    if (colType == null) {
+                        colType = elem.dataType();
+                    }
+                    if (elem.nullable()) {
+                        colNullable = true;
+                    }
+                }
+            }
+
+            if (colType == null) {
+                colType = StringType.get(); // fallback
+            }
+            fields.add(new StructField(columnNames.get(col), colType, colNullable));
+        }
+
+        return new StructType(fields);
     }
 
     // ==================== SELECT Statement ====================
@@ -2230,6 +2339,22 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
         if (cteSchema != null) {
             logger.debug("Resolved schema for CTE '{}': {} columns", tableName, cteSchema.size());
             return cteSchema;
+        }
+
+        // Check view schema cache (populated from session's cached view schemas).
+        // This provides correct nullable flags for temp views, which DuckDB's
+        // LIMIT 0 metadata reports as all-nullable.
+        if (viewSchemaCache != null) {
+            StructType viewSchema = viewSchemaCache.get(tableName);
+            if (viewSchema == null) {
+                // Try case-insensitive lookup
+                viewSchema = viewSchemaCache.get(tableName.toLowerCase());
+            }
+            if (viewSchema != null) {
+                logger.debug("Resolved schema for view '{}' from cache: {} columns",
+                    tableName, viewSchema.size());
+                return viewSchema;
+            }
         }
 
         try {

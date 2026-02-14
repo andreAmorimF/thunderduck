@@ -1685,6 +1685,15 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                     aggSQL = "CAST(" + aggSQL + " AS DECIMAL(" + resultP + ", " + resultS + "))";
                 }
             }
+            // Spark: grouping() returns TINYINT (ByteType), grouping_id() returns BIGINT (LongType).
+            // DuckDB returns INTEGER for both. Wrap with CAST to match Spark's types exactly.
+            if (baseFuncName.equals("GROUPING")) {
+                originalSQL = aggExpr.toSQL();
+                aggSQL = "CAST(" + aggSQL + " AS TINYINT)";
+            } else if (baseFuncName.equals("GROUPING_ID")) {
+                originalSQL = aggExpr.toSQL();
+                aggSQL = "CAST(" + aggSQL + " AS BIGINT)";
+            }
         } else {
             aggSQL = aggExpr.toSQL();
         }
@@ -1777,6 +1786,15 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                     }
                     aggSQL = "CAST(" + aggSQL + " AS DECIMAL(" + resultP + ", " + resultS + "))";
                 }
+            }
+            // Spark: grouping() returns TINYINT (ByteType), grouping_id() returns BIGINT (LongType).
+            // DuckDB returns INTEGER for both. Wrap with CAST to match Spark's types exactly.
+            if (baseFuncName.equals("GROUPING")) {
+                originalSQL = aggExpr.toSQL();
+                aggSQL = "CAST(" + aggSQL + " AS TINYINT)";
+            } else if (baseFuncName.equals("GROUPING_ID")) {
+                originalSQL = aggExpr.toSQL();
+                aggSQL = "CAST(" + aggSQL + " AS BIGINT)";
             }
         } else if (aggExpr.isComposite()) {
             aggSQL = qualifyCondition(aggExpr.rawExpression(), planIdToAlias);
@@ -1884,6 +1902,23 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
                                                            com.thunderduck.types.StructType childSchema) {
         if (expr instanceof FunctionCall func) {
             String name = func.functionName().toLowerCase();
+
+            // Spark: grouping() returns TINYINT (ByteType), grouping_id() returns BIGINT (LongType).
+            // DuckDB returns INTEGER for both. Wrap with CAST via RawSQLExpression so that
+            // composite expressions (e.g., grouping(a)+grouping(b)) emit correct CASTs.
+            // We use RawSQLExpression instead of CastExpression to avoid the TRUNC wrapping
+            // that CastExpression applies for integral target types (grouping already returns int).
+            if (name.equals("grouping")) {
+                return new com.thunderduck.expression.RawSQLExpression(
+                    "CAST(" + expr.toSQL() + " AS TINYINT)",
+                    com.thunderduck.types.ByteType.get(), false);
+            }
+            if (name.equals("grouping_id")) {
+                return new com.thunderduck.expression.RawSQLExpression(
+                    "CAST(" + expr.toSQL() + " AS BIGINT)",
+                    com.thunderduck.types.LongType.get(), false);
+            }
+
             if (name.equals("sum") || name.equals("sum_distinct") ||
                 name.equals("avg") || name.equals("avg_distinct")) {
                 // Only transform arguments if first argument is DECIMAL

@@ -165,7 +165,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         SQL innerSqlRelation = input.getSql();
                         String innerQuery = innerSqlRelation.getQuery();
                         logger.info("ShowString with spark.sql() query: {}", innerQuery);
-                        TransformResult result = transformSparkSQLWithPlan(innerQuery, duckdbConn);
+                        TransformResult result = transformSparkSQLWithPlan(innerQuery, duckdbConn, session.getViewSchemas());
                         sql = result.sql();
                         sqlPlan = result.plan();
                     } else {
@@ -202,7 +202,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     }
 
                     // Transform SparkSQL to DuckDB SQL via schema-aware parser
-                    TransformResult result = transformSparkSQLWithPlan(query, duckdbConn);
+                    TransformResult result = transformSparkSQLWithPlan(query, duckdbConn, session.getViewSchemas());
                     sql = result.sql();
                     sqlPlan = result.plan();
                 } else if (root.hasCatalog()) {
@@ -244,7 +244,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                 }
 
                 if (query != null && !query.isEmpty()) {
-                    TransformResult result = transformSparkSQLWithPlan(query, duckdbConn);
+                    TransformResult result = transformSparkSQLWithPlan(query, duckdbConn, session.getViewSchemas());
                     sql = result.sql();
                     sqlPlan = result.plan();
                 } else {
@@ -674,7 +674,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                     if (plan.hasRoot() && plan.getRoot().hasSql()) {
                         // Direct SQL query - parse and transform via schema-aware parser
                         String sparkSQL = plan.getRoot().getSql().getQuery();
-                        TransformResult result = transformSparkSQLWithPlan(sparkSQL, analyzeConn);
+                        TransformResult result = transformSparkSQLWithPlan(sparkSQL, analyzeConn, session.getViewSchemas());
                         sql = result.sql();
                         logger.debug("Analyzing SQL query schema: {}", sql.substring(0, Math.min(100, sql.length())));
 
@@ -706,7 +706,7 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
                         }
 
                         // Transform SparkSQL to DuckDB SQL via schema-aware parser
-                        TransformResult result = transformSparkSQLWithPlan(sparkSQL, analyzeConn);
+                        TransformResult result = transformSparkSQLWithPlan(sparkSQL, analyzeConn, session.getViewSchemas());
                         sql = result.sql();
                         logger.debug("Analyzing SQL command schema: {}", sql.substring(0, Math.min(100, sql.length())));
 
@@ -808,23 +808,28 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
     private record TransformResult(String sql, LogicalPlan plan) {}
 
     private TransformResult transformSparkSQLWithPlan(String sparkSQL, java.sql.Connection connection) {
+        return transformSparkSQLWithPlan(sparkSQL, connection, null);
+    }
+
+    private TransformResult transformSparkSQLWithPlan(String sparkSQL, java.sql.Connection connection,
+                                                       java.util.Map<String, com.thunderduck.types.StructType> viewSchemaCache) {
         SparkSQLParser parser = SparkSQLParser.getInstance();
-        LogicalPlan plan = parser.parse(sparkSQL, connection);
+        LogicalPlan plan = parser.parse(sparkSQL, connection, viewSchemaCache);
         String duckdbSQL = sqlGenerator.generate(plan);
         logger.info("SparkSQL parser transformed: {} -> {}", sparkSQL, duckdbSQL);
         return new TransformResult(duckdbSQL, plan);
     }
 
     private TransformResult transformSparkSQLWithPlan(String sparkSQL) {
-        return transformSparkSQLWithPlan(sparkSQL, null);
+        return transformSparkSQLWithPlan(sparkSQL, null, null);
     }
 
     private String transformSparkSQL(String sparkSQL, java.sql.Connection connection) {
-        return transformSparkSQLWithPlan(sparkSQL, connection).sql();
+        return transformSparkSQLWithPlan(sparkSQL, connection, null).sql();
     }
 
     private String transformSparkSQL(String sparkSQL) {
-        return transformSparkSQLWithPlan(sparkSQL, null).sql();
+        return transformSparkSQLWithPlan(sparkSQL, null, null).sql();
     }
 
     /**
@@ -1614,7 +1619,15 @@ public class SparkConnectServiceImpl extends SparkConnectServiceGrpc.SparkConnec
      * Converts thunderduck DataType to Spark Connect DataType.
      */
     private org.apache.spark.connect.proto.DataType convertDataTypeToProto(com.thunderduck.types.DataType dataType) {
-        if (dataType instanceof com.thunderduck.types.IntegerType) {
+        if (dataType instanceof com.thunderduck.types.ByteType) {
+            return org.apache.spark.connect.proto.DataType.newBuilder()
+                .setByte(org.apache.spark.connect.proto.DataType.Byte.newBuilder().build())
+                .build();
+        } else if (dataType instanceof com.thunderduck.types.ShortType) {
+            return org.apache.spark.connect.proto.DataType.newBuilder()
+                .setShort(org.apache.spark.connect.proto.DataType.Short.newBuilder().build())
+                .build();
+        } else if (dataType instanceof com.thunderduck.types.IntegerType) {
             return org.apache.spark.connect.proto.DataType.newBuilder()
                 .setInteger(org.apache.spark.connect.proto.DataType.Integer.newBuilder().build())
                 .build();

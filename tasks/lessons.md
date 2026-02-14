@@ -31,6 +31,12 @@ Review this file at session start to avoid repeating past mistakes.
 - **Rule**: Never add new regex hacks to `preprocessSQL()`. Fix the issue at the AST layer (parser, expression, or SQLGenerator) instead.
 - **Tracking**: See `docs/architect/PREPROCESSSQL_ELIMINATION_PLAN.md` for the plan to remove all SQL string hacks.
 
+## 2026-02-14: Always Init Submodules After Creating Worktrees
+
+- **Issue**: Created 3 worktrees without running `git submodule update --init --recursive`. Agents couldn't build with `-Pbuild-extension` because the `thunderduck-duckdb-extension/duckdb` submodule was missing.
+- **Rule**: ALWAYS run `git submodule update --init --recursive` immediately after `git worktree add`. This is already documented in CLAUDE.md and MEMORY.md but was not followed.
+- **Submodules**: `thunderduck-duckdb-extension`, `thunderduck-duckdb-extension/duckdb`, `thunderduck-duckdb-extension/extension-ci-tools`
+
 ## 2026-02-08: Always Clean Build Before Testing
 
 - **Issue**: Repeatedly tested with stale builds, then was surprised that code changes had no effect.
