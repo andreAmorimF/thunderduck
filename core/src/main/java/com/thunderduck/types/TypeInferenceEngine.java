@@ -16,6 +16,8 @@ import com.thunderduck.expression.UnresolvedColumn;
 import com.thunderduck.expression.WindowFunction;
 
 import java.util.List;
+import java.util.Set;
+import java.util.function.BiFunction;
 import com.thunderduck.functions.FunctionCategories;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +50,57 @@ import org.slf4j.LoggerFactory;
 public final class TypeInferenceEngine {
 
     private static final Logger logger = LoggerFactory.getLogger(TypeInferenceEngine.class);
+
+    // Static sets for function categorization (replaces repeated String.matches() regex compilation)
+
+    private static final Set<String> STRING_RETURNING_FUNCTIONS = Set.of(
+        "concat", "concat_ws", "upper", "lower", "ucase", "lcase",
+        "trim", "ltrim", "rtrim",
+        "lpad", "rpad", "repeat",
+        "substring", "substr", "left", "right",
+        "replace", "translate", "regexp_replace", "regexp_extract",
+        "split_part", "initcap", "format_string", "printf",
+        "from_unixtime", "base64", "unbase64", "hex", "unhex", "md5", "sha1", "sha2");
+
+    private static final Set<String> DATE_RETURNING_FUNCTIONS = Set.of(
+        "to_date", "last_day", "next_day", "date_add", "date_sub", "add_months");
+
+    private static final Set<String> TIMESTAMP_RETURNING_FUNCTIONS = Set.of(
+        "to_timestamp", "date_trunc");
+
+    private static final Set<String> DATE_PART_FUNCTIONS = Set.of(
+        "year", "month", "day", "dayofmonth", "dayofweek", "dayofyear",
+        "hour", "minute", "second", "quarter", "weekofyear", "week", "datediff", "size");
+
+    private static final Set<String> STRING_LENGTH_FUNCTIONS = Set.of(
+        "length", "char_length", "character_length");
+
+    private static final Set<String> LONG_RETURNING_FUNCTIONS = Set.of(
+        "unix_timestamp", "array_position");
+
+    private static final Set<String> DOUBLE_RETURNING_MATH_FUNCTIONS = Set.of(
+        "sqrt", "log", "ln", "log10", "log2", "exp", "expm1",
+        "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh",
+        "radians", "degrees", "cbrt", "hypot", "pow", "power",
+        "sign", "signum", "truncate", "months_between");
+
+    private static final Set<String> CEIL_FLOOR_FUNCTIONS = Set.of(
+        "ceil", "ceiling", "floor");
+
+    private static final Set<String> COMPLEX_TYPE_CONSTRUCTORS = Set.of(
+        "array", "map", "create_map", "named_struct", "struct");
+
+    private static final Set<String> BOOLEAN_CHECK_FUNCTIONS = Set.of(
+        "isnull", "isnotnull", "isnan");
+
+    private static final Set<String> MATH_NULLABLE_FUNCTIONS = Set.of(
+        "ceil", "ceiling", "floor", "round", "bround",
+        "log", "ln", "log10", "log2", "exp", "expm1", "sqrt", "cbrt",
+        "pow", "power", "hypot",
+        "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh",
+        "radians", "degrees", "sign", "signum",
+        "abs", "negative", "positive",
+        "truncate", "months_between");
 
     private TypeInferenceEngine() {
         // Utility class - prevent instantiation
@@ -361,6 +414,33 @@ public final class TypeInferenceEngine {
         return null;
     }
 
+    /**
+     * Attempts decimal promotion for a binary expression when at least one operand is DecimalType.
+     *
+     * <p>Converts both operands to DecimalType (if possible) and applies the given promotion
+     * function. Returns null if neither operand is DecimalType or if conversion fails.
+     *
+     * @param leftType the left operand type
+     * @param rightType the right operand type
+     * @param leftExpr the left expression (for literal precision extraction)
+     * @param rightExpr the right expression (for literal precision extraction)
+     * @param promoter the decimal promotion function to apply (e.g., promoteDecimalDivision)
+     * @return the promoted DecimalType, or null if decimal promotion does not apply
+     */
+    private static DataType tryDecimalPromotion(
+            DataType leftType, DataType rightType,
+            Expression leftExpr, Expression rightExpr,
+            BiFunction<DecimalType, DecimalType, DecimalType> promoter) {
+        if (leftType instanceof DecimalType || rightType instanceof DecimalType) {
+            DecimalType leftDec = toDecimalType(leftType, leftExpr);
+            DecimalType rightDec = toDecimalType(rightType, rightExpr);
+            if (leftDec != null && rightDec != null) {
+                return promoter.apply(leftDec, rightDec);
+            }
+        }
+        return null;
+    }
+
     // ========================================================================
     // Core Type Resolution
     // ========================================================================
@@ -580,15 +660,9 @@ public final class TypeInferenceEngine {
 
         // Division: promote non-DECIMAL operands to DECIMAL when other is DECIMAL
         if (op == BinaryExpression.Operator.DIVIDE) {
-            boolean leftIsDecimal = leftType instanceof DecimalType;
-            boolean rightIsDecimal = rightType instanceof DecimalType;
-            if (leftIsDecimal || rightIsDecimal) {
-                DecimalType leftDec = toDecimalType(leftType, binExpr.left());
-                DecimalType rightDec = toDecimalType(rightType, binExpr.right());
-                if (leftDec != null && rightDec != null) {
-                    return promoteDecimalDivision(leftDec, rightDec);
-                }
-            }
+            DataType result = tryDecimalPromotion(leftType, rightType, binExpr.left(), binExpr.right(),
+                    TypeInferenceEngine::promoteDecimalDivision);
+            if (result != null) return result;
             return DoubleType.get();
         }
 
@@ -596,42 +670,24 @@ public final class TypeInferenceEngine {
         // Only use decimal promotion when at least one operand is already DecimalType
         // Integer * Integer stays as integer (uses numeric type promotion below)
         if (op == BinaryExpression.Operator.MULTIPLY) {
-            boolean leftIsDecimal = leftType instanceof DecimalType;
-            boolean rightIsDecimal = rightType instanceof DecimalType;
-            if (leftIsDecimal || rightIsDecimal) {
-                DecimalType leftDec = toDecimalType(leftType, binExpr.left());
-                DecimalType rightDec = toDecimalType(rightType, binExpr.right());
-                if (leftDec != null && rightDec != null) {
-                    return promoteDecimalMultiplication(leftDec, rightDec);
-                }
-            }
+            DataType result = tryDecimalPromotion(leftType, rightType, binExpr.left(), binExpr.right(),
+                    TypeInferenceEngine::promoteDecimalMultiplication);
+            if (result != null) return result;
             // Otherwise fall through to numeric type promotion
         }
 
         // Addition / Subtraction: use Spark's decimal addition formula with carry digit
         if (op == BinaryExpression.Operator.ADD || op == BinaryExpression.Operator.SUBTRACT) {
-            boolean leftIsDecimal = leftType instanceof DecimalType;
-            boolean rightIsDecimal = rightType instanceof DecimalType;
-            if (leftIsDecimal || rightIsDecimal) {
-                DecimalType leftDec = toDecimalType(leftType, binExpr.left());
-                DecimalType rightDec = toDecimalType(rightType, binExpr.right());
-                if (leftDec != null && rightDec != null) {
-                    return promoteDecimalAddition(leftDec, rightDec);
-                }
-            }
+            DataType result = tryDecimalPromotion(leftType, rightType, binExpr.left(), binExpr.right(),
+                    TypeInferenceEngine::promoteDecimalAddition);
+            if (result != null) return result;
         }
 
         // Modulo: use Spark's decimal remainder formula (min integer digits, not max)
         if (op == BinaryExpression.Operator.MODULO) {
-            boolean leftIsDecimal = leftType instanceof DecimalType;
-            boolean rightIsDecimal = rightType instanceof DecimalType;
-            if (leftIsDecimal || rightIsDecimal) {
-                DecimalType leftDec = toDecimalType(leftType, binExpr.left());
-                DecimalType rightDec = toDecimalType(rightType, binExpr.right());
-                if (leftDec != null && rightDec != null) {
-                    return promoteDecimalModulo(leftDec, rightDec);
-                }
-            }
+            DataType result = tryDecimalPromotion(leftType, rightType, binExpr.left(), binExpr.right(),
+                    TypeInferenceEngine::promoteDecimalModulo);
+            if (result != null) return result;
         }
 
         // For other arithmetic operators, use numeric type promotion
@@ -972,6 +1028,170 @@ public final class TypeInferenceEngine {
     }
 
     // ========================================================================
+    // Function Call Type Resolution — Shared Helpers
+    // ========================================================================
+
+    /**
+     * Resolves collect_list/collect_set/list/list_distinct/array_agg return type.
+     * These collection aggregates return ArrayType(argType, false) since Spark skips nulls.
+     *
+     * @return resolved ArrayType, or null if this function doesn't match
+     */
+    private static DataType resolveCollectListType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if (funcName.equals("collect_list") || funcName.equals("collect_set") ||
+            funcName.equals("list") || funcName.equals("list_distinct") ||
+            funcName.equals("array_agg")) {
+            if (!func.arguments().isEmpty()) {
+                DataType argType = resolveType(func.arguments().get(0), schema);
+                return new ArrayType(argType, false);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the array() constructor return type.
+     * array(1, 2, 3) -> ArrayType(IntegerType, false)
+     *
+     * @return resolved ArrayType, or null if this function doesn't match
+     */
+    private static DataType resolveArrayConstructorType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if (funcName.equals("array") && !func.arguments().isEmpty()) {
+            DataType elemType = resolveType(func.arguments().get(0), schema);
+            boolean containsNull = func.arguments().stream()
+                .anyMatch(arg -> resolveNullable(arg, schema));
+            return new ArrayType(elemType, containsNull);
+        }
+        return null;
+    }
+
+    /**
+     * Resolves map_keys/map_values return type from the input map type.
+     * map_keys returns ArrayType of key type, map_values returns ArrayType of value type.
+     *
+     * @return resolved ArrayType, or null if this function doesn't match or arg is not MapType
+     */
+    private static DataType resolveMapKeysValuesType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if (FunctionCategories.isMapExtraction(funcName) && !func.arguments().isEmpty()) {
+            DataType argType = resolveType(func.arguments().get(0), schema);
+            if (argType instanceof MapType mapType) {
+                return funcName.equals("map_keys")
+                    ? new ArrayType(mapType.keyType(), true)
+                    : new ArrayType(mapType.valueType(), mapType.valueContainsNull());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves flatten return type: ArrayType(ArrayType(T)) -> ArrayType(T).
+     *
+     * @return resolved type, or null if this function doesn't match
+     */
+    private static DataType resolveFlattenType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if (funcName.equals("flatten") && !func.arguments().isEmpty()) {
+            DataType argType = resolveType(func.arguments().get(0), schema);
+            if (argType instanceof ArrayType a) {
+                DataType elemType = a.elementType();
+                return (elemType instanceof ArrayType) ? elemType : argType;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves split return type: always ArrayType(StringType, false).
+     *
+     * @return ArrayType(StringType, false) if funcName is "split", null otherwise
+     */
+    private static DataType resolveSplitType(FunctionCall func) {
+        if (func.functionName().toLowerCase().equals("split")) {
+            return new ArrayType(StringType.get(), false);
+        }
+        return null;
+    }
+
+    /**
+     * Resolves map_entries return type: map_entries(map) -> ArrayType(StructType([key, value]), false).
+     *
+     * @return resolved ArrayType of struct entries, or null if this function doesn't match
+     */
+    private static DataType resolveMapEntriesType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if (funcName.equals("map_entries") && !func.arguments().isEmpty()) {
+            DataType argType = resolveType(func.arguments().get(0), schema);
+            if (argType instanceof MapType mapType) {
+                java.util.List<StructField> entryFields = java.util.List.of(
+                    new StructField("key", mapType.keyType(), false),
+                    new StructField("value", mapType.valueType(), mapType.valueContainsNull()));
+                return new ArrayType(new StructType(entryFields), false);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves map_from_arrays return type: map_from_arrays(keys_array, values_array) -> MapType.
+     *
+     * @return resolved MapType, or null if this function doesn't match
+     */
+    private static DataType resolveMapFromArraysType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if (funcName.equals("map_from_arrays") && func.arguments().size() >= 2) {
+            DataType keysType = resolveType(func.arguments().get(0), schema);
+            DataType valuesType = resolveType(func.arguments().get(1), schema);
+            if (keysType instanceof ArrayType keyArr && valuesType instanceof ArrayType valArr) {
+                return new MapType(keyArr.elementType(), valArr.elementType(), valArr.containsNull());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves map/create_map constructor return type: map(k1, v1, k2, v2) -> MapType.
+     *
+     * @return resolved MapType, or null if this function doesn't match
+     */
+    private static DataType resolveMapConstructorType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if ((funcName.equals("map") || funcName.equals("create_map")) && func.arguments().size() >= 2) {
+            DataType keyType = resolveType(func.arguments().get(0), schema);
+            DataType valueType = resolveType(func.arguments().get(1), schema);
+            boolean valueContainsNull = false;
+            for (int i = 1; i < func.arguments().size(); i += 2) {
+                if (resolveNullable(func.arguments().get(i), schema)) {
+                    valueContainsNull = true;
+                    break;
+                }
+            }
+            return new MapType(keyType, valueType, valueContainsNull);
+        }
+        return null;
+    }
+
+    /**
+     * Resolves array type-preserving and set operation function return types.
+     * These functions return the same ArrayType as their first argument.
+     *
+     * @return the input ArrayType if the function matches and arg is ArrayType, null otherwise
+     */
+    private static DataType resolveArrayPreservingType(FunctionCall func, StructType schema) {
+        String funcName = func.functionName().toLowerCase();
+        if ((FunctionCategories.isArrayTypePreserving(funcName) ||
+             FunctionCategories.isArraySetOperation(funcName)) && !func.arguments().isEmpty()) {
+            DataType argType = resolveType(func.arguments().get(0), schema);
+            if (argType instanceof ArrayType) {
+                return argType;
+            }
+        }
+        return null;
+    }
+
+    // ========================================================================
     // Function Call Type Resolution
     // ========================================================================
 
@@ -987,71 +1207,14 @@ public final class TypeInferenceEngine {
             boolean hasUnresolved = UnresolvedType.containsUnresolved(arrType) ||
                                    arrType.elementType() instanceof StringType;
             if (hasUnresolved) {
-                if (FunctionCategories.isArrayTypePreserving(funcName) ||
-                    FunctionCategories.isArraySetOperation(funcName)) {
-                    if (!func.arguments().isEmpty()) {
-                        DataType argType = resolveType(func.arguments().get(0), schema);
-                        if (argType instanceof ArrayType) {
-                            return argType;
-                        }
-                    }
-                }
-                // Collection aggregates: resolve element type from argument
-                // Spark's collect_list/collect_set skip nulls, so containsNull=false
-                if (funcName.equals("collect_list") || funcName.equals("collect_set") ||
-                    funcName.equals("list") || funcName.equals("list_distinct") ||
-                    funcName.equals("array_agg")) {
-                    if (!func.arguments().isEmpty()) {
-                        DataType argType = resolveType(func.arguments().get(0), schema);
-                        return new ArrayType(argType, false);
-                    }
-                }
-                // Array constructor: resolve element type from arguments
-                if (funcName.equals("array")) {
-                    if (!func.arguments().isEmpty()) {
-                        DataType elemType = resolveType(func.arguments().get(0), schema);
-                        boolean containsNull = func.arguments().stream()
-                            .anyMatch(arg -> resolveNullable(arg, schema));
-                        return new ArrayType(elemType, containsNull);
-                    }
-                }
-                // Map extraction functions: resolve from input map type
-                if (FunctionCategories.isMapExtraction(funcName)) {
-                    if (!func.arguments().isEmpty()) {
-                        DataType argType = resolveType(func.arguments().get(0), schema);
-                        if (argType instanceof MapType mapType) {
-                            return funcName.equals("map_keys")
-                                ? new ArrayType(mapType.keyType(), true)
-                                : new ArrayType(mapType.valueType(), mapType.valueContainsNull());
-                        }
-                    }
-                }
-                // Flatten: ArrayType(ArrayType(T)) -> ArrayType(T)
-                if (funcName.equals("flatten")) {
-                    if (!func.arguments().isEmpty()) {
-                        DataType argType = resolveType(func.arguments().get(0), schema);
-                        if (argType instanceof ArrayType a) {
-                            DataType elemType = a.elementType();
-                            return (elemType instanceof ArrayType) ? elemType : argType;
-                        }
-                    }
-                }
-                // split returns ArrayType(StringType, false)
-                if (funcName.equals("split")) {
-                    return new ArrayType(StringType.get(), false);
-                }
-                // map_entries(map) -> ArrayType(StructType([key, value]), false)
-                if (funcName.equals("map_entries")) {
-                    if (!func.arguments().isEmpty()) {
-                        DataType argType = resolveType(func.arguments().get(0), schema);
-                        if (argType instanceof MapType mapType) {
-                            java.util.List<StructField> entryFields = java.util.List.of(
-                                new StructField("key", mapType.keyType(), false),
-                                new StructField("value", mapType.valueType(), mapType.valueContainsNull()));
-                            return new ArrayType(new StructType(entryFields), false);
-                        }
-                    }
-                }
+                DataType resolved;
+                if ((resolved = resolveArrayPreservingType(func, schema)) != null) return resolved;
+                if ((resolved = resolveCollectListType(func, schema)) != null) return resolved;
+                if ((resolved = resolveArrayConstructorType(func, schema)) != null) return resolved;
+                if ((resolved = resolveMapKeysValuesType(func, schema)) != null) return resolved;
+                if ((resolved = resolveFlattenType(func, schema)) != null) return resolved;
+                if ((resolved = resolveSplitType(func)) != null) return resolved;
+                if ((resolved = resolveMapEntriesType(func, schema)) != null) return resolved;
             }
             return resolveNestedType(declaredType, schema);
         }
@@ -1061,27 +1224,9 @@ public final class TypeInferenceEngine {
             boolean hasUnresolved = UnresolvedType.containsUnresolved(mapDeclared.keyType()) ||
                                    UnresolvedType.containsUnresolved(mapDeclared.valueType());
             if (hasUnresolved && !func.arguments().isEmpty()) {
-                // map_from_arrays(keys_array, values_array) -> MapType(keyElem, valueElem, valueContainsNull)
-                if (funcName.equals("map_from_arrays") && func.arguments().size() >= 2) {
-                    DataType keysType = resolveType(func.arguments().get(0), schema);
-                    DataType valuesType = resolveType(func.arguments().get(1), schema);
-                    if (keysType instanceof ArrayType keyArr && valuesType instanceof ArrayType valArr) {
-                        return new MapType(keyArr.elementType(), valArr.elementType(), valArr.containsNull());
-                    }
-                }
-                // map/create_map(k1, v1, k2, v2, ...) -> MapType(keyType, valueType, valueContainsNull)
-                if ((funcName.equals("map") || funcName.equals("create_map")) && func.arguments().size() >= 2) {
-                    DataType keyType = resolveType(func.arguments().get(0), schema);
-                    DataType valueType = resolveType(func.arguments().get(1), schema);
-                    boolean valueContainsNull = false;
-                    for (int i = 1; i < func.arguments().size(); i += 2) {
-                        if (resolveNullable(func.arguments().get(i), schema)) {
-                            valueContainsNull = true;
-                            break;
-                        }
-                    }
-                    return new MapType(keyType, valueType, valueContainsNull);
-                }
+                DataType resolved;
+                if ((resolved = resolveMapFromArraysType(func, schema)) != null) return resolved;
+                if ((resolved = resolveMapConstructorType(func, schema)) != null) return resolved;
             }
             return resolveNestedType(declaredType, schema);
         }
@@ -1091,38 +1236,11 @@ public final class TypeInferenceEngine {
              declaredType instanceof StringType) &&
             !func.arguments().isEmpty()) {
 
-            // Array constructor: array(1, 2, 3) -> ArrayType(IntegerType, false)
-            if (funcName.equals("array")) {
-                DataType elemType = resolveType(func.arguments().get(0), schema);
-                boolean containsNull = func.arguments().stream()
-                    .anyMatch(arg -> resolveNullable(arg, schema));
-                return new ArrayType(elemType, containsNull);
-            }
-
-            // Map constructor: map(k1, v1, k2, v2) -> MapType(keyType, valueType, valueContainsNull)
-            if (funcName.equals("map") || funcName.equals("create_map")) {
-                if (func.arguments().size() >= 2) {
-                    DataType keyType = resolveType(func.arguments().get(0), schema);
-                    DataType valueType = resolveType(func.arguments().get(1), schema);
-                    boolean valueContainsNull = false;
-                    for (int i = 1; i < func.arguments().size(); i += 2) {
-                        if (resolveNullable(func.arguments().get(i), schema)) {
-                            valueContainsNull = true;
-                            break;
-                        }
-                    }
-                    return new MapType(keyType, valueType, valueContainsNull);
-                }
-            }
-
-            // map_from_arrays: map_from_arrays(keys_array, values_array) -> MapType
-            if (funcName.equals("map_from_arrays") && func.arguments().size() >= 2) {
-                DataType keysType = resolveType(func.arguments().get(0), schema);
-                DataType valuesType = resolveType(func.arguments().get(1), schema);
-                if (keysType instanceof ArrayType keyArr && valuesType instanceof ArrayType valArr) {
-                    return new MapType(keyArr.elementType(), valArr.elementType(), valArr.containsNull());
-                }
-            }
+            // Complex type constructors: array, map, map_from_arrays
+            DataType resolved;
+            if ((resolved = resolveArrayConstructorType(func, schema)) != null) return resolved;
+            if ((resolved = resolveMapConstructorType(func, schema)) != null) return resolved;
+            if ((resolved = resolveMapFromArraysType(func, schema)) != null) return resolved;
 
             // Struct constructor: named_struct/struct(name1, val1, ...) -> StructType
             if (funcName.equals("named_struct")) {
@@ -1159,22 +1277,10 @@ public final class TypeInferenceEngine {
             }
 
             // Collection aggregates: collect_list/collect_set -> ArrayType(argType, false)
-            // Spark's collect_list/collect_set skip nulls, so containsNull=false
-            if (funcName.equals("collect_list") || funcName.equals("collect_set") ||
-                funcName.equals("list") || funcName.equals("list_distinct") ||
-                funcName.equals("array_agg")) {
-                DataType argType = resolveType(func.arguments().get(0), schema);
-                return new ArrayType(argType, false);
-            }
+            if ((resolved = resolveCollectListType(func, schema)) != null) return resolved;
 
             // Array functions that preserve input type
-            if (FunctionCategories.isArrayTypePreserving(funcName) ||
-                FunctionCategories.isArraySetOperation(funcName)) {
-                DataType argType = resolveType(func.arguments().get(0), schema);
-                if (argType instanceof ArrayType) {
-                    return argType;
-                }
-            }
+            if ((resolved = resolveArrayPreservingType(func, schema)) != null) return resolved;
 
             // Lambda-based array functions that return arrays
             // list_transform: transform(array, lambda) -> ArrayType with transformed element type
@@ -1206,14 +1312,7 @@ public final class TypeInferenceEngine {
             }
 
             // Map extraction functions
-            if (FunctionCategories.isMapExtraction(funcName)) {
-                DataType argType = resolveType(func.arguments().get(0), schema);
-                if (argType instanceof MapType mapType) {
-                    return funcName.equals("map_keys")
-                        ? new ArrayType(mapType.keyType(), true)
-                        : new ArrayType(mapType.valueType(), mapType.valueContainsNull());
-                }
-            }
+            if ((resolved = resolveMapKeysValuesType(func, schema)) != null) return resolved;
 
             // Element extraction
             if (FunctionCategories.isElementExtraction(funcName)) {
@@ -1235,13 +1334,7 @@ public final class TypeInferenceEngine {
             }
 
             // Flatten
-            if (funcName.equals("flatten")) {
-                DataType argType = resolveType(func.arguments().get(0), schema);
-                if (argType instanceof ArrayType a) {
-                    DataType elemType = a.elementType();
-                    return (elemType instanceof ArrayType) ? elemType : argType;
-                }
-            }
+            if ((resolved = resolveFlattenType(func, schema)) != null) return resolved;
 
             // Boolean-returning functions
             if (FunctionCategories.isBooleanReturning(funcName) ||
@@ -1323,38 +1416,31 @@ public final class TypeInferenceEngine {
             }
 
             // String functions
-            if (funcName.matches("concat|concat_ws|upper|lower|ucase|lcase|" +
-                    "trim|ltrim|rtrim|" +
-                    "lpad|rpad|repeat|" +
-                    "substring|substr|left|right|" +
-                    "replace|translate|regexp_replace|regexp_extract|" +
-                    "split_part|initcap|format_string|printf|" +
-                    "from_unixtime|base64|unbase64|hex|unhex|md5|sha1|sha2")) {
+            if (STRING_RETURNING_FUNCTIONS.contains(funcName)) {
                 return StringType.get();
             }
 
             // Date/time functions
-            if (funcName.matches("to_date|last_day|next_day|date_add|date_sub|add_months")) {
+            if (DATE_RETURNING_FUNCTIONS.contains(funcName)) {
                 return DateType.get();
             }
-            if (funcName.matches("to_timestamp|date_trunc")) {
+            if (TIMESTAMP_RETURNING_FUNCTIONS.contains(funcName)) {
                 return TimestampType.get();
             }
 
             // Integer-returning functions
             if (FunctionCategories.isIntegerReturning(funcName) ||
-                funcName.matches("year|month|day|dayofmonth|dayofweek|dayofyear|" +
-                    "hour|minute|second|quarter|weekofyear|week|datediff|size")) {
+                DATE_PART_FUNCTIONS.contains(funcName)) {
                 return IntegerType.get();
             }
 
             // String length functions return IntegerType in Spark 4.x
-            if (funcName.matches("length|char_length|character_length")) {
+            if (STRING_LENGTH_FUNCTIONS.contains(funcName)) {
                 return IntegerType.get();
             }
 
             // Long-returning functions
-            if (funcName.matches("unix_timestamp|array_position")) {
+            if (LONG_RETURNING_FUNCTIONS.contains(funcName)) {
                 return LongType.get();
             }
 
@@ -1390,32 +1476,22 @@ public final class TypeInferenceEngine {
             }
 
             // Double-returning functions
-            if (funcName.matches("sqrt|log|ln|log10|log2|exp|expm1|" +
-                    "sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|" +
-                    "radians|degrees|cbrt|hypot|pow|power|" +
-                    "sign|signum|truncate|months_between")) {
+            if (DOUBLE_RETURNING_MATH_FUNCTIONS.contains(funcName)) {
                 return DoubleType.get();
             }
 
             // Ceil/floor return Long in Spark
-            if (funcName.matches("ceil|ceiling|floor")) {
+            if (CEIL_FLOOR_FUNCTIONS.contains(funcName)) {
                 return LongType.get();
             }
 
             // split returns ArrayType(StringType, false)
-            if (funcName.equals("split")) {
-                return new ArrayType(StringType.get(), false);
-            }
+            if ((resolved = resolveSplitType(func)) != null) return resolved;
 
             // map_entries(map) -> ArrayType(StructType([key, value]), false)
+            if ((resolved = resolveMapEntriesType(func, schema)) != null) return resolved;
+            // Fallback for map_entries when arg is not MapType
             if (funcName.equals("map_entries")) {
-                DataType argType = resolveType(func.arguments().get(0), schema);
-                if (argType instanceof MapType mapType) {
-                    java.util.List<StructField> entryFields = java.util.List.of(
-                        new StructField("key", mapType.keyType(), false),
-                        new StructField("value", mapType.valueType(), mapType.valueContainsNull()));
-                    return new ArrayType(new StructType(entryFields), false);
-                }
                 return new ArrayType(StringType.get(), false);
             }
 
@@ -1457,12 +1533,7 @@ public final class TypeInferenceEngine {
      * @return the inferred return type
      */
     public static DataType resolveAggregateReturnType(String function, DataType argType) {
-        String func = function.toUpperCase();
-        // Normalize _DISTINCT suffix: SUM_DISTINCT -> SUM, AVG_DISTINCT -> AVG, etc.
-        // ExpressionConverter appends _DISTINCT for DISTINCT aggregates.
-        if (func.endsWith("_DISTINCT") && !func.equals("COUNT_DISTINCT")) {
-            func = func.substring(0, func.length() - "_DISTINCT".length());
-        }
+        String func = normalizeDistinctSuffix(function.toUpperCase());
         logger.debug("resolveAggregateReturnType: function={}, normalized={}, argType={}", function, func, argType);
 
         switch (func) {
@@ -1555,11 +1626,7 @@ public final class TypeInferenceEngine {
      * @return true if the aggregate result can be null
      */
     public static boolean resolveAggregateNullable(String function, Expression argument, StructType schema) {
-        String funcUpper = function.toUpperCase();
-        // Normalize _DISTINCT suffix: SUM_DISTINCT -> SUM, AVG_DISTINCT -> AVG, etc.
-        if (funcUpper.endsWith("_DISTINCT") && !funcUpper.equals("COUNT_DISTINCT")) {
-            funcUpper = funcUpper.substring(0, funcUpper.length() - "_DISTINCT".length());
-        }
+        String funcUpper = normalizeDistinctSuffix(function.toUpperCase());
 
         // COUNT is always non-nullable (returns 0 for empty groups)
         if (funcUpper.equals("COUNT") || funcUpper.equals("COUNT_DISTINCT")) {
@@ -1813,10 +1880,7 @@ public final class TypeInferenceEngine {
         String funcUpper = funcName.toUpperCase();
 
         // Normalize _DISTINCT suffix
-        String normalizedUpper = funcUpper;
-        if (funcUpper.endsWith("_DISTINCT") && !funcUpper.equals("COUNT_DISTINCT")) {
-            normalizedUpper = funcUpper.substring(0, funcUpper.length() - "_DISTINCT".length());
-        }
+        String normalizedUpper = normalizeDistinctSuffix(funcUpper);
 
         // COUNT is always non-nullable (returns 0 for empty groups)
         if (normalizedUpper.equals("COUNT") || funcUpper.equals("COUNT_DISTINCT")) {
@@ -1824,12 +1888,12 @@ public final class TypeInferenceEngine {
         }
 
         // Complex type constructors are never null (the container itself is not null)
-        if (funcName.matches("array|map|create_map|named_struct|struct")) {
+        if (COMPLEX_TYPE_CONSTRUCTORS.contains(funcName)) {
             return false;
         }
 
         // Boolean check functions always return non-null boolean
-        if (funcName.matches("isnull|isnotnull|isnan")) {
+        if (BOOLEAN_CHECK_FUNCTIONS.contains(funcName)) {
             return false;
         }
 
@@ -1892,13 +1956,7 @@ public final class TypeInferenceEngine {
         // Spark marks ceil/floor/round/log/exp/sqrt/pow etc. as nullable because
         // the function implementations can return null for edge cases (e.g., log(0),
         // division by zero). Even with non-nullable inputs, results are nullable.
-        if (funcName.matches("ceil|ceiling|floor|round|bround|" +
-                "log|ln|log10|log2|exp|expm1|sqrt|cbrt|" +
-                "pow|power|hypot|" +
-                "sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|" +
-                "radians|degrees|sign|signum|" +
-                "abs|negative|positive|" +
-                "truncate|months_between")) {
+        if (MATH_NULLABLE_FUNCTIONS.contains(funcName)) {
             return true;
         }
 
@@ -2141,5 +2199,22 @@ public final class TypeInferenceEngine {
         return expr instanceof Literal lit
             && lit.isNull()
             && lit.dataType() instanceof StringType;
+    }
+
+    /**
+     * Normalizes the _DISTINCT suffix from aggregate function names.
+     *
+     * <p>ExpressionConverter appends _DISTINCT for DISTINCT aggregates (e.g., SUM_DISTINCT).
+     * This method strips the suffix for type resolution, except for COUNT_DISTINCT which
+     * has its own special handling.
+     *
+     * @param funcName the function name to normalize
+     * @return the normalized function name with _DISTINCT suffix removed (if applicable)
+     */
+    private static String normalizeDistinctSuffix(String funcName) {
+        if (funcName.endsWith("_DISTINCT") && !funcName.equals("COUNT_DISTINCT")) {
+            return funcName.substring(0, funcName.length() - "_DISTINCT".length());
+        }
+        return funcName;
     }
 }
