@@ -57,15 +57,22 @@ These are non-negotiable constraints governing all SQL generation and type handl
 
 | Layer | Class | Responsibility |
 |-------|-------|---------------|
+| **Service** | `SparkConnectServiceImpl` | gRPC service: receives Spark Connect requests, dispatches to converter/parser, executes on DuckDB |
+| **Service** | `SessionManager` | Manages user sessions and their DuckDB connections |
+| **Converter** | `PlanConverter` | Entry point for protobuf plan deserialization, wraps RelationConverter + ExpressionConverter |
 | **Converter** | `RelationConverter` | Converts Spark Connect protobuf to logical plan nodes |
 | **Converter** | `ExpressionConverter` | Converts Spark expression protos to Expression AST |
+| **Parser** | `SparkSQLParser` | ANTLR4-based Spark SQL parser (raw SQL path entry point) |
+| **Parser** | `SparkSQLAstBuilder` | ANTLR visitor that builds LogicalPlan + Expression nodes from parse tree |
+| **Logical** | `LogicalPlan` (sealed) | Abstract sealed base — closed set of plan node types enables exhaustive pattern matching |
 | **Logical** | `Aggregate`, `Join`, `Filter`, `Project`, etc. | Logical plan nodes with `toSQL(SQLGenerator)` and `inferSchema()` |
-| **Expression** | `FunctionCall`, `BinaryExpression`, `CastExpression`, etc. | Expression AST nodes with `toSQL()` and `dataType()` |
-| **Generator** | `SQLGenerator` | Visits logical plan tree, generates DuckDB SQL |
+| **Expression** | `Expression` (interface) | Interface with `toSQL()`, `dataType()`, `toString()` — 30+ implementations |
+| **Generator** | `SQLGenerator` | Visits logical plan tree via sealed-class switch, generates DuckDB SQL |
 | **Runtime** | `DuckDBRuntime` | Manages DuckDB connections, extension loading |
 | **Runtime** | `SparkCompatMode` | Strict/relaxed mode detection |
 | **Functions** | `FunctionRegistry` | Maps Spark function names to DuckDB equivalents |
 | **Types** | `TypeInferenceEngine` | Resolves expression types, aggregate return types |
+| **Schema** | `SchemaInferrer` | Infers schema from DuckDB via DESCRIBE queries when plan-level inference unavailable |
 
 ### CRITICAL: Dual SQL Generation Paths
 
@@ -78,25 +85,33 @@ Aggregate SQL generation is unified: `Aggregate.toSQL()` delegates to `generator
 
 **Rule:** For joins, when modifying SQL generation, check both `visitJoin()` and `generateFlatJoinChainWithMapping()`.
 
-### Expression Hierarchy
+**Note:** `Join.toSQL()` exists but is dead code — `SQLGenerator.visit()` dispatches Join directly to `visitJoin()`, unlike `Aggregate.toSQL()` which delegates to the generator.
+
+### Expression Hierarchy (key types, 30+ implementations total)
 
 ```
-Expression (abstract)
+Expression (interface: toSQL(), dataType(), toString())
   +-- FunctionCall         # func(args...) -- uses FunctionRegistry for translation
   +-- BinaryExpression     # left OP right
   +-- UnaryExpression      # OP operand
   +-- CastExpression       # CAST(expr AS type)
+  +-- CaseWhenExpression   # CASE WHEN ... THEN ... END
+  +-- WindowFunction       # window/analytic functions (ROW_NUMBER, RANK, etc.)
   +-- Literal              # constant values
-  +-- UnresolvedColumn     # column references
+  +-- UnresolvedColumn     # unresolved column references (pre-resolution)
+  +-- ColumnReference      # resolved column with type info and qualifier
   +-- AliasExpression      # expr AS alias
+  +-- SubqueryExpression   # abstract base for ScalarSubquery, ExistsSubquery, InSubquery
+  +-- LambdaExpression     # lambda expressions for array HOFs (transform, filter, etc.)
+  +-- RawSQLExpression     # raw SQL passthrough from Spark's expr()
   +-- Aggregate.AggregateExpression  # AGG(arg) or composite (rawExpression)
 ```
 
 ### Raw SQL vs DataFrame API Code Paths
 
 Both paths now go through full logical planning:
-- **Raw SQL**: Spark SQL string → `SparkSQLParser` (ANTLR4) → LogicalPlan → `SQLGenerator.generate()` → DuckDB SQL
-- **DataFrame API**: Spark Connect protobuf → `RelationConverter` → LogicalPlan → `SQLGenerator.generate()` → DuckDB SQL
+- **Raw SQL**: Spark SQL string → `SparkSQLParser` (ANTLR4) → `SparkSQLAstBuilder` → LogicalPlan → `SQLGenerator.generate()` → DuckDB SQL
+- **DataFrame API**: Spark Connect protobuf → `PlanConverter` → `RelationConverter` → LogicalPlan → `SQLGenerator.generate()` → DuckDB SQL
 
 Both paths have full type awareness via `plan.inferSchema()` and `TypeInferenceEngine`.
 
@@ -114,7 +129,7 @@ Both paths have full type awareness via `plan.inferSchema()` and `TypeInferenceE
 
 5. **Maven -q flag hides errors**: When using `mvn -q`, build failures may show exit code 1 but no error details. Remove `-q` when debugging build failures.
 
-6. **Session-scoped test servers**: Test servers are session-scoped -- started once on auto-allocated ports, reused across all test classes. Health checks run before each class-scoped session; unhealthy servers are auto-restarted. Cleanup is port-scoped (only kills our ports, safe for parallel runs).
+6. **Session-scoped test servers**: Test servers are session-scoped -- started once on auto-allocated ports, reused across all test classes. PySpark sessions are module-scoped (one pair per test file). Health checks run before each module-scoped session; unhealthy servers are auto-restarted. Cleanup is port-scoped (only kills our ports, safe for parallel runs).
 
 7. **Always clean build before testing**: Never test with a stale build. Always run `mvn clean package -DskipTests` before integration tests.
 
@@ -237,7 +252,7 @@ cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_tpch
 ```
 
 **Test tiers:**
-- **Full suite**: `pytest differential/` — runs ALL 36 test files (TPC-H, TPC-DS, joins, aggregations, window functions, array functions, datetime, type casting, etc.)
+- **Full suite**: `pytest differential/` — runs ALL 37 test files (TPC-H, TPC-DS, joins, aggregations, window functions, array functions, datetime, type casting, etc.)
 - **Quick check**: `test_differential_v2.py test_tpch_differential.py` — TPC-H only (51 tests)
 - **TPC-DS**: `test_tpcds_differential.py test_tpcds_dataframe_differential.py`
 - **Single file/test**: target specific test files or parameterized tests
@@ -307,4 +322,4 @@ pkill -9 -f java 2>/dev/null
 | Test conftest | `tests/integration/conftest.py` |
 | DataFrame diff util | `tests/integration/utils/dataframe_diff.py` |
 
-**Last Updated**: 2026-02-10
+**Last Updated**: 2026-02-14
