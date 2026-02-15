@@ -489,6 +489,76 @@ public class FunctionRegistry {
             // Basic 2-arg form: swap argument order for instr, but return NULL if str is NULL
             return "CASE WHEN " + str + " IS NULL THEN NULL ELSE instr(" + str + ", " + substr + ") END";
         });
+
+        // format_number: Spark format_number(num, d) → formatted string with commas and decimal places
+        // DuckDB: printf with comma grouping format specifier
+        CUSTOM_TRANSLATORS.put("format_number", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("format_number requires exactly 2 arguments");
+            }
+            // DuckDB printf with comma grouping: printf('%,.2f', 12345.678) → '12,345.68'
+            // Build format string dynamically using the decimal places argument
+            return "printf('%,.' || CAST(" + args[1] + " AS VARCHAR) || 'f', " + args[0] + ")";
+        });
+
+        // substring_index: Spark substring_index(str, delim, count)
+        // Returns everything before the Nth occurrence of delim (positive count)
+        // or everything after the Nth-from-last occurrence (negative count)
+        // DuckDB has no native equivalent; emulate with string_split + array_to_string
+        CUSTOM_TRANSLATORS.put("substring_index", args -> {
+            if (args.length != 3) {
+                throw new IllegalArgumentException("substring_index requires exactly 3 arguments");
+            }
+            String str = args[0];
+            String delim = args[1];
+            String count = args[2];
+            return "CASE WHEN " + count + " > 0 " +
+                   "THEN array_to_string(string_split(" + str + ", " + delim + ")[1:" + count + "], " + delim + ") " +
+                   "ELSE array_to_string(string_split(" + str + ", " + delim + ")[length(string_split(" + str + ", " + delim + ")) + " + count + " + 1:], " + delim + ") " +
+                   "END";
+        });
+
+        // to_number: Spark to_number(str, format) → numeric value parsed from formatted string
+        // DuckDB doesn't have the same format-based numeric parsing
+        // For 1-arg form, simple CAST; for 2-arg form, strip formatting chars and CAST
+        CUSTOM_TRANSLATORS.put("to_number", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("to_number requires at least 1 argument");
+            }
+            if (args.length == 1) {
+                return "CAST(" + args[0] + " AS DOUBLE)";
+            }
+            // With format spec - strip common format chars (commas, dollar signs, whitespace) and cast
+            return "CAST(regexp_replace(regexp_replace(" + args[0] + ", '[,$]', '', 'g'), '\\s+', '', 'g') AS DOUBLE)";
+        });
+
+        // to_char: Spark to_char(num_or_date, format)
+        // For dates/timestamps, delegate to strftime with format conversion
+        CUSTOM_TRANSLATORS.put("to_char", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("to_char requires exactly 2 arguments");
+            }
+            String format = convertSparkDateFormatToDuckDB(args[1]);
+            return "strftime(" + args[0] + ", " + format + ")";
+        });
+
+        // encode: Spark encode(str, charset) → binary
+        // DuckDB encode(str) always uses UTF-8; ignore charset argument
+        CUSTOM_TRANSLATORS.put("encode", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("encode requires at least 1 argument");
+            }
+            return "encode(" + args[0] + ")";
+        });
+
+        // decode: Spark decode(binary, charset) → string
+        // DuckDB decode(binary) always uses UTF-8; ignore charset argument
+        CUSTOM_TRANSLATORS.put("decode", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("decode requires at least 1 argument");
+            }
+            return "decode(" + args[0] + ")";
+        });
     }
 
     // ==================== Math Functions ====================
@@ -1662,6 +1732,25 @@ public class FunctionRegistry {
 
         FUNCTION_METADATA.put("schema_of_json", FunctionMetadata.builder("schema_of_json")
             .duckdbName("json_structure")
+            .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // String functions with type metadata
+        FUNCTION_METADATA.put("format_number", FunctionMetadata.builder("format_number")
+            .duckdbName("printf")
+            .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("substring_index", FunctionMetadata.builder("substring_index")
+            .duckdbName("substring_index")
+            .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("to_char", FunctionMetadata.builder("to_char")
+            .duckdbName("strftime")
             .returnType(FunctionMetadata.constantType(StringType.get()))
             .nullable(FunctionMetadata.anyArgNullable())
             .build());
