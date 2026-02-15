@@ -770,8 +770,20 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("make_timestamp", "make_timestamp");
 
         // Day/month name functions
-        DIRECT_MAPPINGS.put("dayname", "dayname");
-        DIRECT_MAPPINGS.put("monthname", "monthname");
+        // Spark returns 3-letter abbreviations (Mon, Jan), DuckDB returns full names (Monday, January)
+        CUSTOM_TRANSLATORS.put("dayname", args -> {
+            if (args.length != 1) {
+                throw new IllegalArgumentException("dayname requires exactly 1 argument");
+            }
+            return "left(dayname(" + args[0] + "), 3)";
+        });
+
+        CUSTOM_TRANSLATORS.put("monthname", args -> {
+            if (args.length != 1) {
+                throw new IllegalArgumentException("monthname requires exactly 1 argument");
+            }
+            return "left(monthname(" + args[0] + "), 3)";
+        });
 
         // Current date/time
         DIRECT_MAPPINGS.put("current_date", "current_date");
@@ -997,7 +1009,7 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("bit_xor", "bit_xor");
 
         // Percentile aggregates
-        DIRECT_MAPPINGS.put("percentile", "quantile");
+        DIRECT_MAPPINGS.put("percentile", "quantile_cont");
         // percentile_approx: DuckDB's approx_quantile doesn't support accuracy parameter (3rd arg)
         CUSTOM_TRANSLATORS.put("percentile_approx", args -> {
             if (args.length < 2) {
@@ -1007,8 +1019,20 @@ public class FunctionRegistry {
         });
 
         // Distribution aggregates
-        DIRECT_MAPPINGS.put("kurtosis", "kurtosis");
-        DIRECT_MAPPINGS.put("skewness", "skewness");
+        DIRECT_MAPPINGS.put("kurtosis", "kurtosis_pop");
+
+        // Spark uses population skewness: mu_3 / mu_2^(3/2)
+        // DuckDB's skewness() uses sample correction: sqrt(n*(n-1))/(n-2) * population_skewness
+        // To convert: population = sample * (n-2) / sqrt(n*(n-1))
+        // Note: DuckDB has no skewness_pop function, so we reverse the correction
+        CUSTOM_TRANSLATORS.put("skewness", args -> {
+            if (args.length != 1) {
+                throw new IllegalArgumentException("skewness requires exactly 1 argument");
+            }
+            String col = args[0];
+            // Reverse DuckDB's bias correction to get population skewness matching Spark
+            return "(skewness(" + col + ") * (count(" + col + ") - 2) / sqrt(count(" + col + ") * (count(" + col + ") - 1)))";
+        });
 
         // Regression aggregates
         DIRECT_MAPPINGS.put("regr_count", "regr_count");
@@ -1124,7 +1148,15 @@ public class FunctionRegistry {
 
         // Array append/prepend
         DIRECT_MAPPINGS.put("array_append", "list_append");
-        DIRECT_MAPPINGS.put("array_prepend", "list_prepend");
+        // array_prepend: Spark has array_prepend(array, element) - array first
+        // DuckDB has list_prepend(element, list) - element first; must swap args
+        CUSTOM_TRANSLATORS.put("array_prepend", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("array_prepend requires exactly 2 arguments");
+            }
+            // Spark: array_prepend(array, element) -> DuckDB: list_prepend(element, list)
+            return "list_prepend(" + args[1] + ", " + args[0] + ")";
+        });
 
         // array_remove: remove all occurrences of a value from an array
         CUSTOM_TRANSLATORS.put("array_remove", args -> {
@@ -1774,7 +1806,7 @@ public class FunctionRegistry {
 
         // Percentile aggregate metadata
         FUNCTION_METADATA.put("percentile", FunctionMetadata.builder("percentile")
-            .duckdbName("quantile")
+            .duckdbName("quantile_cont")
             .returnType(FunctionMetadata.constantType(DoubleType.get()))
             .nullable(FunctionMetadata.anyArgNullable())
             .build());
@@ -1787,7 +1819,7 @@ public class FunctionRegistry {
 
         // Distribution aggregate metadata
         FUNCTION_METADATA.put("kurtosis", FunctionMetadata.builder("kurtosis")
-            .duckdbName("kurtosis")
+            .duckdbName("kurtosis_pop")
             .returnType(FunctionMetadata.constantType(DoubleType.get()))
             .nullable(FunctionMetadata.anyArgNullable())
             .build());

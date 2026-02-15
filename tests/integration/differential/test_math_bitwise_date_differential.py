@@ -277,7 +277,6 @@ class TestDateFunctions_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "make_date", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB dayname returns full name (Monday), Spark returns abbreviation (Mon)")
     @pytest.mark.timeout(30)
     def test_dayname(self, spark_reference, spark_thunderduck):
         """Test dayname() returns the day-of-week name for a date."""
@@ -292,7 +291,6 @@ class TestDateFunctions_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "dayname", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB monthname returns full name (January), Spark returns abbreviation (Jan)")
     @pytest.mark.timeout(30)
     def test_monthname(self, spark_reference, spark_thunderduck):
         """Test monthname() returns the month name for a date."""

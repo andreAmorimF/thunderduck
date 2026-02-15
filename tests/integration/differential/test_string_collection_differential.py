@@ -430,7 +430,6 @@ class TestCollectionFunctions_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "array_append", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB list_prepend type mismatch with array literals")
     @pytest.mark.timeout(30)
     def test_array_prepend(self, spark_reference, spark_thunderduck):
         """Test array_prepend() adding an element to the start of an array."""

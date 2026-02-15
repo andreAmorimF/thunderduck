@@ -354,7 +354,6 @@ class TestNewAggregates_Differential:
 class TestStatisticalAggregates_Differential:
     """Tests for statistical aggregate functions (kurtosis, skewness, percentile, percentile_approx)."""
 
-    @pytest.mark.skip(reason="DuckDB kurtosis uses population formula, Spark uses sample formula")
     @pytest.mark.timeout(30)
     def test_kurtosis(self, spark_reference, spark_thunderduck):
         """kurtosis computes the excess kurtosis of a numeric column (requires >= 4 rows)."""
@@ -366,7 +365,6 @@ class TestStatisticalAggregates_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "kurtosis", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB skewness uses population formula, Spark uses sample formula")
     @pytest.mark.timeout(30)
     def test_skewness(self, spark_reference, spark_thunderduck):
         """skewness computes the skewness of a numeric column (requires >= 3 rows)."""
@@ -378,7 +376,6 @@ class TestStatisticalAggregates_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "skewness", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB quantile uses nearest-rank, Spark uses linear interpolation")
     @pytest.mark.timeout(30)
     def test_percentile_p50(self, spark_reference, spark_thunderduck):
         """percentile at 0.5 returns the median."""
@@ -390,7 +387,6 @@ class TestStatisticalAggregates_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "percentile_p50", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB quantile uses nearest-rank, Spark uses linear interpolation")
     @pytest.mark.timeout(30)
     def test_percentile_p25(self, spark_reference, spark_thunderduck):
         """percentile at 0.25 returns the first quartile."""
@@ -402,7 +398,6 @@ class TestStatisticalAggregates_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "percentile_p25", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB quantile uses nearest-rank, Spark uses linear interpolation")
     @pytest.mark.timeout(30)
     def test_percentile_p75(self, spark_reference, spark_thunderduck):
         """percentile at 0.75 returns the third quartile."""
@@ -575,7 +570,6 @@ class TestGroupedNewAggregates_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "bool_and_grouped", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB kurtosis uses population formula, Spark uses sample formula")
     @pytest.mark.timeout(30)
     def test_kurtosis_grouped(self, spark_reference, spark_thunderduck):
         """kurtosis with GROUP BY computes excess kurtosis per group (requires >= 4 rows per group)."""
@@ -590,7 +584,6 @@ class TestGroupedNewAggregates_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "kurtosis_grouped", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB quantile uses nearest-rank, Spark uses linear interpolation")
     @pytest.mark.timeout(30)
     def test_percentile_grouped(self, spark_reference, spark_thunderduck):
         """percentile with GROUP BY computes the 50th percentile per group."""
