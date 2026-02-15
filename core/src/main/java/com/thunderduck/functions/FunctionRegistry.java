@@ -38,6 +38,7 @@ public class FunctionRegistry {
         initializeWindowFunctions();
         initializeArrayFunctions();
         initializeConditionalFunctions();
+        initializeJsonFunctions();
         initializeFunctionMetadata();
     }
 
@@ -1331,6 +1332,55 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("isinf", "isinf");
     }
 
+    // ==================== JSON Functions ====================
+
+    private static void initializeJsonFunctions() {
+        // Direct mappings - same function name or simple name change
+        DIRECT_MAPPINGS.put("to_json", "to_json");
+        DIRECT_MAPPINGS.put("json_array_length", "json_array_length");
+        DIRECT_MAPPINGS.put("json_object_keys", "json_keys");
+        DIRECT_MAPPINGS.put("schema_of_json", "json_structure");
+
+        // get_json_object: Spark uses JSONPath syntax, DuckDB json_extract_string also uses JSONPath
+        // Spark: get_json_object(json_str, '$.key')
+        // DuckDB: json_extract_string(json_str, '$.key')
+        CUSTOM_TRANSLATORS.put("get_json_object", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("get_json_object requires exactly 2 arguments");
+            }
+            return "json_extract_string(" + args[0] + ", " + args[1] + ")";
+        });
+
+        // from_json: Spark parses JSON string to struct based on schema
+        // DuckDB: json() parses a JSON string into DuckDB's JSON type
+        // Full struct schema support would need type system integration
+        CUSTOM_TRANSLATORS.put("from_json", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("from_json requires at least 1 argument");
+            }
+            // Basic implementation: parse the JSON string
+            return "json(" + args[0] + ")";
+        });
+
+        // json_tuple: Spark extracts multiple keys from a JSON string
+        // Spark: json_tuple(json_str, key1, key2, ...) returns multiple columns
+        // DuckDB: Multiple json_extract_string calls
+        CUSTOM_TRANSLATORS.put("json_tuple", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("json_tuple requires at least 2 arguments (json_str, key1, ...)");
+            }
+            // For each key, extract the value
+            StringBuilder sb = new StringBuilder();
+            for (int i = 1; i < args.length; i++) {
+                if (i > 1) {
+                    sb.append(", ");
+                }
+                sb.append("json_extract_string(").append(args[0]).append(", ").append(args[i]).append(")");
+            }
+            return sb.toString();
+        });
+    }
+
     /**
      * Gets the total number of registered functions.
      *
@@ -1594,6 +1644,25 @@ public class FunctionRegistry {
         FUNCTION_METADATA.put("dayofyear", FunctionMetadata.builder("dayofyear")
             .duckdbName("dayofyear")
             .returnType(FunctionMetadata.constantType(IntegerType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // JSON functions
+        FUNCTION_METADATA.put("get_json_object", FunctionMetadata.builder("get_json_object")
+            .duckdbName("json_extract_string")
+            .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("to_json", FunctionMetadata.builder("to_json")
+            .duckdbName("to_json")
+            .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("schema_of_json", FunctionMetadata.builder("schema_of_json")
+            .duckdbName("json_structure")
+            .returnType(FunctionMetadata.constantType(StringType.get()))
             .nullable(FunctionMetadata.anyArgNullable())
             .build());
     }
