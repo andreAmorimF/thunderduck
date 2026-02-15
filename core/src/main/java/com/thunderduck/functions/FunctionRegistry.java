@@ -441,6 +441,24 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("rlike", "regexp_matches");
         CUSTOM_TRANSLATORS.put("like", args -> "(" + args[0] + " LIKE " + args[1] + ")");
 
+        // Phonetic and distance functions
+        DIRECT_MAPPINGS.put("soundex", "soundex");
+        DIRECT_MAPPINGS.put("levenshtein", "levenshtein");
+
+        // String manipulation
+        DIRECT_MAPPINGS.put("overlay", "overlay");
+        DIRECT_MAPPINGS.put("left", "left");
+        DIRECT_MAPPINGS.put("right", "right");
+        DIRECT_MAPPINGS.put("split_part", "split_part");
+        DIRECT_MAPPINGS.put("translate", "translate");
+        DIRECT_MAPPINGS.put("btrim", "trim");
+
+        // Length functions
+        DIRECT_MAPPINGS.put("char_length", "length");
+        DIRECT_MAPPINGS.put("character_length", "length");
+        DIRECT_MAPPINGS.put("octet_length", "octet_length");
+        DIRECT_MAPPINGS.put("bit_length", "bit_length");
+
         // Other string functions
         DIRECT_MAPPINGS.put("ascii", "ascii");
         DIRECT_MAPPINGS.put("chr", "chr");
@@ -519,6 +537,54 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("e", "e");
         DIRECT_MAPPINGS.put("rand", "random");
         DIRECT_MAPPINGS.put("random", "random");
+
+        // Additional math functions
+        DIRECT_MAPPINGS.put("factorial", "factorial");
+        DIRECT_MAPPINGS.put("cbrt", "cbrt");
+        DIRECT_MAPPINGS.put("width_bucket", "width_bucket");
+        DIRECT_MAPPINGS.put("bin", "bin");
+        DIRECT_MAPPINGS.put("hex", "hex");
+        DIRECT_MAPPINGS.put("unhex", "unhex");
+
+        // Unary sign functions
+        CUSTOM_TRANSLATORS.put("negative", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("negative requires 1 argument");
+            }
+            return "(-(" + args[0] + "))";
+        });
+        CUSTOM_TRANSLATORS.put("positive", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("positive requires 1 argument");
+            }
+            return "(+(" + args[0] + "))";
+        });
+
+        // Bitwise functions
+        DIRECT_MAPPINGS.put("bit_count", "bit_count");
+        DIRECT_MAPPINGS.put("bit_get", "get_bit");
+        DIRECT_MAPPINGS.put("getbit", "get_bit");
+
+        // Bitwise shift functions
+        CUSTOM_TRANSLATORS.put("shiftleft", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("shiftleft requires 2 arguments");
+            }
+            return "(" + args[0] + " << " + args[1] + ")";
+        });
+        CUSTOM_TRANSLATORS.put("shiftright", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("shiftright requires 2 arguments");
+            }
+            return "(" + args[0] + " >> " + args[1] + ")";
+        });
+        // DuckDB uses unsigned shift for >> on unsigned types; same operator works
+        CUSTOM_TRANSLATORS.put("shiftrightunsigned", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("shiftrightunsigned requires 2 arguments");
+            }
+            return "(" + args[0] + " >> " + args[1] + ")";
+        });
 
         // Comparison functions
         DIRECT_MAPPINGS.put("greatest", "greatest");
@@ -627,6 +693,14 @@ public class FunctionRegistry {
                 return "CAST(strptime(" + args[0] + ", " + format + ") AS TIMESTAMP)";
             }
         });
+
+        // Date/time construction
+        DIRECT_MAPPINGS.put("make_date", "make_date");
+        DIRECT_MAPPINGS.put("make_timestamp", "make_timestamp");
+
+        // Day/month name functions
+        DIRECT_MAPPINGS.put("dayname", "dayname");
+        DIRECT_MAPPINGS.put("monthname", "monthname");
 
         // Current date/time
         DIRECT_MAPPINGS.put("current_date", "current_date");
@@ -832,6 +906,33 @@ public class FunctionRegistry {
             return "list_distinct(list(" + arg + ") FILTER (WHERE " + arg + " IS NOT NULL))";
         });
 
+        // Conditional and statistical aggregates
+        DIRECT_MAPPINGS.put("count_if", "count_if");
+        DIRECT_MAPPINGS.put("median", "median");
+        DIRECT_MAPPINGS.put("mode", "mode");
+        DIRECT_MAPPINGS.put("max_by", "max_by");
+        DIRECT_MAPPINGS.put("min_by", "min_by");
+
+        // Boolean aggregates
+        DIRECT_MAPPINGS.put("bool_and", "bool_and");
+        DIRECT_MAPPINGS.put("every", "bool_and");       // Spark alias for bool_and
+        DIRECT_MAPPINGS.put("bool_or", "bool_or");
+        DIRECT_MAPPINGS.put("some", "bool_or");          // Spark alias for bool_or
+        DIRECT_MAPPINGS.put("any", "bool_or");           // Spark alias for bool_or
+
+        // Bitwise aggregates
+        DIRECT_MAPPINGS.put("bit_and", "bit_and");
+        DIRECT_MAPPINGS.put("bit_or", "bit_or");
+        DIRECT_MAPPINGS.put("bit_xor", "bit_xor");
+
+        // Distribution aggregates
+        DIRECT_MAPPINGS.put("kurtosis", "kurtosis");
+        DIRECT_MAPPINGS.put("skewness", "skewness");
+
+        // Quantile aggregates (name mapping)
+        DIRECT_MAPPINGS.put("percentile", "quantile");
+        DIRECT_MAPPINGS.put("percentile_approx", "approx_quantile");
+
         // Other aggregates
         DIRECT_MAPPINGS.put("approx_count_distinct", "approx_count_distinct");
         DIRECT_MAPPINGS.put("corr", "corr");
@@ -932,6 +1033,37 @@ public class FunctionRegistry {
 
         // Array construction
         DIRECT_MAPPINGS.put("array", "list_value");
+
+        // Array append/prepend
+        DIRECT_MAPPINGS.put("array_append", "list_append");
+        DIRECT_MAPPINGS.put("array_prepend", "list_prepend");
+
+        // array_remove: remove all occurrences of a value from an array
+        CUSTOM_TRANSLATORS.put("array_remove", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("array_remove requires exactly 2 arguments");
+            }
+            return "list_filter(" + args[0] + ", x -> x != " + args[1] + ")";
+        });
+
+        // array_compact: remove all NULL values from an array
+        CUSTOM_TRANSLATORS.put("array_compact", args -> {
+            if (args.length != 1) {
+                throw new IllegalArgumentException("array_compact requires exactly 1 argument");
+            }
+            return "list_filter(" + args[0] + ", x -> x IS NOT NULL)";
+        });
+
+        // sequence: generate a series of values
+        DIRECT_MAPPINGS.put("sequence", "generate_series");
+
+        // cardinality: same as size, returns length of array/map as INTEGER
+        CUSTOM_TRANSLATORS.put("cardinality", args -> {
+            if (args.length < 1) {
+                throw new IllegalArgumentException("cardinality requires at least 1 argument");
+            }
+            return "CAST(len(" + args[0] + ") AS INTEGER)";
+        });
 
         // array_union: DuckDB has no list_union; use list_distinct(list_concat(a, b))
         CUSTOM_TRANSLATORS.put("array_union", args -> {
