@@ -1602,6 +1602,31 @@ public final class TypeInferenceEngine {
             case "COVAR_POP":
                 return DoubleType.get();
 
+            // Percentile functions always return DoubleType
+            case "PERCENTILE":
+            case "QUANTILE":
+            case "PERCENTILE_APPROX":
+            case "APPROX_QUANTILE":
+                return DoubleType.get();
+
+            // Distribution functions always return DoubleType
+            case "KURTOSIS":
+            case "SKEWNESS":
+                return DoubleType.get();
+
+            // Regression functions
+            case "REGR_COUNT":
+                return LongType.get();
+            case "REGR_R2":
+            case "REGR_AVGX":
+            case "REGR_AVGY":
+            case "REGR_SXX":
+            case "REGR_SYY":
+            case "REGR_SXY":
+            case "REGR_SLOPE":
+            case "REGR_INTERCEPT":
+                return DoubleType.get();
+
             // Spark: grouping() returns ByteType (TINYINT), grouping_id() returns LongType (BIGINT)
             case "GROUPING":
                 return ByteType.get();
@@ -1655,8 +1680,19 @@ public final class TypeInferenceEngine {
             funcUpper.equals("VAR_POP") || funcUpper.equals("VAR_SAMP") ||
             funcUpper.equals("COVAR_POP") || funcUpper.equals("COVAR_SAMP") ||
             funcUpper.equals("CORR") || funcUpper.equals("PERCENTILE") ||
-            funcUpper.equals("PERCENTILE_APPROX")) {
+            funcUpper.equals("PERCENTILE_APPROX") || funcUpper.equals("QUANTILE") ||
+            funcUpper.equals("APPROX_QUANTILE") || funcUpper.equals("KURTOSIS") ||
+            funcUpper.equals("SKEWNESS") || funcUpper.equals("REGR_R2") ||
+            funcUpper.equals("REGR_AVGX") || funcUpper.equals("REGR_AVGY") ||
+            funcUpper.equals("REGR_SXX") || funcUpper.equals("REGR_SYY") ||
+            funcUpper.equals("REGR_SXY") || funcUpper.equals("REGR_SLOPE") ||
+            funcUpper.equals("REGR_INTERCEPT")) {
             return true;
+        }
+
+        // regr_count is non-nullable (returns 0 for empty groups, like COUNT)
+        if (funcUpper.equals("REGR_COUNT")) {
+            return false;
         }
 
         // For SUM/AVG/MIN/MAX/FIRST/LAST: always nullable per Spark semantics
@@ -1952,8 +1988,19 @@ public final class TypeInferenceEngine {
             normalizedUpper.equals("VAR_POP") || normalizedUpper.equals("VAR_SAMP") ||
             normalizedUpper.equals("COVAR_POP") || normalizedUpper.equals("COVAR_SAMP") ||
             normalizedUpper.equals("CORR") || normalizedUpper.equals("PERCENTILE") ||
-            normalizedUpper.equals("PERCENTILE_APPROX")) {
+            normalizedUpper.equals("PERCENTILE_APPROX") || normalizedUpper.equals("QUANTILE") ||
+            normalizedUpper.equals("APPROX_QUANTILE") || normalizedUpper.equals("KURTOSIS") ||
+            normalizedUpper.equals("SKEWNESS") || normalizedUpper.equals("REGR_R2") ||
+            normalizedUpper.equals("REGR_AVGX") || normalizedUpper.equals("REGR_AVGY") ||
+            normalizedUpper.equals("REGR_SXX") || normalizedUpper.equals("REGR_SYY") ||
+            normalizedUpper.equals("REGR_SXY") || normalizedUpper.equals("REGR_SLOPE") ||
+            normalizedUpper.equals("REGR_INTERCEPT")) {
             return true;
+        }
+
+        // regr_count is non-nullable (returns 0 for empty groups, like COUNT)
+        if (normalizedUpper.equals("REGR_COUNT")) {
+            return false;
         }
 
         // Math functions: always nullable per Spark semantics.

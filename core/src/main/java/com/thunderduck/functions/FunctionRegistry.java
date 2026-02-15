@@ -996,13 +996,30 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("bit_or", "bit_or");
         DIRECT_MAPPINGS.put("bit_xor", "bit_xor");
 
+        // Percentile aggregates
+        DIRECT_MAPPINGS.put("percentile", "quantile");
+        // percentile_approx: DuckDB's approx_quantile doesn't support accuracy parameter (3rd arg)
+        CUSTOM_TRANSLATORS.put("percentile_approx", args -> {
+            if (args.length < 2) {
+                throw new IllegalArgumentException("percentile_approx requires at least 2 arguments");
+            }
+            return "approx_quantile(" + args[0] + ", " + args[1] + ")";
+        });
+
         // Distribution aggregates
         DIRECT_MAPPINGS.put("kurtosis", "kurtosis");
         DIRECT_MAPPINGS.put("skewness", "skewness");
 
-        // Quantile aggregates (name mapping)
-        DIRECT_MAPPINGS.put("percentile", "quantile");
-        DIRECT_MAPPINGS.put("percentile_approx", "approx_quantile");
+        // Regression aggregates
+        DIRECT_MAPPINGS.put("regr_count", "regr_count");
+        DIRECT_MAPPINGS.put("regr_r2", "regr_r2");
+        DIRECT_MAPPINGS.put("regr_avgx", "regr_avgx");
+        DIRECT_MAPPINGS.put("regr_avgy", "regr_avgy");
+        DIRECT_MAPPINGS.put("regr_sxx", "regr_sxx");
+        DIRECT_MAPPINGS.put("regr_syy", "regr_syy");
+        DIRECT_MAPPINGS.put("regr_sxy", "regr_sxy");
+        DIRECT_MAPPINGS.put("regr_slope", "regr_slope");
+        DIRECT_MAPPINGS.put("regr_intercept", "regr_intercept");
 
         // Other aggregates
         DIRECT_MAPPINGS.put("approx_count_distinct", "approx_count_distinct");
@@ -1752,6 +1769,32 @@ public class FunctionRegistry {
         FUNCTION_METADATA.put("to_char", FunctionMetadata.builder("to_char")
             .duckdbName("strftime")
             .returnType(FunctionMetadata.constantType(StringType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // Percentile aggregate metadata
+        FUNCTION_METADATA.put("percentile", FunctionMetadata.builder("percentile")
+            .duckdbName("quantile")
+            .returnType(FunctionMetadata.constantType(DoubleType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("percentile_approx", FunctionMetadata.builder("percentile_approx")
+            .duckdbName("approx_quantile")
+            .returnType(FunctionMetadata.constantType(DoubleType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        // Distribution aggregate metadata
+        FUNCTION_METADATA.put("kurtosis", FunctionMetadata.builder("kurtosis")
+            .duckdbName("kurtosis")
+            .returnType(FunctionMetadata.constantType(DoubleType.get()))
+            .nullable(FunctionMetadata.anyArgNullable())
+            .build());
+
+        FUNCTION_METADATA.put("skewness", FunctionMetadata.builder("skewness")
+            .duckdbName("skewness")
+            .returnType(FunctionMetadata.constantType(DoubleType.get()))
             .nullable(FunctionMetadata.anyArgNullable())
             .build());
     }
