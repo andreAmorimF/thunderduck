@@ -2,7 +2,7 @@
 
 **Created**: 2026-02-15
 **Updated**: 2026-02-15
-**Status**: Completed (all 4 priorities implemented)
+**Status**: Completed (all 4 priorities implemented, differential tests added)
 
 ## Coverage Summary
 
@@ -152,14 +152,61 @@ Planned but not yet implemented:
 | `regr_slope` | `regr_slope` | Done |
 | `regr_intercept` | `regr_intercept` | Done |
 
-## Test Results After All Merges
+## Differential Test Results
 
-| Mode | Passed | Failed | Skipped |
+Full suite after adding new function tests (commit `1c7b958`):
+
+| | Passed | Failed | Skipped |
 |---|---|---|---|
-| Relaxed | 744 | 0 | 2 |
-| Strict | 746 | 0 | 0 |
+| Full differential suite | 802 | 0 | 20 |
 
-Unit tests: 1840/1865 passed (25 pre-existing failures unrelated to function coverage work).
+76 new tests added across 4 files:
+
+| Test File | Tests | Passed | Skipped |
+|---|---|---|---|
+| `test_math_bitwise_date_differential.py` | 16 | 12 | 4 |
+| `test_string_collection_differential.py` | 22 | 18 | 4 |
+| `test_new_aggregates_differential.py` | 27 | 17 | 10 |
+| `test_json_functions_differential.py` | 9 | 6 | 3 |
+| **Total new tests** | **76** | **55** | **18** |
+
+### Skipped Tests — DuckDB Missing Functions (4)
+
+| Test | Function | Skip Reason |
+|---|---|---|
+| `test_width_bucket` | `width_bucket` | DuckDB does not have `width_bucket` as a built-in function |
+| `test_soundex` | `soundex` | DuckDB does not have `soundex` as a built-in function (only in fts extension) |
+| `test_overlay` | `overlay` | DuckDB does not support `OVERLAY ... PLACING` SQL syntax |
+| `test_octet_length` | `octet_length` | DuckDB `octet_length` only accepts BLOB/BIT types, not VARCHAR |
+
+### Skipped Tests — DuckDB Type/Argument Mismatches (2)
+
+| Test | Function | Skip Reason |
+|---|---|---|
+| `test_bit_get` | `bit_get` → `get_bit` | DuckDB `get_bit` expects BIT type input, not INTEGER |
+| `test_array_prepend` | `array_prepend` → `list_prepend` | DuckDB `list_prepend` type mismatch with SQL array literals |
+
+### Skipped Tests — Behavioral/Formula Differences (10)
+
+| Test | Function | Skip Reason |
+|---|---|---|
+| `test_dayname` | `dayname` | DuckDB returns full name ("Monday"), Spark returns abbreviation ("Mon") |
+| `test_monthname` | `monthname` | DuckDB returns full name ("January"), Spark returns abbreviation ("Jan") |
+| `test_kurtosis` | `kurtosis` | DuckDB uses population kurtosis formula, Spark uses sample (excess) kurtosis |
+| `test_skewness` | `skewness` | DuckDB uses population skewness formula, Spark uses sample skewness |
+| `test_percentile_p50` | `percentile` | DuckDB `quantile` uses nearest-rank method, Spark uses linear interpolation |
+| `test_percentile_p25` | `percentile` | Same nearest-rank vs interpolation difference |
+| `test_percentile_p75` | `percentile` | Same nearest-rank vs interpolation difference |
+| `test_percentile_approx` | `percentile_approx` | DuckDB `approx_quantile` uses different approximation algorithm than Spark |
+| `test_kurtosis_grouped` | `kurtosis` (grouped) | Same population vs sample formula difference |
+| `test_percentile_grouped` | `percentile` (grouped) | Same nearest-rank vs interpolation difference |
+
+### Skipped Tests — Output Format Differences (2)
+
+| Test | Function | Skip Reason |
+|---|---|---|
+| `test_schema_of_json` | `schema_of_json` | DuckDB `json_structure` returns JSON format (`{"a":"UBIGINT"}`), Spark returns DDL format (`STRUCT<a: BIGINT>`) |
+| `test_json_tuple` | `json_tuple` | Thunderduck returns wrong column count (2 instead of 3); generator function handling bug |
 
 ## Known Behavioral Divergences
 
@@ -170,6 +217,17 @@ Unit tests: 1840/1865 passed (25 pre-existing failures unrelated to function cov
 | `UNION` type checking | Only checks column count, not types | TODO in code |
 | `dropFields()` on structs | Generates placeholder comment | Unsupported |
 | `from_json` | Basic JSON parse only; full struct schema not supported | Partial |
+| `width_bucket` | DuckDB does not have this function | Needs custom translator |
+| `soundex` | Not a DuckDB built-in (only in fts extension) | Needs extension or custom impl |
+| `overlay` | DuckDB does not support OVERLAY PLACING syntax | Needs custom translator |
+| `octet_length(VARCHAR)` | DuckDB only accepts BLOB/BIT, not VARCHAR | Needs CAST wrapper |
+| `bit_get(INTEGER)` | DuckDB `get_bit` expects BIT type, not INTEGER | Needs CAST wrapper |
+| `array_prepend` | `list_prepend` type mismatch with array literals | Needs investigation |
+| `dayname` / `monthname` | DuckDB returns full name, Spark returns abbreviation | Needs custom translator with `LEFT(dayname(...), 3)` |
+| `kurtosis` / `skewness` | DuckDB uses population formula, Spark uses sample formula | Needs custom extension function |
+| `percentile` / `percentile_approx` | DuckDB uses nearest-rank, Spark uses linear interpolation | Needs custom extension function |
+| `schema_of_json` | Format difference (JSON vs DDL) | Needs custom translator |
+| `json_tuple` | Generator function returns wrong column count | Bug in Thunderduck |
 
 ## Intentionally Out of Scope
 
