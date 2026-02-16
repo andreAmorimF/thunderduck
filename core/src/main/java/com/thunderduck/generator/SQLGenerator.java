@@ -4042,12 +4042,8 @@ public class SQLGenerator implements com.thunderduck.logical.SQLGenerator {
     }
 
     /**
-     * Creates an Expression that returns the given SQL verbatim from toSQL().
-     * Unlike RawSQLExpression, this does NOT pass through FunctionRegistry.rewriteSQL(),
-     * so DuckDB-native function names (like element_at for MAPs) are preserved.
-     *
-     * <p>Extends RawSQLExpression behavior (appendAutoAlias skips it) by implementing
-     * the same interface but with direct SQL output.
+     * Creates an Expression that returns the given SQL verbatim from toSQL()
+     * with explicit type metadata, unlike RawSQLExpression which uses UnresolvedType.
      */
     private static Expression createVerbatimSQLExpression(String sql, DataType dataType, boolean nullable) {
         // Use an anonymous Expression that returns SQL verbatim.

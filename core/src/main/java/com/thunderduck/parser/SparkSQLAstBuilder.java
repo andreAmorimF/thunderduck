@@ -117,6 +117,17 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
     }
 
     @Override
+    public Expression visitSingleExpression(SqlBaseParser.SingleExpressionContext ctx) {
+        SqlBaseParser.NamedExpressionContext named = ctx.namedExpression();
+        Expression expr = visitExpr(named.expression());
+        if (named.name != null) {
+            String alias = getErrorCapturingIdentifierText(named.name);
+            return new AliasExpression(expr, alias);
+        }
+        return expr;
+    }
+
+    @Override
     public LogicalPlan visitStatementDefault(SqlBaseParser.StatementDefaultContext ctx) {
         return visitQuery(ctx.query());
     }

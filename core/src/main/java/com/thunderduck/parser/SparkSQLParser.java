@@ -1,5 +1,6 @@
 package com.thunderduck.parser;
 
+import com.thunderduck.expression.Expression;
 import com.thunderduck.logical.LogicalPlan;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.atn.PredictionMode;
@@ -152,6 +153,61 @@ public class SparkSQLParser {
 
         logger.debug("Successfully parsed SparkSQL into LogicalPlan: {}", plan);
         return plan;
+    }
+
+    /**
+     * Parses a single SQL expression string into a Thunderduck Expression AST.
+     *
+     * <p>Used for PySpark's {@code expr()}, {@code selectExpr()}, and {@code filter(string)}
+     * which pass raw SQL expression text. This routes expressions through the ANTLR grammar's
+     * {@code singleExpression} rule, producing proper Expression AST nodes that go through
+     * {@code FunctionRegistry.translate()} for Spark-to-DuckDB function name mapping.
+     *
+     * <p>Uses SLL prediction mode first (fast path), then falls back to LL mode on SLL failure.
+     *
+     * @param exprSQL the SQL expression string (e.g., "length(name) > 5", "id * 2 as doubled")
+     * @return the expression AST
+     * @throws SparkSQLParseException if the expression is syntactically invalid
+     */
+    public Expression parseExpression(String exprSQL) {
+        if (exprSQL == null || exprSQL.isBlank()) {
+            throw new SparkSQLParseException(0, 0, "", "Expression must not be null or empty");
+        }
+
+        logger.debug("Parsing expression: {}", exprSQL);
+
+        // Reset lexer and parser state
+        lexer.setInputStream(new UpperCaseCharStream(CharStreams.fromString(exprSQL)));
+        tokens.setTokenSource(lexer);
+        parser.setTokenStream(tokens);
+
+        // Phase 1: Try SLL mode (fast)
+        parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
+        parser.removeErrorListeners();
+        parser.setErrorHandler(new BailErrorStrategy());
+
+        SqlBaseParser.SingleExpressionContext tree;
+        try {
+            tree = parser.singleExpression();
+        } catch (Exception e) {
+            // Phase 2: Fall back to LL mode (correct for all grammars)
+            logger.debug("SLL expression parse failed, falling back to LL mode: {}", e.getMessage());
+            tokens.seek(0);
+            parser.reset();
+            parser.getInterpreter().setPredictionMode(PredictionMode.LL);
+            parser.removeErrorListeners();
+            parser.addErrorListener(new SparkSQLErrorListener());
+            parser.setErrorHandler(new DefaultErrorStrategy());
+
+            tree = parser.singleExpression();
+        }
+
+        // Build Expression AST from parse tree (no connection needed for expression parsing)
+        SparkSQLAstBuilder astBuilder = new SparkSQLAstBuilder();
+        Expression expr = (Expression) astBuilder.visit(tree);
+
+        logger.debug("Successfully parsed expression: {}", expr);
+        return expr;
     }
 
     /**

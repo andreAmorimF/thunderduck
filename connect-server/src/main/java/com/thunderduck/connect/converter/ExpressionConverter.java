@@ -791,7 +791,8 @@ public class ExpressionConverter {
      * Converts an ExpressionString (SQL expression as string).
      *
      * <p>SQL expression strings from PySpark's {@code expr()}, {@code selectExpr()}, or filter
-     * with string arguments are passed through directly to DuckDB without parsing.
+     * with string arguments are parsed through the ANTLR grammar to produce proper Expression AST
+     * nodes, enabling Spark-to-DuckDB function name translation via {@code FunctionRegistry.translate()}.
      *
      * <p>Examples:
      * <pre>
@@ -800,17 +801,22 @@ public class ExpressionConverter {
      *   df.filter("length(name) > 5")        -- function call
      * </pre>
      *
-     * <p>This works for most SQL expressions since DuckDB's SQL dialect is very similar to Spark SQL.
-     * However, some Spark-specific functions or syntax may not be supported and will result in
-     * DuckDB errors at query execution time.
+     * <p>Falls back to {@link RawSQLExpression} for edge cases that the parser cannot handle
+     * (e.g., DuckDB-specific syntax passed through {@code expr()}).
      *
      * @param exprString the protobuf ExpressionString message
-     * @return a RawSQLExpression wrapping the SQL text
+     * @return a parsed Expression AST, or RawSQLExpression as fallback
      */
     private com.thunderduck.expression.Expression convertExpressionString(ExpressionString exprString) {
         String sqlText = exprString.getExpression();
         logger.debug("Converting SQL expression string: {}", sqlText);
-        return new com.thunderduck.expression.RawSQLExpression(sqlText);
+        try {
+            com.thunderduck.parser.SparkSQLParser parser = com.thunderduck.parser.SparkSQLParser.getInstance();
+            return parser.parseExpression(sqlText);
+        } catch (Exception e) {
+            logger.debug("Expression parsing failed, using raw SQL fallback: {}", sqlText);
+            return new com.thunderduck.expression.RawSQLExpression(sqlText);
+        }
     }
 
     /**
