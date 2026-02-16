@@ -1399,8 +1399,9 @@ public final class TypeInferenceEngine {
             }
 
             // Aggregate functions: resolve return type based on argument type
-            // This handles SUM/AVG/MIN/MAX/COUNT when used in composite expressions
-            // (e.g., SUM(a) / SUM(b)) where the declared type is UnresolvedType
+            // This handles aggregate functions when used in composite expressions
+            // (e.g., SUM(a) / SUM(b)) or in implicit aggregation (SELECT agg(col) FROM t
+            // without GROUP BY) where the declared type is UnresolvedType
             String upperFuncName = funcName.toUpperCase();
             if (upperFuncName.equals("SUM") || upperFuncName.equals("SUM_DISTINCT") ||
                 upperFuncName.equals("AVG") || upperFuncName.equals("AVG_DISTINCT") ||
@@ -1411,7 +1412,15 @@ public final class TypeInferenceEngine {
                 upperFuncName.equals("STDDEV_POP") || upperFuncName.equals("VARIANCE") ||
                 upperFuncName.equals("VAR_SAMP") || upperFuncName.equals("VAR_POP") ||
                 upperFuncName.equals("CORR") || upperFuncName.equals("COVAR_SAMP") ||
-                upperFuncName.equals("COVAR_POP")) {
+                upperFuncName.equals("COVAR_POP") ||
+                upperFuncName.equals("SKEWNESS") || upperFuncName.equals("KURTOSIS") ||
+                upperFuncName.equals("PERCENTILE") || upperFuncName.equals("PERCENTILE_APPROX") ||
+                upperFuncName.equals("APPROX_COUNT_DISTINCT") ||
+                upperFuncName.equals("REGR_COUNT") || upperFuncName.equals("REGR_R2") ||
+                upperFuncName.equals("REGR_AVGX") || upperFuncName.equals("REGR_AVGY") ||
+                upperFuncName.equals("REGR_SXX") || upperFuncName.equals("REGR_SYY") ||
+                upperFuncName.equals("REGR_SXY") || upperFuncName.equals("REGR_SLOPE") ||
+                upperFuncName.equals("REGR_INTERCEPT")) {
                 DataType argType = resolveType(func.arguments().get(0), schema);
                 DataType aggResult = resolveAggregateReturnType(upperFuncName, argType);
                 if (aggResult != null) {

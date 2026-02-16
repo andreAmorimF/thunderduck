@@ -1,5 +1,6 @@
 package com.thunderduck.functions;
 
+import com.thunderduck.runtime.SparkCompatMode;
 import com.thunderduck.types.*;
 
 import java.util.HashMap;
@@ -1023,15 +1024,17 @@ public class FunctionRegistry {
 
         // Spark uses population skewness: mu_3 / mu_2^(3/2)
         // DuckDB's skewness() uses sample correction: sqrt(n*(n-1))/(n-2) * population_skewness
-        // To convert: population = sample * (n-2) / sqrt(n*(n-1))
-        // Note: DuckDB has no skewness_pop function, so we reverse the correction
+        // Strict mode: use spark_skewness() extension function (exact match)
+        // Relaxed mode: use DuckDB's built-in skewness (accept bias-correction difference)
         CUSTOM_TRANSLATORS.put("skewness", args -> {
             if (args.length != 1) {
                 throw new IllegalArgumentException("skewness requires exactly 1 argument");
             }
-            String col = args[0];
-            // Reverse DuckDB's bias correction to get population skewness matching Spark
-            return "(skewness(" + col + ") * (count(" + col + ") - 2) / sqrt(count(" + col + ") * (count(" + col + ") - 1)))";
+            if (SparkCompatMode.isStrictMode()) {
+                return "spark_skewness(" + args[0] + ")";
+            }
+            // Relaxed mode: use DuckDB's built-in skewness (sample/bias-corrected)
+            return "skewness(" + args[0] + ")";
         });
 
         // Regression aggregates
@@ -1825,7 +1828,7 @@ public class FunctionRegistry {
             .build());
 
         FUNCTION_METADATA.put("skewness", FunctionMetadata.builder("skewness")
-            .duckdbName("skewness")
+            .duckdbName("spark_skewness")
             .returnType(FunctionMetadata.constantType(DoubleType.get()))
             .nullable(FunctionMetadata.anyArgNullable())
             .build());

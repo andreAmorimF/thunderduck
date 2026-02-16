@@ -65,4 +65,49 @@ Key milestones:
 
 ---
 
-**Last Updated**: 2026-02-14
+## Appendix: Accepted Divergences from Spark in Strict Mode
+
+Thunderduck aims for exact Spark parity in strict mode. However, a small number of behavioral differences have been intentionally accepted as documented trade-offs, where matching Spark exactly is either infeasible or would require disproportionate effort for marginal benefit.
+
+### Functions Using Different Algorithms
+
+These functions exist in both Spark and DuckDB but use fundamentally different algorithms, making exact value matching impossible without reimplementing the algorithm from scratch in the DuckDB extension.
+
+| Function | Spark Formula | DuckDB Formula | Difference and Rationale |
+|----------|--------------|----------------|--------------------------|
+| `percentile_approx` | G-K algorithm with accuracy param | T-Digest (different algorithm) | Not feasible to match exactly -- different algorithms produce inherently different approximations. Could implement G-K in the extension, but this is extremely high complexity for marginal benefit. |
+| `skewness` (relaxed mode only) | Population: `mu_3 / mu_2^(3/2)` | Sample: `sqrt(n*(n-1))/(n-2) * population` | In relaxed mode, uses DuckDB's built-in sample skewness. Difference is ~1.5% for n=100, ~6% for n=10. Strict mode matches exactly via `spark_skewness()` extension function. |
+
+### Functions with Output Format Differences
+
+These functions produce semantically equivalent results but in a different textual representation that cannot be reconciled without a full reimplementation.
+
+| Function | Spark Output | DuckDB Output | Difference and Rationale |
+|----------|-------------|---------------|--------------------------|
+| `schema_of_json` | DDL format: `STRUCT<a: BIGINT>` | JSON format: `{"a":"UBIGINT"}` | DuckDB's `json_structure` returns JSON schema representation. Producing Spark's DDL format would require building a full JSON-to-DDL converter with Spark type name mapping -- high complexity for a rarely used introspection function. |
+
+### Functions Missing from DuckDB
+
+These Spark functions have no equivalent in DuckDB's core or extension ecosystem, and implementing them in the Thunderduck extension is not justified given their niche usage.
+
+| Function | Description | Rationale for Skipping |
+|----------|-------------|------------------------|
+| `width_bucket` | Histogram bucket assignment | Not available in DuckDB; could be implemented as a SQL expression but rarely used in practice. |
+| `soundex` | Phonetic encoding | Only available in DuckDB's `fts` extension (not loaded by default); niche function. |
+
+### Intentionally Out of Scope
+
+Entire function families that are not applicable to Thunderduck's single-node DuckDB architecture:
+
+| Category | Approximate Count | Rationale |
+|----------|-------------------|-----------|
+| Sketch functions | ~25 | Distributed approximation algorithms (HyperLogLog, CountMinSketch, etc.) designed for distributed compute. DuckDB has native exact equivalents for most use cases. |
+| Streaming functions | ~10 | Spark Structured Streaming concepts (window, watermark) that don't apply to batch-on-DuckDB. |
+| Distributed-only | ~15 | Functions like `spark_partition_id`, `input_file_name` that are inherently tied to distributed execution. |
+| Variant functions | ~10 | Spark 4.x semi-structured type -- niche feature not yet widely adopted. |
+| XML functions | ~12 | Niche format with minimal overlap with DuckDB's analytical workloads. |
+| Avro/Protobuf | ~5 | Serialization format functions not relevant to single-node analytics. |
+
+---
+
+**Last Updated**: 2026-02-16
