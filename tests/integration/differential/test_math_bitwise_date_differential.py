@@ -107,7 +107,6 @@ class TestMathFunctions_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "cbrt", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB does not have width_bucket function")
     @pytest.mark.timeout(30)
     def test_width_bucket(self, spark_reference, spark_thunderduck):
         """Test width_bucket() distributes values into equi-width histogram buckets."""

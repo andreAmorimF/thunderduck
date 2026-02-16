@@ -638,7 +638,20 @@ public class FunctionRegistry {
         // Additional math functions
         DIRECT_MAPPINGS.put("factorial", "factorial");
         DIRECT_MAPPINGS.put("cbrt", "cbrt");
-        DIRECT_MAPPINGS.put("width_bucket", "width_bucket");
+        // width_bucket: DuckDB does not have this function, so we emulate it with CASE
+        CUSTOM_TRANSLATORS.put("width_bucket", args -> {
+            if (args.length != 4) {
+                throw new IllegalArgumentException("width_bucket requires exactly 4 arguments");
+            }
+            String value = args[0];
+            String minVal = args[1];
+            String maxVal = args[2];
+            String numBuckets = args[3];
+            return "CASE WHEN " + value + " < " + minVal + " THEN 0 " +
+                   "WHEN " + value + " >= " + maxVal + " THEN " + numBuckets + " + 1 " +
+                   "ELSE CAST(FLOOR((CAST(" + value + " AS DOUBLE) - CAST(" + minVal + " AS DOUBLE)) / " +
+                   "(CAST(" + maxVal + " AS DOUBLE) - CAST(" + minVal + " AS DOUBLE)) * " + numBuckets + ") + 1 AS INTEGER) END";
+        });
         DIRECT_MAPPINGS.put("bin", "bin");
         DIRECT_MAPPINGS.put("hex", "hex");
         DIRECT_MAPPINGS.put("unhex", "unhex");
