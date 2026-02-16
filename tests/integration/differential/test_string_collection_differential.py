@@ -187,7 +187,6 @@ class TestStringFunctions_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "levenshtein", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB does not support OVERLAY PLACING syntax")
     @pytest.mark.timeout(30)
     def test_overlay(self, spark_reference, spark_thunderduck):
         """Test overlay() replacing a substring at a position."""
@@ -291,7 +290,6 @@ class TestStringFunctions_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "char_length", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB octet_length only accepts BLOB/BIT, not VARCHAR")
     @pytest.mark.timeout(30)
     def test_octet_length(self, spark_reference, spark_thunderduck):
         """Test octet_length() returning byte count of string."""

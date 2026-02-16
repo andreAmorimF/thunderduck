@@ -448,7 +448,7 @@ public class FunctionRegistry {
         DIRECT_MAPPINGS.put("levenshtein", "levenshtein");
 
         // String manipulation
-        DIRECT_MAPPINGS.put("overlay", "overlay");
+        // overlay: handled by CUSTOM_TRANSLATORS (DuckDB has no OVERLAY PLACING syntax)
         DIRECT_MAPPINGS.put("left", "left");
         DIRECT_MAPPINGS.put("right", "right");
         DIRECT_MAPPINGS.put("split_part", "split_part");
@@ -458,7 +458,7 @@ public class FunctionRegistry {
         // Length functions
         DIRECT_MAPPINGS.put("char_length", "length");
         DIRECT_MAPPINGS.put("character_length", "length");
-        DIRECT_MAPPINGS.put("octet_length", "octet_length");
+        // octet_length: handled by CUSTOM_TRANSLATORS (DuckDB octet_length only accepts BLOB/BIT)
         DIRECT_MAPPINGS.put("bit_length", "bit_length");
 
         // Other string functions
@@ -489,6 +489,31 @@ public class FunctionRegistry {
             }
             // Basic 2-arg form: swap argument order for instr, but return NULL if str is NULL
             return "CASE WHEN " + str + " IS NULL THEN NULL ELSE instr(" + str + ", " + substr + ") END";
+        });
+
+        // overlay: Spark overlay(str, replacement, pos [, len]) replaces a substring
+        // DuckDB has no native OVERLAY function; emulate with string concatenation
+        CUSTOM_TRANSLATORS.put("overlay", args -> {
+            if (args.length < 3) {
+                throw new IllegalArgumentException("overlay requires at least 3 arguments");
+            }
+            String str = args[0];
+            String replacement = args[1];
+            String pos = args[2];
+            String len = args.length >= 4 ? args[3] : "length(" + replacement + ")";
+            // LEFT(str, pos-1) || replacement || SUBSTR(str, pos + len)
+            return "LEFT(" + str + ", " + pos + " - 1) || " + replacement +
+                   " || SUBSTR(" + str + ", " + pos + " + " + len + ")";
+        });
+
+        // octet_length: Spark octet_length(str) returns byte length of a string
+        // DuckDB octet_length only accepts BLOB/BIT, not VARCHAR
+        // Use strlen() which returns byte length for VARCHAR
+        CUSTOM_TRANSLATORS.put("octet_length", args -> {
+            if (args.length != 1) {
+                throw new IllegalArgumentException("octet_length requires exactly 1 argument");
+            }
+            return "strlen(" + args[0] + ")";
         });
 
         // format_number: Spark format_number(num, d) → formatted string with commas and decimal places
@@ -634,8 +659,23 @@ public class FunctionRegistry {
 
         // Bitwise functions
         DIRECT_MAPPINGS.put("bit_count", "bit_count");
-        DIRECT_MAPPINGS.put("bit_get", "get_bit");
-        DIRECT_MAPPINGS.put("getbit", "get_bit");
+        // bit_get/getbit: handled by CUSTOM_TRANSLATORS (DuckDB get_bit expects BIT type, not INTEGER)
+
+        // bit_get: Spark bit_get(value, pos) extracts the bit at position pos from an integer.
+        // DuckDB get_bit expects BIT type, not INTEGER. Use bitwise math instead.
+        CUSTOM_TRANSLATORS.put("bit_get", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("bit_get requires exactly 2 arguments");
+            }
+            // (value >> pos) & 1 extracts the bit at position pos (0 = LSB)
+            return "((" + args[0] + " >> " + args[1] + ") & 1)";
+        });
+        CUSTOM_TRANSLATORS.put("getbit", args -> {
+            if (args.length != 2) {
+                throw new IllegalArgumentException("getbit requires exactly 2 arguments");
+            }
+            return "((" + args[0] + " >> " + args[1] + ") & 1)";
+        });
 
         // Bitwise shift functions
         CUSTOM_TRANSLATORS.put("shiftleft", args -> {

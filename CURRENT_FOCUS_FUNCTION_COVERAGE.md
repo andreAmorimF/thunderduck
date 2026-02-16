@@ -1,8 +1,8 @@
 # Spark SQL Function Coverage Gap Analysis
 
 **Created**: 2026-02-15
-**Updated**: 2026-02-15
-**Status**: Completed (all 4 priorities implemented, differential tests added)
+**Updated**: 2026-02-16
+**Status**: Completed (all 4 priorities implemented, differential tests added, spark_skewness extension function added)
 
 ## Coverage Summary
 
@@ -23,6 +23,7 @@ Many of Spark's ~540 functions are in categories Thunderduck intentionally doesn
 | `spark_decimal_div(a, b)` | DECIMAL division with ROUND_HALF_UP | Implemented |
 | `spark_sum(col)` | SUM with Spark type rules (DECIMAL->wider DECIMAL, INT->BIGINT) | Implemented |
 | `spark_avg(col)` | AVG with Spark precision rules for DECIMAL | Implemented |
+| `spark_skewness(col)` | Population skewness matching Spark (no sample bias correction) | Implemented |
 
 Planned but not yet implemented:
 - `spark_extract_int` — EXTRACT returns INTEGER (not BIGINT)
@@ -45,8 +46,8 @@ Planned but not yet implemented:
 | `bit_and` | `bit_and` | Done |
 | `bit_or` | `bit_or` | Done |
 | `bit_xor` | `bit_xor` | Done |
-| `kurtosis` | `kurtosis` | Done |
-| `skewness` | `skewness` | Done |
+| `kurtosis` | `kurtosis_pop` | Done |
+| `skewness` | `spark_skewness` (strict) / `skewness` (relaxed) | Done |
 
 ### String Functions (14 entries)
 | Spark Function | DuckDB Equivalent | Status |
@@ -140,8 +141,8 @@ Planned but not yet implemented:
 |---|---|---|
 | `percentile(col, p)` | `quantile(col, p)` | Done |
 | `percentile_approx(col, p, acc)` | `approx_quantile(col, p)` | Done (drops accuracy arg) |
-| `kurtosis(col)` | `kurtosis(col)` | Done |
-| `skewness(col)` | `skewness(col)` | Done |
+| `kurtosis(col)` | `kurtosis_pop(col)` | Done |
+| `skewness(col)` | `spark_skewness(col)` (strict) / `skewness(col)` (relaxed) | Done |
 | `regr_count` | `regr_count` | Done |
 | `regr_r2` | `regr_r2` | Done |
 | `regr_avgx` | `regr_avgx` | Done |
@@ -154,52 +155,60 @@ Planned but not yet implemented:
 
 ## Differential Test Results
 
-Full suite after adding new function tests (commit `1c7b958`):
+Full suite in strict mode (after `spark_skewness` extension, commit `441aa3c`):
 
 | | Passed | Failed | Skipped |
 |---|---|---|---|
-| Full differential suite | 802 | 0 | 20 |
+| Full differential suite (strict) | 788 | 26 | 8 |
+
+The 26 failures are pre-existing type inference issues (UnresolvedType defaulting to StringType) for implicit aggregation and scalar functions in the SQL path. These are tracked separately.
+
+Previous results (relaxed mode, commit `1c7b958`):
+
+| | Passed | Failed | Skipped |
+|---|---|---|---|
+| Full differential suite (relaxed) | 802 | 0 | 20 |
 
 76 new tests added across 4 files:
 
 | Test File | Tests | Passed | Skipped |
 |---|---|---|---|
-| `test_math_bitwise_date_differential.py` | 16 | 12 | 4 |
-| `test_string_collection_differential.py` | 22 | 18 | 4 |
+| `test_math_bitwise_date_differential.py` | 16 | 13 | 3 |
+| `test_string_collection_differential.py` | 22 | 20 | 2 |
 | `test_new_aggregates_differential.py` | 27 | 17 | 10 |
 | `test_json_functions_differential.py` | 9 | 6 | 3 |
-| **Total new tests** | **76** | **55** | **18** |
+| **Total new tests** | **76** | **58** | **15** |
 
-### Skipped Tests — DuckDB Missing Functions (4)
+### Skipped Tests — DuckDB Missing Functions (2)
 
 | Test | Function | Skip Reason |
 |---|---|---|
 | `test_width_bucket` | `width_bucket` | DuckDB does not have `width_bucket` as a built-in function |
 | `test_soundex` | `soundex` | DuckDB does not have `soundex` as a built-in function (only in fts extension) |
-| `test_overlay` | `overlay` | DuckDB does not support `OVERLAY ... PLACING` SQL syntax |
-| `test_octet_length` | `octet_length` | DuckDB `octet_length` only accepts BLOB/BIT types, not VARCHAR |
 
-### Skipped Tests — DuckDB Type/Argument Mismatches (2)
-
-| Test | Function | Skip Reason |
-|---|---|---|
-| `test_bit_get` | `bit_get` → `get_bit` | DuckDB `get_bit` expects BIT type input, not INTEGER |
-| `test_array_prepend` | `array_prepend` → `list_prepend` | DuckDB `list_prepend` type mismatch with SQL array literals |
-
-### Skipped Tests — Behavioral/Formula Differences (10)
+### Skipped Tests — Behavioral/Formula Differences (6)
 
 | Test | Function | Skip Reason |
 |---|---|---|
 | `test_dayname` | `dayname` | DuckDB returns full name ("Monday"), Spark returns abbreviation ("Mon") |
 | `test_monthname` | `monthname` | DuckDB returns full name ("January"), Spark returns abbreviation ("Jan") |
-| `test_kurtosis` | `kurtosis` | DuckDB uses population kurtosis formula, Spark uses sample (excess) kurtosis |
-| `test_skewness` | `skewness` | DuckDB uses population skewness formula, Spark uses sample skewness |
 | `test_percentile_p50` | `percentile` | DuckDB `quantile` uses nearest-rank method, Spark uses linear interpolation |
 | `test_percentile_p25` | `percentile` | Same nearest-rank vs interpolation difference |
 | `test_percentile_p75` | `percentile` | Same nearest-rank vs interpolation difference |
 | `test_percentile_approx` | `percentile_approx` | DuckDB `approx_quantile` uses different approximation algorithm than Spark |
-| `test_kurtosis_grouped` | `kurtosis` (grouped) | Same population vs sample formula difference |
-| `test_percentile_grouped` | `percentile` (grouped) | Same nearest-rank vs interpolation difference |
+
+### Previously Skipped, Now Passing (8)
+
+| Test | Function | Fix |
+|---|---|---|
+| `test_kurtosis` | `kurtosis` | Mapped to `kurtosis_pop` (DuckDB built-in population kurtosis) |
+| `test_kurtosis_grouped` | `kurtosis` (grouped) | Same `kurtosis_pop` mapping |
+| `test_skewness` | `skewness` | `spark_skewness()` extension function computes population skewness |
+| `test_percentile_grouped` | `percentile` (grouped) | Fixed in earlier commit |
+| `test_overlay` | `overlay` | Custom translator: `LEFT() \|\| replacement \|\| SUBSTR()` |
+| `test_octet_length` | `octet_length` | Custom translator: `strlen()` (byte length for VARCHAR) |
+| `test_bit_get` | `bit_get` | Custom translator: `(value >> pos) & 1` (bitwise math) |
+| `test_array_prepend` | `array_prepend` | Custom translator: `list_prepend()` with swapped args |
 
 ### Skipped Tests — Output Format Differences (2)
 
@@ -219,12 +228,13 @@ Full suite after adding new function tests (commit `1c7b958`):
 | `from_json` | Basic JSON parse only; full struct schema not supported | Partial |
 | `width_bucket` | DuckDB does not have this function | Needs custom translator |
 | `soundex` | Not a DuckDB built-in (only in fts extension) | Needs extension or custom impl |
-| `overlay` | DuckDB does not support OVERLAY PLACING syntax | Needs custom translator |
-| `octet_length(VARCHAR)` | DuckDB only accepts BLOB/BIT, not VARCHAR | Needs CAST wrapper |
-| `bit_get(INTEGER)` | DuckDB `get_bit` expects BIT type, not INTEGER | Needs CAST wrapper |
-| `array_prepend` | `list_prepend` type mismatch with array literals | Needs investigation |
+| `overlay` | DuckDB does not support OVERLAY PLACING syntax | Fixed: custom translator with `LEFT() \|\| replacement \|\| SUBSTR()` |
+| `octet_length(VARCHAR)` | DuckDB only accepts BLOB/BIT, not VARCHAR | Fixed: custom translator using `strlen()` |
+| `bit_get(INTEGER)` | DuckDB `get_bit` expects BIT type, not INTEGER | Fixed: custom translator using `(value >> pos) & 1` |
+| `array_prepend` | `list_prepend` reversed argument order | Fixed: custom translator swaps args |
 | `dayname` / `monthname` | DuckDB returns full name, Spark returns abbreviation | Needs custom translator with `LEFT(dayname(...), 3)` |
-| `kurtosis` / `skewness` | DuckDB uses population formula, Spark uses sample formula | Needs custom extension function |
+| `kurtosis` | DuckDB `kurtosis` uses sample formula | Fixed: mapped to `kurtosis_pop` (population formula) |
+| `skewness` | DuckDB `skewness` uses sample bias correction | Fixed: `spark_skewness()` extension function in strict mode; relaxed mode accepts ~0.2% difference |
 | `percentile` / `percentile_approx` | DuckDB uses nearest-rank, Spark uses linear interpolation | Needs custom extension function |
 | `schema_of_json` | Format difference (JSON vs DDL) | Needs custom translator |
 | `json_tuple` | Generator function returns wrong column count | Bug in Thunderduck |

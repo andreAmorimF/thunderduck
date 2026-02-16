@@ -1605,20 +1605,18 @@ public class SparkSQLAstBuilder extends SqlBaseParserBaseVisitor<Object> {
                 List.of(substr, str), IntegerType.get());
         }
 
-        // OVERLAY
+        // OVERLAY - convert to FunctionCall so it goes through FunctionRegistry
         if (ctx instanceof SqlBaseParser.OverlayContext overlay) {
             Expression input = visitValueExpr(overlay.input);
             Expression replace = visitValueExpr(overlay.replace);
             Expression position = visitValueExpr(overlay.position);
             if (overlay.length != null) {
                 Expression length = visitValueExpr(overlay.length);
-                return new RawSQLExpression(
-                    "OVERLAY(" + input.toSQL() + " PLACING " + replace.toSQL() +
-                    " FROM " + position.toSQL() + " FOR " + length.toSQL() + ")");
+                return new FunctionCall("overlay",
+                    List.of(input, replace, position, length), StringType.get());
             }
-            return new RawSQLExpression(
-                "OVERLAY(" + input.toSQL() + " PLACING " + replace.toSQL() +
-                " FROM " + position.toSQL() + ")");
+            return new FunctionCall("overlay",
+                List.of(input, replace, position), StringType.get());
         }
 
         // STRUCT constructor

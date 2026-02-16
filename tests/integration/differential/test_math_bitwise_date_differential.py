@@ -212,7 +212,6 @@ class TestBitwiseFunctions_Differential:
         td = run_test(spark_thunderduck)
         assert_dataframes_equal(ref, td, "bit_count", ignore_nullable=True)
 
-    @pytest.mark.skip(reason="DuckDB get_bit expects BIT type, not INTEGER")
     @pytest.mark.timeout(30)
     def test_bit_get(self, spark_reference, spark_thunderduck):
         """Test bit_get() returns the bit value at a given position."""
