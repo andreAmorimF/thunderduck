@@ -2,7 +2,7 @@
 
 **Created**: 2026-02-15
 **Updated**: 2026-02-16
-**Status**: Completed (all 4 priorities + 5 follow-up fixes: soundex, dropFields, schema_of_json, json_tuple, split limit)
+**Status**: Completed (all 4 priorities + follow-up fixes including from_json schema support)
 
 ## Coverage Summary
 
@@ -114,7 +114,7 @@ Planned but not yet implemented:
 | `json_object_keys` | `json_keys` | Done |
 | `schema_of_json` | `spark_schema_of_json` (strict) / `json_structure` (relaxed) | Done |
 | `get_json_object` | `json_extract_string` | Done (custom) |
-| `from_json` | `json()` | Done (basic; full struct schema TBD) |
+| `from_json` | `json_transform(jsonStr, schema)` | Done (full schema support) |
 | `json_tuple` | Multiple `json_extract_string` | Done (custom) |
 
 ## Priority 3: String Functions — DONE
@@ -139,7 +139,7 @@ Planned but not yet implemented:
 
 | Spark Function | DuckDB Equivalent | Status |
 |---|---|---|
-| `percentile(col, p)` | `quantile(col, p)` | Done |
+| `percentile(col, p)` | `quantile_cont(col, p)` | Done |
 | `percentile_approx(col, p, acc)` | `approx_quantile(col, p)` | Done (drops accuracy arg) |
 | `kurtosis(col)` | `kurtosis_pop(col)` | Done |
 | `skewness(col)` | `spark_skewness(col)` (strict) / `skewness(col)` (relaxed) | Done |
@@ -159,35 +159,35 @@ Current relaxed mode baseline:
 
 | | Passed | Failed | Skipped |
 |---|---|---|---|
-| Full differential suite (relaxed) | 825 | 0 | 3 |
+| Full differential suite (relaxed) | 830 | 0 | 3 |
 
-76 new tests added across 4 files:
+81 new tests added across 4 files:
 
 | Test File | Tests | Passed | Skipped |
 |---|---|---|---|
 | `test_math_bitwise_date_differential.py` | 16 | 16 | 0 |
 | `test_string_collection_differential.py` | 22 | 21 | 1 |
 | `test_new_aggregates_differential.py` | 27 | 17 | 10 |
-| `test_json_functions_differential.py` | 9 | 7 | 2 |
-| **Total new tests** | **76** | **63** | **10** |
+| `test_json_functions_differential.py` | 14 | 13 | 1 |
+| **Total new tests** | **81** | **68** | **10** |
 
-### Skipped Tests — Behavioral/Formula Differences (4)
+### Skipped Tests — Behavioral/Formula Differences (1)
 
 | Test | Function | Skip Reason |
 |---|---|---|
-| `test_percentile_p50` | `percentile` | DuckDB `quantile` uses nearest-rank method, Spark uses linear interpolation |
-| `test_percentile_p25` | `percentile` | Same nearest-rank vs interpolation difference |
-| `test_percentile_p75` | `percentile` | Same nearest-rank vs interpolation difference |
-| `test_percentile_approx` | `percentile_approx` | DuckDB `approx_quantile` returns 55.0, Spark returns 50.0 — different algorithms |
+| `test_percentile_approx` | `percentile_approx` | DuckDB `approx_quantile` returns 55.0, Spark returns 50.0 — different approximation algorithms |
 
-### Previously Skipped, Now Passing (11)
+### Previously Skipped, Now Passing (14)
 
 | Test | Function | Fix |
 |---|---|---|
 | `test_kurtosis` | `kurtosis` | Mapped to `kurtosis_pop` (DuckDB built-in population kurtosis) |
 | `test_kurtosis_grouped` | `kurtosis` (grouped) | Same `kurtosis_pop` mapping |
 | `test_skewness` | `skewness` | `spark_skewness()` extension function computes population skewness |
-| `test_percentile_grouped` | `percentile` (grouped) | Fixed in earlier commit |
+| `test_percentile_p50` | `percentile` | Mapped to `quantile_cont` (linear interpolation matches Spark exactly) |
+| `test_percentile_p25` | `percentile` | Same `quantile_cont` mapping |
+| `test_percentile_p75` | `percentile` | Same `quantile_cont` mapping |
+| `test_percentile_grouped` | `percentile` (grouped) | Same `quantile_cont` mapping |
 | `test_overlay` | `overlay` | Custom translator: `LEFT() \|\| replacement \|\| SUBSTR()` |
 | `test_octet_length` | `octet_length` | Custom translator: `strlen()` (byte length for VARCHAR) |
 | `test_bit_get` | `bit_get` | Custom translator: `(value >> pos) & 1` (bitwise math) |
@@ -208,8 +208,7 @@ Current relaxed mode baseline:
 
 | Function | Gap | Status |
 |---|---|---|
-| `from_json` | Basic JSON parse only; full struct schema not supported | Partial |
-| `percentile` / `percentile_approx` | DuckDB uses nearest-rank, Spark uses linear interpolation | Needs custom extension function |
+| `percentile_approx` | DuckDB T-Digest vs Spark G-K algorithm; accuracy param dropped | Accepted (both approximate by design) |
 
 ### Intentionally Not Addressed
 

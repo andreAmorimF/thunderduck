@@ -13,6 +13,7 @@ This directory contains documentation for the Thunderduck project.
 - **[SPARK_CONNECT_GAP_ANALYSIS.md](SPARK_CONNECT_GAP_ANALYSIS.md)** - Comprehensive Spark Connect protocol coverage analysis
 - **[SQL_PARSER_RESEARCH.md](research/SQL_PARSER_RESEARCH.md)** - Research on SQL parser options for SparkSQL support
 - **[TPC_H_BENCHMARK.md](TPC_H_BENCHMARK.md)** - TPC-H data generation and benchmark guide
+- **[FUNCTION_COVERAGE.md](FUNCTION_COVERAGE.md)** - Spark SQL function coverage gap analysis (~260 functions mapped)
 
 ### Architecture Documents (architect/)
 - **[SPARK_COMPAT_EXTENSION.md](architect/SPARK_COMPAT_EXTENSION.md)** - Spark compatibility extension (strict/relaxed modes)
@@ -44,6 +45,8 @@ Key milestones:
 - **M68-M71**: Decimal precision, datetime fixes, performance instrumentation
 - **M72-M79**: SparkSQL parser, schema-aware dispatch, extension functions
 - **M80-M83**: Strict mode convergence (744/2), test suite optimization
+- **M84**: Function coverage expansion (81 new function mappings, 76 new tests)
+- **M85**: Bug fixes, 17 skipped tests resolved, rewriteSQL() elimination, from_json schema support (830/0/3)
 
 ---
 
@@ -85,15 +88,6 @@ These functions produce semantically equivalent results but in a different textu
 | Function | Spark Output | DuckDB Output | Difference and Rationale |
 |----------|-------------|---------------|--------------------------|
 | `schema_of_json` | DDL format: `STRUCT<a: BIGINT>` | JSON format: `{"a":"UBIGINT"}` | DuckDB's `json_structure` returns JSON schema representation. Producing Spark's DDL format would require building a full JSON-to-DDL converter with Spark type name mapping -- high complexity for a rarely used introspection function. |
-
-### Functions Missing from DuckDB
-
-These Spark functions have no equivalent in DuckDB's core or extension ecosystem, and implementing them in the Thunderduck extension is not justified given their niche usage.
-
-| Function | Description | Rationale for Skipping |
-|----------|-------------|------------------------|
-| `width_bucket` | Histogram bucket assignment | Not available in DuckDB; could be implemented as a SQL expression but rarely used in practice. |
-| `soundex` | Phonetic encoding | Only available in DuckDB's `fts` extension (not loaded by default); niche function. |
 
 ### Intentionally Out of Scope
 

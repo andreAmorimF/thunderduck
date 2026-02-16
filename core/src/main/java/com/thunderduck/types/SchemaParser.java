@@ -56,6 +56,60 @@ public class SchemaParser {
     }
 
     /**
+     * Converts a Spark schema string to DuckDB's JSON schema format for use with json_transform().
+     *
+     * <p>Accepts both DDL and JSON schema formats (same as {@link #parse(String)}).
+     * Produces a JSON object where keys are field names and values are DuckDB type strings.
+     *
+     * <p>Examples:
+     * <ul>
+     *   <li>{@code "a INT, b STRING"} → {@code {"a":"INTEGER","b":"VARCHAR"}}</li>
+     *   <li>{@code "STRUCT<a: INT, b: STRING>"} → {@code {"a":"INTEGER","b":"VARCHAR"}}</li>
+     *   <li>Nested struct: {@code "a INT, b STRUCT<x: INT>"} → {@code {"a":"INTEGER","b":{"x":"INTEGER"}}}</li>
+     *   <li>Array field: {@code "a ARRAY<INT>"} → {@code {"a":["INTEGER"]}}</li>
+     * </ul>
+     *
+     * @param sparkSchema the Spark schema string (DDL or JSON format)
+     * @return the DuckDB JSON schema string
+     * @throws IllegalArgumentException if the schema string is invalid
+     */
+    public static String toDuckDBJsonSchema(String sparkSchema) {
+        StructType structType = parse(sparkSchema);
+        return dataTypeToDuckDBJson(structType);
+    }
+
+    /**
+     * Recursively converts a DataType to its DuckDB JSON schema representation.
+     */
+    private static String dataTypeToDuckDBJson(DataType dataType) {
+        return switch (dataType) {
+            case StructType st -> {
+                StringBuilder sb = new StringBuilder("{");
+                List<StructField> fields = st.fields();
+                for (int i = 0; i < fields.size(); i++) {
+                    if (i > 0) sb.append(",");
+                    StructField f = fields.get(i);
+                    sb.append("\"").append(f.name()).append("\":");
+                    sb.append(dataTypeToDuckDBJson(f.dataType()));
+                }
+                sb.append("}");
+                yield sb.toString();
+            }
+            case ArrayType a -> "[" + dataTypeToDuckDBJson(a.elementType()) + "]";
+            case MapType m -> "\"MAP(" + escapeDuckDBType(TypeMapper.toDuckDBType(m.keyType()))
+                    + ", " + escapeDuckDBType(TypeMapper.toDuckDBType(m.valueType())) + ")\"";
+            default -> "\"" + TypeMapper.toDuckDBType(dataType) + "\"";
+        };
+    }
+
+    /**
+     * Escapes quotes in a DuckDB type string for embedding in JSON.
+     */
+    private static String escapeDuckDBType(String type) {
+        return type.replace("\"", "\\\"");
+    }
+
+    /**
      * Parses a JSON schema string into a StructType.
      *
      * <p>Expected format:
@@ -156,17 +210,28 @@ public class SchemaParser {
     /**
      * Parses a single field definition.
      *
-     * @param fieldDef the field definition (e.g., "name:string" or "id:int")
+     * <p>Supports both colon-separated ({@code name:string}) and
+     * space-separated ({@code name STRING}) formats.
+     *
+     * @param fieldDef the field definition
      * @return the parsed StructField
      */
     private static StructField parseField(String fieldDef) {
         int colonIndex = fieldDef.indexOf(':');
-        if (colonIndex == -1) {
-            throw new IllegalArgumentException("Invalid field definition: " + fieldDef);
+        String name;
+        String typeStr;
+        if (colonIndex != -1) {
+            name = fieldDef.substring(0, colonIndex).trim();
+            typeStr = fieldDef.substring(colonIndex + 1).trim();
+        } else {
+            // Space-separated DDL format: "name STRING", "age INT"
+            int spaceIndex = fieldDef.indexOf(' ');
+            if (spaceIndex == -1) {
+                throw new IllegalArgumentException("Invalid field definition: " + fieldDef);
+            }
+            name = fieldDef.substring(0, spaceIndex).trim();
+            typeStr = fieldDef.substring(spaceIndex + 1).trim();
         }
-
-        String name = fieldDef.substring(0, colonIndex).trim();
-        String typeStr = fieldDef.substring(colonIndex + 1).trim();
 
         // All fields are nullable by default in this format
         boolean nullable = true;
@@ -207,9 +272,8 @@ public class SchemaParser {
 
         // Handle nested struct types
         if (normalized.startsWith("struct<") && normalized.endsWith(">")) {
-            // Nested structs are not directly supported as DataType
-            // They would need special handling
-            throw new UnsupportedOperationException("Nested struct types not yet supported: " + typeStr);
+            String inner = typeStr.substring(7, typeStr.length() - 1);
+            return parseStructFields(inner);
         }
 
         // Handle primitive types

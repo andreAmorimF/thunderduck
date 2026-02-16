@@ -203,6 +203,104 @@ class TestJsonConversion_Differential:
 
 
 @pytest.mark.differential
+class TestFromJsonDifferential:
+    """Tests for from_json: parsing JSON strings into typed structs using a schema."""
+
+    @pytest.mark.timeout(30)
+    def test_from_json_simple_ddl(self, spark_reference, spark_thunderduck):
+        """Test from_json with a simple DDL schema string."""
+        def run_test(spark):
+            _create_json_data(spark)
+            return spark.sql(
+                "SELECT id, "
+                "from_json(json_str, 'name STRING, age INT').name as name, "
+                "from_json(json_str, 'name STRING, age INT').age as age "
+                "FROM json_data ORDER BY id"
+            )
+
+        ref = run_test(spark_reference)
+        td = run_test(spark_thunderduck)
+        assert_dataframes_equal(ref, td, "from_json_simple_ddl", ignore_nullable=True)
+
+    @pytest.mark.timeout(30)
+    def test_from_json_missing_keys(self, spark_reference, spark_thunderduck):
+        """Test from_json when JSON is missing keys from the schema — should return NULL."""
+        def run_test(spark):
+            _create_json_data(spark)
+            return spark.sql(
+                "SELECT id, "
+                "from_json(json_str, 'name STRING, salary DOUBLE').name as name, "
+                "from_json(json_str, 'name STRING, salary DOUBLE').salary as salary "
+                "FROM json_data ORDER BY id"
+            )
+
+        ref = run_test(spark_reference)
+        td = run_test(spark_thunderduck)
+        assert_dataframes_equal(ref, td, "from_json_missing_keys", ignore_nullable=True)
+
+    @pytest.mark.timeout(30)
+    def test_from_json_null_input(self, spark_reference, spark_thunderduck):
+        """Test from_json with NULL JSON input — should return NULL struct."""
+        def run_test(spark):
+            _create_json_null_data(spark)
+            return spark.sql(
+                "SELECT id, "
+                "from_json(json_str, 'name STRING, age INT').name as name, "
+                "from_json(json_str, 'name STRING, age INT').age as age "
+                "FROM json_null_data ORDER BY id"
+            )
+
+        ref = run_test(spark_reference)
+        td = run_test(spark_thunderduck)
+        assert_dataframes_equal(ref, td, "from_json_null_input", ignore_nullable=True)
+
+    @pytest.mark.timeout(30)
+    def test_from_json_array_field(self, spark_reference, spark_thunderduck):
+        """Test from_json with an array-typed field in the schema."""
+        def run_test(spark):
+            data = [
+                (1, '{"tags": ["a", "b"], "count": 2}'),
+                (2, '{"tags": ["x"], "count": 1}'),
+                (3, '{"tags": [], "count": 0}'),
+            ]
+            schema = StructType([
+                StructField("id", IntegerType(), False),
+                StructField("json_str", StringType()),
+            ])
+            df = spark.createDataFrame(data, schema)
+            df.createOrReplaceTempView("json_array_field_data")
+            return spark.sql(
+                "SELECT id, "
+                "from_json(json_str, 'tags ARRAY<STRING>, count INT').count as cnt "
+                "FROM json_array_field_data ORDER BY id"
+            )
+
+        ref = run_test(spark_reference)
+        td = run_test(spark_thunderduck)
+        assert_dataframes_equal(ref, td, "from_json_array_field", ignore_nullable=True)
+
+    @pytest.mark.timeout(30)
+    def test_from_json_dataframe_api(self, spark_reference, spark_thunderduck):
+        """Test from_json via the DataFrame API with a StructType schema."""
+        def run_test(spark):
+            _create_json_data(spark)
+            df = spark.table("json_data")
+            parse_schema = StructType([
+                StructField("name", StringType()),
+                StructField("age", IntegerType()),
+            ])
+            return df.select(
+                "id",
+                F.from_json(F.col("json_str"), parse_schema).getField("name").alias("name"),
+                F.from_json(F.col("json_str"), parse_schema).getField("age").alias("age"),
+            ).orderBy("id")
+
+        ref = run_test(spark_reference)
+        td = run_test(spark_thunderduck)
+        assert_dataframes_equal(ref, td, "from_json_dataframe_api", ignore_nullable=True)
+
+
+@pytest.mark.differential
 class TestJsonNullHandling_Differential:
     """Tests for JSON functions with NULL inputs and missing keys."""
 

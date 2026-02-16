@@ -1375,13 +1375,24 @@ public class FunctionRegistry {
         });
 
         // from_json: Spark parses JSON string to struct based on schema
-        // DuckDB: json() parses a JSON string into DuckDB's JSON type
-        // Full struct schema support would need type system integration
+        // DuckDB: json_transform(jsonStr, schemaJSON) parses JSON into typed struct/array
         CUSTOM_TRANSLATORS.put("from_json", args -> {
             if (args.length < 1) {
                 throw new IllegalArgumentException("from_json requires at least 1 argument");
             }
-            // Basic implementation: parse the JSON string
+            if (args.length >= 2) {
+                String schemaArg = args[1].trim();
+                // Schema must be a string literal (enclosed in single quotes)
+                if (schemaArg.startsWith("'") && schemaArg.endsWith("'") && schemaArg.length() > 2) {
+                    String schemaStr = schemaArg.substring(1, schemaArg.length() - 1);
+                    try {
+                        String duckdbSchema = SchemaParser.toDuckDBJsonSchema(schemaStr);
+                        return "json_transform(" + args[0] + ", '" + duckdbSchema + "')";
+                    } catch (Exception e) {
+                        // Schema parse failure — fall back to basic json()
+                    }
+                }
+            }
             return "json(" + args[0] + ")";
         });
 

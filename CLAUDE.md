@@ -228,7 +228,7 @@ Run from `/workspace/tests/integration`. Fixtures auto-start both servers. Use `
 # Env vars prefix (always include)
 ENV="THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true COLLECT_TIMEOUT=30"
 
-# --- Full differential test suite (ALL tests across 36 files) ---
+# --- Full differential test suite (ALL tests across 41 files) ---
 # This is the canonical "run everything" command
 cd /workspace/tests/integration && $ENV python3 -m pytest differential/ -v --tb=short
 
@@ -252,7 +252,7 @@ cd /workspace/tests/integration && $ENV python3 -m pytest differential/test_tpch
 ```
 
 **Test tiers:**
-- **Full suite**: `pytest differential/` — runs ALL 37 test files (TPC-H, TPC-DS, joins, aggregations, window functions, array functions, datetime, type casting, etc.)
+- **Full suite**: `pytest differential/` — runs ALL 41 test files (TPC-H, TPC-DS, joins, aggregations, window functions, array functions, datetime, type casting, JSON, math/bitwise, string/collection, etc.)
 - **Quick check**: `test_differential_v2.py test_tpch_differential.py` — TPC-H only (51 tests)
 - **TPC-DS**: `test_tpcds_differential.py test_tpcds_dataframe_differential.py`
 - **Single file/test**: target specific test files or parameterized tests
@@ -322,4 +322,4 @@ pkill -9 -f java 2>/dev/null
 | Test conftest | `tests/integration/conftest.py` |
 | DataFrame diff util | `tests/integration/utils/dataframe_diff.py` |
 
-**Last Updated**: 2026-02-14
+**Last Updated**: 2026-02-16
