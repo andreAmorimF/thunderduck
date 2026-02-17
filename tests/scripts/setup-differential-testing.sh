@@ -33,10 +33,13 @@ echo -e "${BLUE}Differential Testing V2 - Environment Setup${NC}"
 echo -e "${BLUE}================================================================${NC}"
 echo ""
 
+# Venv configuration
+VENV_DIR="${THUNDERDUCK_VENV_DIR:-$WORKSPACE_DIR/.venv}"
+
 # ------------------------------------------------------------------------------
 # Step 1: Check Java
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[1/5] Checking Java...${NC}"
+echo -e "${BLUE}[1/6] Checking Java...${NC}"
 
 if ! command -v java &> /dev/null; then
     echo -e "${RED}ERROR: Java is not installed${NC}"
@@ -61,7 +64,7 @@ fi
 # ------------------------------------------------------------------------------
 # Step 2: Check Python and pip
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[2/5] Checking Python and pip...${NC}"
+echo -e "${BLUE}[2/6] Checking Python and pip...${NC}"
 
 if ! command -v python3 &> /dev/null; then
     echo -e "${RED}ERROR: Python 3 is not installed${NC}"
@@ -85,26 +88,35 @@ PIP_VERSION=$(python3 -m pip --version 2>/dev/null | awk '{print $2}')
 echo -e "${GREEN}  pip version: $PIP_VERSION${NC}"
 
 # ------------------------------------------------------------------------------
-# Step 3: Install Python dependencies
+# Step 3: Create/reuse virtualenv
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[3/5] Installing Python dependencies...${NC}"
+echo -e "${BLUE}[3/6] Setting up virtualenv at $VENV_DIR...${NC}"
 
-PYSPARK_VERSION="4.1.1"
+if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/python3" ]; then
+    echo -e "${GREEN}  Existing venv found, reusing${NC}"
+else
+    echo "  Creating virtualenv..."
+    python3 -m venv "$VENV_DIR"
+    echo -e "${GREEN}  Virtualenv created${NC}"
+fi
 
-echo "  Installing pytest, pyspark, pandas, pyarrow, grpcio..."
-python3 -m pip install --quiet --upgrade pip
-python3 -m pip install --quiet \
-    pytest \
-    pytest-timeout \
-    "pyspark==$PYSPARK_VERSION" \
-    pandas \
-    "pyarrow>=11.0.0" \
-    "grpcio>=1.48.1" \
-    "grpcio-status>=1.48.1" \
-    "googleapis-common-protos>=1.56.4"
+# ------------------------------------------------------------------------------
+# Step 4: Install Python dependencies into venv
+# ------------------------------------------------------------------------------
+echo -e "${BLUE}[4/6] Installing Python dependencies into venv...${NC}"
+
+REQUIREMENTS_FILE="$WORKSPACE_DIR/tests/integration/requirements.txt"
+if [ ! -f "$REQUIREMENTS_FILE" ]; then
+    echo -e "${RED}ERROR: requirements.txt not found at $REQUIREMENTS_FILE${NC}"
+    exit 1
+fi
+
+echo "  Installing from requirements.txt..."
+"$VENV_DIR/bin/python3" -m pip install --quiet --upgrade pip
+"$VENV_DIR/bin/python3" -m pip install --quiet -r "$REQUIREMENTS_FILE"
 
 # Verify PySpark installation
-PYSPARK_INSTALLED=$(python3 -m pip show pyspark 2>/dev/null | grep Version | awk '{print $2}')
+PYSPARK_INSTALLED=$("$VENV_DIR/bin/python3" -m pip show pyspark 2>/dev/null | grep Version | awk '{print $2}')
 if [ -z "$PYSPARK_INSTALLED" ]; then
     echo -e "${RED}ERROR: PySpark installation failed${NC}"
     exit 1
@@ -112,9 +124,9 @@ fi
 echo -e "${GREEN}  PySpark version: $PYSPARK_INSTALLED${NC}"
 
 # ------------------------------------------------------------------------------
-# Step 4: Download and Install Apache Spark
+# Step 5: Download and Install Apache Spark
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[4/5] Setting up Apache Spark ${SPARK_VERSION}...${NC}"
+echo -e "${BLUE}[5/6] Setting up Apache Spark ${SPARK_VERSION}...${NC}"
 
 if [ -d "$SPARK_HOME" ] && [ -f "$SPARK_HOME/bin/spark-submit" ]; then
     echo -e "${GREEN}  Spark already installed at: $SPARK_HOME${NC}"
@@ -157,9 +169,9 @@ fi
 echo -e "${GREEN}  Spark version: $("$SPARK_HOME/bin/spark-submit" --version 2>&1 | grep -i version | head -1)${NC}"
 
 # ------------------------------------------------------------------------------
-# Step 5: Build Thunderduck
+# Step 6: Build Thunderduck
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[5/5] Building Thunderduck...${NC}"
+echo -e "${BLUE}[6/6] Building Thunderduck...${NC}"
 
 cd "$WORKSPACE_DIR"
 
@@ -195,6 +207,7 @@ cat > "$ENV_FILE" << EOF
 export SPARK_HOME="$SPARK_HOME"
 export SPARK_VERSION="$SPARK_VERSION"
 export WORKSPACE_DIR="$WORKSPACE_DIR"
+export THUNDERDUCK_VENV_DIR="$VENV_DIR"
 EOF
 
 echo ""
@@ -204,12 +217,16 @@ echo -e "${GREEN}===============================================================
 echo ""
 echo -e "Configuration saved to: ${BLUE}$ENV_FILE${NC}"
 echo ""
+echo -e "Virtualenv: ${BLUE}$VENV_DIR${NC}"
+echo ""
 echo -e "${YELLOW}To run differential tests:${NC}"
 echo ""
+echo "  # Run script auto-detects the venv (no manual activation needed):"
+echo "  $SCRIPT_DIR/run-differential-tests-v2.sh"
+echo ""
+echo "  # Or activate manually and run pytest directly:"
+echo "  source $VENV_DIR/bin/activate"
 echo "  cd $WORKSPACE_DIR/tests/integration"
 echo "  python3 -m pytest differential/ -v"
-echo ""
-echo "  # Or use the run script:"
-echo "  $SCRIPT_DIR/run-differential-tests-v2.sh"
 echo ""
 echo -e "${GREEN}================================================================${NC}"

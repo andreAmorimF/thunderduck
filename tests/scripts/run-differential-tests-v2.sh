@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run differential tests using the V2 framework
-# This script activates the venv, runs tests, and ensures proper cleanup
+# This script auto-detects the project venv, runs tests, and ensures proper cleanup
 #
 # Compatible with both bash 4+ and zsh
 #
@@ -34,6 +34,7 @@
 #   SERVER_STARTUP_TIMEOUT=60     - Server startup timeout
 #   SPARK_MEMORY=4g               - Spark driver memory
 #   THUNDERDUCK_MEMORY=2g         - Thunderduck JVM heap
+#   THUNDERDUCK_VENV_DIR=.venv         - Override venv location (default: <project-root>/.venv)
 #   THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true  - Continue on hard errors (for CI/CD)
 #   VERBOSE_FAILURES=true             - Use long tracebacks for failures (--tb=long)
 #
@@ -69,6 +70,26 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 WORKSPACE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SPARK_HOME="${SPARK_HOME:-$HOME/spark/current}"
+
+# ------------------------------------------------------------------------------
+# Resolve Python interpreter (venv auto-detection)
+# ------------------------------------------------------------------------------
+VENV_DIR="${THUNDERDUCK_VENV_DIR:-$WORKSPACE_DIR/.venv}"
+
+if [ -n "$VIRTUAL_ENV" ]; then
+    # User already activated a venv — use their python3
+    PYTHON="python3"
+elif [ -x "$VENV_DIR/bin/python3" ]; then
+    # Auto-detect project venv
+    PYTHON="$VENV_DIR/bin/python3"
+else
+    echo "ERROR: No virtualenv found."
+    echo ""
+    echo "Either:"
+    echo "  1. Run the setup script first:  $SCRIPT_DIR/setup-differential-testing.sh"
+    echo "  2. Or activate your own venv:   source <your-venv>/bin/activate"
+    exit 1
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -348,6 +369,7 @@ if [ -n "$PYTEST_ARGS" ]; then
 fi
 echo ""
 echo -e "  ${CYAN}Configuration:${NC}"
+echo -e "    Python:           $PYTHON"
 echo -e "    Spark port:       ${SPARK_PORT:-15003}"
 echo -e "    Thunderduck port: ${THUNDERDUCK_PORT:-15002}"
 echo -e "    Connect timeout:  ${CONNECT_TIMEOUT:-10}s"
@@ -370,7 +392,7 @@ fi
 
 # Run pytest with all test files
 # shellcheck disable=SC2086
-python3 -m pytest \
+$PYTHON -m pytest \
     $TEST_FILES \
     -v \
     $TB_STYLE \

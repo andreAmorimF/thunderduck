@@ -224,6 +224,8 @@ python3 -m pytest ...                                   # auto mode (default)
 
 Run from `/workspace/tests/integration`. Fixtures auto-start both servers. Use `python3` (not `python`).
 
+**Virtualenv**: `run-differential-tests-v2.sh` auto-detects `.venv` at the project root (no manual activation needed). For manual `python3 -m pytest` invocations, activate the venv first: `source .venv/bin/activate`. Override with `THUNDERDUCK_VENV_DIR` env var.
+
 ```bash
 # Env vars prefix (always include)
 ENV="THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR=true COLLECT_TIMEOUT=30"

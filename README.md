@@ -147,8 +147,8 @@ orders.select("o_orderkey", "o_totalprice").filter(orders.o_totalprice > 1000).s
 curl -s localhost:15002 || echo "Server running on port 15002"
 
 # Run differential tests (compares against Spark 4.1.1)
-./tests/scripts/setup-differential-testing.sh  # One-time setup
-./tests/scripts/run-differential-tests-v2.sh   # Run differential tests
+./tests/scripts/setup-differential-testing.sh  # One-time setup (creates .venv)
+./tests/scripts/run-differential-tests-v2.sh   # Run tests (auto-detects .venv)
 ```
 
 ## Building from Source
@@ -347,11 +347,16 @@ The differential testing framework compares Thunderduck results against Apache S
 ### Quick Start
 
 ```bash
-# One-time setup (downloads Spark 4.1.1, installs Python dependencies)
+# One-time setup (downloads Spark 4.1.1, creates .venv, installs Python deps)
 ./tests/scripts/setup-differential-testing.sh
 
-# Run DataFrame differential tests
+# Run differential tests (auto-detects .venv, no manual activation needed)
 ./tests/scripts/run-differential-tests-v2.sh
+
+# Or run pytest directly (activate venv first)
+source .venv/bin/activate
+cd tests/integration
+python3 -m pytest differential/ -v
 ```
 
 ### Test Groups
