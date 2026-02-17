@@ -278,8 +278,8 @@ public class NamedWindowTest extends TestBase {
             // Then: All should reference same window (ranking functions get CAST for Spark parity)
             assertThat(rankSQL).isEqualTo("CAST(RANK() OVER w_salary AS INTEGER)");
             assertThat(rowNumSQL).isEqualTo("CAST(ROW_NUMBER() OVER w_salary AS INTEGER)");
-            // AVG casts arg to DOUBLE in relaxed mode for precision
-            assertThat(avgSQL).isEqualTo("AVG(CAST(salary AS DOUBLE)) OVER w_salary");
+            // AVG passes arg directly (DuckDB handles type promotion)
+            assertThat(avgSQL).isEqualTo("AVG(salary) OVER w_salary");
         }
     }
 

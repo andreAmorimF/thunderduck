@@ -214,10 +214,10 @@ jobs:
 
       - name: Run TPC-H differential tests
         env:
-          SPARK_HOME: ~/spark/spark-4.1.1
           THUNDERDUCK_TEST_SUITE_CONTINUE_ON_ERROR: 'true'
           COLLECT_TIMEOUT: '30'
         run: |
+          export SPARK_HOME="$HOME/spark/spark-4.1.1"
           cd tests/integration
           python3 -m pytest \
             differential/test_differential_v2.py \
