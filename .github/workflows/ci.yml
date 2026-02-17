@@ -229,6 +229,7 @@ jobs:
 
       - name: Run differential tests (${{ matrix.mode }})
         env:
-          SPARK_HOME: ~/spark/spark-4.1.1
           THUNDERDUCK_COMPAT_MODE: ${{ matrix.compat_mode }}
-        run: ./tests/scripts/run-differential-tests-v2.sh --ci all
+        run: |
+          export SPARK_HOME="$HOME/spark/spark-4.1.1"
+          ./tests/scripts/run-differential-tests-v2.sh --ci all
