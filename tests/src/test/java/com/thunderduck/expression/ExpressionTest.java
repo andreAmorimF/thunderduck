@@ -242,7 +242,7 @@ public class ExpressionTest extends TestBase {
             Expression right = Literal.of(4);
             BinaryExpression expr = BinaryExpression.divide(left, right);
             
-            assertThat(expr.toSQL()).isEqualTo("(CAST(100 AS DOUBLE) / CAST(4 AS DOUBLE))");
+            assertThat(expr.toSQL()).isEqualTo("(100 / 4)");
         }
 
         @Test
@@ -282,7 +282,7 @@ public class ExpressionTest extends TestBase {
             BinaryExpression denominator = BinaryExpression.subtract(c, d);
             BinaryExpression division = BinaryExpression.divide(numerator, denominator);
             
-            assertThat(division.toSQL()).isEqualTo("(CAST((10 + 5) AS DOUBLE) / CAST((20 - 3) AS DOUBLE))");
+            assertThat(division.toSQL()).isEqualTo("((10 + 5) / (20 - 3))");
         }
 
         @Test
@@ -707,7 +707,7 @@ public class ExpressionTest extends TestBase {
             BinaryExpression sum2 = BinaryExpression.add(e, f);
             BinaryExpression result = BinaryExpression.divide(prod, sum2);
             
-            assertThat(result.toSQL()).isEqualTo("(CAST(((10 + 5) * (20 - 3)) AS DOUBLE) / CAST((7 + 2) AS DOUBLE))");
+            assertThat(result.toSQL()).isEqualTo("(((10 + 5) * (20 - 3)) / (7 + 2))");
         }
 
         @Test
@@ -772,7 +772,7 @@ public class ExpressionTest extends TestBase {
             Expression level5 = BinaryExpression.divide(level4, Literal.of(5));
 
             String sql = level5.toString(); // Use toString() which delegates to toSQL()
-            assertThat(sql).contains("(CAST((((1 + 2) * 3) - 4) AS DOUBLE) / CAST(5 AS DOUBLE))");
+            assertThat(sql).contains("((((1 + 2) * 3) - 4) / 5)");
         }
     }
 
