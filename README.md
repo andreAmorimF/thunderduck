@@ -158,6 +158,9 @@ curl -s localhost:15002 || echo "Server running on port 15002"
 ```bash
 git clone https://github.com/lastrk/thunderduck.git
 cd thunderduck
+
+# Initialize submodules (required for DuckDB extension)
+git submodule update --init --recursive
 ```
 
 ### Build All Modules
