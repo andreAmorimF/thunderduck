@@ -96,25 +96,37 @@ class QueryLoggerIntegrationTest {
     @Test
     @DisplayName("Should handle concurrent queries with separate correlation IDs")
     void testConcurrentQueryLogging() throws InterruptedException {
-        // Given: Two concurrent queries
-        Thread thread1 = new Thread(() -> {
-            VectorSchemaRoot result = executor.executeQuery("SELECT 1 as t1");
-            result.close();
-        });
+        // DuckDB connections are NOT thread-safe, so each thread needs its own
+        // runtime/executor (mirrors real usage where each session has its own connection)
+        DuckDBRuntime runtime1 = DuckDBRuntime.create("jdbc:duckdb::memory:concurrent_" + System.nanoTime());
+        DuckDBRuntime runtime2 = DuckDBRuntime.create("jdbc:duckdb::memory:concurrent_" + (System.nanoTime() + 1));
+        QueryExecutor executor1 = new QueryExecutor(runtime1);
+        QueryExecutor executor2 = new QueryExecutor(runtime2);
 
-        Thread thread2 = new Thread(() -> {
-            VectorSchemaRoot result = executor.executeQuery("SELECT 2 as t2");
-            result.close();
-        });
+        try {
+            // Given: Two concurrent queries on separate connections
+            Thread thread1 = new Thread(() -> {
+                VectorSchemaRoot result = executor1.executeQuery("SELECT 1 as t1");
+                result.close();
+            });
 
-        // When: Execute concurrently
-        thread1.start();
-        thread2.start();
-        thread1.join();
-        thread2.join();
+            Thread thread2 = new Thread(() -> {
+                VectorSchemaRoot result = executor2.executeQuery("SELECT 2 as t2");
+                result.close();
+            });
 
-        // Then: Both threads should complete successfully
-        // (If correlation IDs interfered, one might fail or hang)
+            // When: Execute concurrently
+            thread1.start();
+            thread2.start();
+            thread1.join();
+            thread2.join();
+
+            // Then: Both threads should complete successfully
+            // (If correlation IDs interfered, one might fail or hang)
+        } finally {
+            runtime1.close();
+            runtime2.close();
+        }
     }
 
     @Test
